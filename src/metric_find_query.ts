@@ -1,19 +1,20 @@
-define([
-  'lodash'
-],
-function (_) {
-  'use strict';
+import _ from 'lodash';
 
-  function PrometheusMetricFindQuery(datasource, query, timeSrv) {
+export default class PrometheusMetricFindQuery {
+  datasource: any;
+  query: any;
+  range: any;
+
+  constructor(datasource, query, timeSrv) {
     this.datasource = datasource;
     this.query = query;
     this.range = timeSrv.timeRange();
   }
 
-  PrometheusMetricFindQuery.prototype.process = function() {
-    var label_values_regex = /^label_values\((?:(.+),\s*)?([a-zA-Z_][a-zA-Z0-9_]+)\)$/;
-    var metric_names_regex = /^metrics\((.+)\)$/;
-    var query_result_regex = /^query_result\((.+)\)$/;
+  process() {
+    var label_values_regex = /^label_values\((?:(.+),\s*)?([a-zA-Z_][a-zA-Z0-9_]+)\)\s*$/;
+    var metric_names_regex = /^metrics\((.+)\)\s*$/;
+    var query_result_regex = /^query_result\((.+)\)\s*$/;
 
     var label_values_query = this.query.match(label_values_regex);
     if (label_values_query) {
@@ -36,9 +37,9 @@ function (_) {
 
     // if query contains full metric name, return metric name and label list
     return this.metricNameAndLabelsQuery(this.query);
-  };
+  }
 
-  PrometheusMetricFindQuery.prototype.labelValuesQuery = function(label, metric) {
+  labelValuesQuery(label, metric) {
     var url;
 
     if (!metric) {
@@ -47,88 +48,85 @@ function (_) {
 
       return this.datasource._request('GET', url).then(function(result) {
         return _.map(result.data.data, function(value) {
-          return {text: value};
+          return { text: value };
         });
       });
     } else {
       var start = this.datasource.getPrometheusTime(this.range.from, false);
       var end = this.datasource.getPrometheusTime(this.range.to, true);
-      url = '/api/v1/series?match[]=' + encodeURIComponent(metric)
-        + '&start=' + start
-        + '&end=' + end;
+      url = '/api/v1/series?match[]=' + encodeURIComponent(metric) + '&start=' + start + '&end=' + end;
 
-      return this.datasource._request('GET', url)
-      .then(function(result) {
-        return _.map(result.data.data, function(metric) {
+      return this.datasource._request('GET', url).then(function(result) {
+        var _labels = _.map(result.data.data, function(metric) {
+          return metric[label] || '';
+        }).filter(function(label) {
+          return label !== '';
+        });
+
+        return _.uniq(_labels).map(function(metric) {
           return {
-            text: metric[label],
-            expandable: true
+            text: metric,
+            expandable: true,
           };
         });
       });
     }
-  };
+  }
 
-  PrometheusMetricFindQuery.prototype.metricNameQuery = function(metricFilterPattern) {
+  metricNameQuery(metricFilterPattern) {
     var url = '/api/v1/label/__name__/values';
 
-    return this.datasource._request('GET', url)
-    .then(function(result) {
+    return this.datasource._request('GET', url).then(function(result) {
       return _.chain(result.data.data)
-      .filter(function(metricName) {
-        var r = new RegExp(metricFilterPattern);
-        return r.test(metricName);
-      })
-      .map(function(matchedMetricName) {
-        return {
-          text: matchedMetricName,
-          expandable: true
-        };
-      })
-      .value();
+        .filter(function(metricName) {
+          var r = new RegExp(metricFilterPattern);
+          return r.test(metricName);
+        })
+        .map(function(matchedMetricName) {
+          return {
+            text: matchedMetricName,
+            expandable: true,
+          };
+        })
+        .value();
     });
-  };
+  }
 
-  PrometheusMetricFindQuery.prototype.queryResultQuery = function(query) {
+  queryResultQuery(query) {
     var end = this.datasource.getPrometheusTime(this.range.to, true);
-    var url = '/api/v1/query?query=' + encodeURIComponent(query) + '&time=' + end;
-
-    return this.datasource._request('GET', url)
-    .then(function(result) {
+    return this.datasource.performInstantQuery({ expr: query }, end).then(function(result) {
       return _.map(result.data.data.result, function(metricData) {
         var text = metricData.metric.__name__ || '';
         delete metricData.metric.__name__;
-        text += '{' +
-                _.map(metricData.metric, function(v, k) { return k + '="' + v + '"'; }).join(',') +
-                '}';
+        text +=
+          '{' +
+          _.map(metricData.metric, function(v, k) {
+            return k + '="' + v + '"';
+          }).join(',') +
+          '}';
         text += ' ' + metricData.value[1] + ' ' + metricData.value[0] * 1000;
 
         return {
           text: text,
-          expandable: true
+          expandable: true,
         };
       });
     });
-  };
+  }
 
-  PrometheusMetricFindQuery.prototype.metricNameAndLabelsQuery = function(query) {
+  metricNameAndLabelsQuery(query) {
     var start = this.datasource.getPrometheusTime(this.range.from, false);
     var end = this.datasource.getPrometheusTime(this.range.to, true);
-    var url = '/api/v1/series?match[]=' + encodeURIComponent(query)
-      + '&start=' + start
-      + '&end=' + end;
+    var url = '/api/v1/series?match[]=' + encodeURIComponent(query) + '&start=' + start + '&end=' + end;
 
     var self = this;
-    return this.datasource._request('GET', url)
-    .then(function(result) {
+    return this.datasource._request('GET', url).then(function(result) {
       return _.map(result.data.data, function(metric) {
         return {
           text: self.datasource.getOriginalMetricName(metric),
-          expandable: true
+          expandable: true,
         };
       });
     });
-  };
-
-  return PrometheusMetricFindQuery;
-});
+  }
+}
