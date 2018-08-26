@@ -5,40 +5,54 @@ export class PromCompleter {
   labelQueryCache: any;
   labelNameCache: any;
   labelValueCache: any;
+  templateVariableCompletions: any;
 
   identifierRegexps = [/\[/, /[a-zA-Z0-9_:]/];
 
-  constructor(private datasource: PrometheusDatasource) {
+  constructor(private datasource: PrometheusDatasource, private templateSrv) {
     this.labelQueryCache = {};
     this.labelNameCache = {};
     this.labelValueCache = {};
+    this.templateVariableCompletions = this.templateSrv.variables.map(variable => {
+      return {
+        caption: '$' + variable.name,
+        value: '$' + variable.name,
+        meta: 'variable',
+        score: Number.MAX_VALUE,
+      };
+    });
   }
 
   getCompletions(editor, session, pos, prefix, callback) {
-    let token = session.getTokenAt(pos.row, pos.column);
+    const wrappedCallback = (err, completions) => {
+      completions = completions.concat(this.templateVariableCompletions);
+      return callback(err, completions);
+    };
+
+    const token = session.getTokenAt(pos.row, pos.column);
 
     switch (token.type) {
       case 'entity.name.tag.label-matcher':
         this.getCompletionsForLabelMatcherName(session, pos).then(completions => {
-          callback(null, completions);
+          wrappedCallback(null, completions);
         });
         return;
       case 'string.quoted.label-matcher':
         this.getCompletionsForLabelMatcherValue(session, pos).then(completions => {
-          callback(null, completions);
+          wrappedCallback(null, completions);
         });
         return;
       case 'entity.name.tag.label-list-matcher':
         this.getCompletionsForBinaryOperator(session, pos).then(completions => {
-          callback(null, completions);
+          wrappedCallback(null, completions);
         });
         return;
     }
 
     if (token.type === 'paren.lparen' && token.value === '[') {
       var vectors = [];
-      for (let unit of ['s', 'm', 'h']) {
-        for (let value of [1, 5, 10, 30]) {
+      for (const unit of ['s', 'm', 'h']) {
+        for (const value of [1, 5, 10, 30]) {
           vectors.push({
             caption: value + unit,
             value: '[' + value + unit,
@@ -59,14 +73,14 @@ export class PromCompleter {
         meta: 'range vector',
       });
 
-      callback(null, vectors);
+      wrappedCallback(null, vectors);
       return;
     }
 
     var query = prefix;
 
     return this.datasource.performSuggestQuery(query, true).then(metricNames => {
-      callback(
+      wrappedCallback(
         null,
         metricNames.map(name => {
           let value = name;
@@ -85,7 +99,7 @@ export class PromCompleter {
   }
 
   getCompletionsForLabelMatcherName(session, pos) {
-    let metricName = this.findMetricName(session, pos.row, pos.column);
+    const metricName = this.findMetricName(session, pos.row, pos.column);
     if (!metricName) {
       return Promise.resolve(this.transformToCompletions(['__name__', 'instance', 'job'], 'label name'));
     }
@@ -111,7 +125,7 @@ export class PromCompleter {
   }
 
   getCompletionsForLabelMatcherValue(session, pos) {
-    let metricName = this.findMetricName(session, pos.row, pos.column);
+    const metricName = this.findMetricName(session, pos.row, pos.column);
     if (!metricName) {
       return Promise.resolve([]);
     }
@@ -149,7 +163,7 @@ export class PromCompleter {
   }
 
   getCompletionsForBinaryOperator(session, pos) {
-    let keywordOperatorToken = this.findToken(session, pos.row, pos.column, 'keyword.control', null, 'identifier');
+    const keywordOperatorToken = this.findToken(session, pos.row, pos.column, 'keyword.control', null, 'identifier');
     if (!keywordOperatorToken) {
       return Promise.resolve([]);
     }
@@ -190,7 +204,7 @@ export class PromCompleter {
       case 'ignoring':
       case 'group_left':
       case 'group_right':
-        let binaryOperatorToken = this.findToken(
+        const binaryOperatorToken = this.findToken(
           session,
           keywordOperatorToken.row,
           keywordOperatorToken.column,
@@ -229,7 +243,7 @@ export class PromCompleter {
             return labelNames;
           });
         } else {
-          let metricName = this.findMetricName(session, binaryOperatorToken.row, binaryOperatorToken.column);
+          const metricName = this.findMetricName(session, binaryOperatorToken.row, binaryOperatorToken.column);
           return this.getLabelNameAndValueForExpression(metricName, 'metricName').then(result => {
             var labelNames = this.transformToCompletions(
               _.uniq(
@@ -318,7 +332,7 @@ export class PromCompleter {
         // current row
         c = 0;
         for (idx = 0; idx < tokens.length; idx++) {
-          let nc = c + tokens[idx].value.length;
+          const nc = c + tokens[idx].value.length;
           if (nc >= column) {
             break;
           }
