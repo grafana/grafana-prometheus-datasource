@@ -1,3 +1,26 @@
+//  🌟 This was machine generated.  Do not edit. 🌟
+//  
+//  Frame[0] {
+//      "type": "timeseries-many",
+//      "custom": {
+//          "resultType": "matrix"
+//      },
+//      "executedQueryString": "Expr: test1\nStep: 1s"
+//  }
+//  Name: go_goroutines{job="prometheus"}
+//  Dimensions: 2 Fields by 3 Rows
+//  +-------------------------------+------------------------------------------------+
+//  | Name: Time                    | Name: Value                                    |
+//  | Labels:                       | Labels: __name__=go_goroutines, job=prometheus |
+//  | Type: []time.Time             | Type: []float64                                |
+//  +-------------------------------+------------------------------------------------+
+//  | 2022-01-11 08:25:33 +0000 UTC | 21                                             |
+//  | 2022-01-11 08:25:34 +0000 UTC | 32                                             |
+//  | 2022-01-11 08:25:37 +0000 UTC | 43                                             |
+//  +-------------------------------+------------------------------------------------+
+//  
+//  
+//  🌟 This was machine generated.  Do not edit. 🌟
 {
   "frames": [
     {
