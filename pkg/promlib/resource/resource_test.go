@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/grafana/pkg/promlib/resource"
+	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/resource"
 )
 
 type mockRoundTripper struct {

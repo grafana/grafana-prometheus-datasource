@@ -10,7 +10,7 @@ import (
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	sdkapi "github.com/grafana/grafana-plugin-sdk-go/experimental/apis/datasource/v0alpha1"
 
-	"github.com/grafana/grafana/pkg/promlib/models"
+	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/models"
 )
 
 const (

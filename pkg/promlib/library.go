@@ -11,10 +11,10 @@ import (
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 
-	"github.com/grafana/grafana/pkg/promlib/client"
-	"github.com/grafana/grafana/pkg/promlib/instrumentation"
-	"github.com/grafana/grafana/pkg/promlib/querydata"
-	"github.com/grafana/grafana/pkg/promlib/resource"
+	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/client"
+	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/instrumentation"
+	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/querydata"
+	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/resource"
 )
 
 type Service struct {

@@ -1,8 +1,9 @@
 {
   "type": "datasource",
   "name": "Prometheus",
-  "id": "prometheus",
+  "id": "grafana-prometheus-datasource",
   "category": "tsdb",
+  "executable": "gpx_prometheus",
   "routes": [
     {
       "method": "POST",

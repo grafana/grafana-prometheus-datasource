@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
 
-	"github.com/grafana/grafana/pkg/promlib/intervalv2"
+	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/intervalv2"
 )
 
 var (

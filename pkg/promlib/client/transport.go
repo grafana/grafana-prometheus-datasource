@@ -11,8 +11,8 @@ import (
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 
-	"github.com/grafana/grafana/pkg/promlib/middleware"
-	"github.com/grafana/grafana/pkg/promlib/utils"
+	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/middleware"
+	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/utils"
 )
 
 // CreateTransportOptions creates options for the http client.

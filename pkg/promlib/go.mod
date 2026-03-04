@@ -1,4 +1,4 @@
-module github.com/grafana/grafana/pkg/promlib
+module github.com/grafana/grafana-prometheus-datasource/pkg/promlib
 
 go 1.25.7
 

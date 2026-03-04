@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/grafana/pkg/promlib/models"
-	"github.com/grafana/grafana/pkg/promlib/querydata/exemplar"
+	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/models"
+	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/querydata/exemplar"
 )
 
 func TestQueryData_parseResponse(t *testing.T) {

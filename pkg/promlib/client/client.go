@@ -13,7 +13,7 @@ import (
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 
-	"github.com/grafana/grafana/pkg/promlib/models"
+	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/models"
 )
 
 type doer interface {

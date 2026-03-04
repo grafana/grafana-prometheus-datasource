@@ -1,5 +1,5 @@
 import { cx } from '@emotion/css';
-import { FormEvent, useMemo, useState } from 'react';
+import React, { FormEvent, useMemo, useState } from 'react';
 import { useEffectOnce } from 'react-use';
 
 import { AzureCredentials } from '@grafana/azure-sdk';

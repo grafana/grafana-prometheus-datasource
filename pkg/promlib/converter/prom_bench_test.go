@@ -19,7 +19,7 @@ func readTestData(t *testing.B, filename string) []byte {
 }
 
 // BenchmarkReadPrometheusStyleResult_FromFile benchmarks processing different test files
-// go test -benchmem -run=^$ -bench=BenchmarkReadPrometheusStyleResult_FromFile$ github.com/grafana/grafana/pkg/promlib/converter/ -memprofile pmem.out -count 6 | tee pmem.0.txt
+// go test -benchmem -run=^$ -bench=BenchmarkReadPrometheusStyleResult_FromFile$ github.com/grafana/grafana-prometheus-datasource/pkg/promlib/converter/ -memprofile pmem.out -count 6 | tee pmem.0.txt
 func BenchmarkReadPrometheusStyleResult_FromFile(b *testing.B) {
 	testFiles := []string{
 		"prom-query-range.json",

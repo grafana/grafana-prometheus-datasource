@@ -16,8 +16,8 @@ import (
 	sdkapi "github.com/grafana/grafana-plugin-sdk-go/experimental/apis/datasource/v0alpha1"
 	"github.com/grafana/grafana-plugin-sdk-go/experimental/schemabuilder"
 
-	"github.com/grafana/grafana/pkg/promlib/intervalv2"
-	"github.com/grafana/grafana/pkg/promlib/models"
+	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/intervalv2"
+	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/models"
 )
 
 var (
@@ -1482,7 +1482,7 @@ func TestQueryTypeDefinitions(t *testing.T) {
 		schemabuilder.BuilderOptions{
 			PluginID: []string{"prometheus"},
 			ScanCode: []schemabuilder.CodePaths{{
-				BasePackage: "github.com/grafana/grafana/pkg/promlib/models",
+				BasePackage: "github.com/grafana/grafana-prometheus-datasource/pkg/promlib/models",
 				CodePath:    "./",
 			}},
 			Enums: []reflect.Type{

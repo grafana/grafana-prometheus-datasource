@@ -16,9 +16,9 @@ import (
 	scope "github.com/grafana/grafana/apps/scope/pkg/apis/scope/v0alpha1"
 	"github.com/prometheus/prometheus/promql/parser"
 
-	"github.com/grafana/grafana/pkg/promlib/client"
-	"github.com/grafana/grafana/pkg/promlib/models"
-	"github.com/grafana/grafana/pkg/promlib/utils"
+	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/client"
+	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/models"
+	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/utils"
 )
 
 type Resource struct {
