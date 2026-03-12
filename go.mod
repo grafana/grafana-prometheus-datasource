@@ -4,7 +4,7 @@ go 1.25.7
 
 require (
 	github.com/grafana/grafana-azure-sdk-go/v2 v2.4.0
-	github.com/grafana/grafana-plugin-sdk-go v0.290.0
+	github.com/grafana/grafana-plugin-sdk-go v0.290.1
 	github.com/grafana/grafana/pkg/promlib v0.0.9
 	github.com/stretchr/testify v1.11.1
 )
