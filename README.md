@@ -1,5 +1,5 @@
 # Prometheus datasource plugin
 
-This is WIP code: do not use it in production. It is under heavily development, and will eat your lunch and eat your chickens.
+[`promlib`](https://github.com/grafana/grafana-prometheus-datasource/tree/main/pkg/promlib) has been migrated out of `grafana/grafana` and is now hosted in this package. It is production-ready and actively used. 
 
-DO NOT USE.
+The datasource, however, is WIP: under heavy development, will eat your lunch and your chickens. DO NOT USE.
