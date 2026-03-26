@@ -103,7 +103,7 @@ func newInstanceSettings(httpClientProvider *sdkhttpclient.Provider, log log.Log
 }
 
 func (s *Service) QueryData(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
-	req = normalizeGrafanaSQLRequest(req)
+	req, schemadsRefIDs := normalizeGrafanaSQLRequest(req)
 
 	if len(req.Queries) == 0 {
 		err := fmt.Errorf("query contains no queries")
@@ -119,6 +119,16 @@ func (s *Service) QueryData(ctx context.Context, req *backend.QueryDataRequest) 
 
 	qd, err := i.queryData.Execute(ctx, req)
 	instrumentation.UpdateQueryDataMetrics(err, qd)
+
+	// Flatten schemads responses from multi-frame time series to single tabular frame.
+	if qd != nil && len(schemadsRefIDs) > 0 {
+		for refID, dr := range qd.Responses {
+			if _, ok := schemadsRefIDs[refID]; ok && dr.Error == nil {
+				dr.Frames = flattenTimeSeriesToTabular(dr.Frames)
+				qd.Responses[refID] = dr
+			}
+		}
+	}
 
 	return qd, err
 }
