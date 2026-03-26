@@ -12,13 +12,16 @@ import (
 // normalizeGrafanaSQLRequest rewrites schemads tabular queries into native
 // Prometheus range queries. Queries without GrafanaSql=true are passed through
 // unchanged. The metric (table) name becomes the PromQL expression.
-func normalizeGrafanaSQLRequest(req *backend.QueryDataRequest) *backend.QueryDataRequest {
+// Returns the modified request and the set of refIDs that were schemads queries
+// (so their responses can be flattened).
+func normalizeGrafanaSQLRequest(req *backend.QueryDataRequest) (*backend.QueryDataRequest, map[string]struct{}) {
 	if req == nil || len(req.Queries) == 0 {
-		return req
+		return req, nil
 	}
 
 	grafanaConfig := req.PluginContext.GrafanaConfig
 	queries := make([]backend.DataQuery, 0, len(req.Queries))
+	schemadsRefIDs := make(map[string]struct{})
 
 	for _, q := range req.Queries {
 		var query schemas.Query
@@ -62,8 +65,12 @@ func normalizeGrafanaSQLRequest(req *backend.QueryDataRequest) *backend.QueryDat
 
 		q.JSON = raw
 		queries = append(queries, q)
+		schemadsRefIDs[q.RefID] = struct{}{}
 	}
 
 	req.Queries = queries
-	return req
+	if len(schemadsRefIDs) == 0 {
+		return req, nil
+	}
+	return req, schemadsRefIDs
 }
