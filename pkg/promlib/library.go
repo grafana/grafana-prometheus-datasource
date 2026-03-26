@@ -10,6 +10,7 @@ import (
 	sdkhttpclient "github.com/grafana/grafana-plugin-sdk-go/backend/httpclient"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
+	schemas "github.com/grafana/schemads"
 
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/client"
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/instrumentation"
@@ -23,8 +24,9 @@ type Service struct {
 }
 
 type instance struct {
-	queryData *querydata.QueryData
-	resource  *resource.Resource
+	queryData    *querydata.QueryData
+	resource     *resource.Resource
+	schemaDatasource *schemas.SchemaDatasource
 }
 
 type ExtendOptions func(ctx context.Context, settings backend.DataSourceInstanceSettings, clientOpts *sdkhttpclient.Options, log log.Logger) error
@@ -81,14 +83,28 @@ func newInstanceSettings(httpClientProvider *sdkhttpclient.Provider, log log.Log
 			return nil, err
 		}
 
+		// Create schema provider for dsabstraction support
+		schemaProvider := resource.NewSchemaProvider(r)
+		schemaDs := schemas.NewSchemaDatasource(
+			schemaProvider, // SchemaHandler
+			schemaProvider, // TablesHandler
+			schemaProvider, // ColumnsHandler
+			nil,            // TableParameterValuesHandler
+			nil,            // ColumnValuesHandler
+			nil,            // fallback CallResourceHandler (handled below)
+		)
+
 		return instance{
-			queryData: qd,
-			resource:  r,
+			queryData:        qd,
+			resource:         r,
+			schemaDatasource: schemaDs,
 		}, nil
 	}
 }
 
 func (s *Service) QueryData(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
+	req = normalizeGrafanaSQLRequest(req)
+
 	if len(req.Queries) == 0 {
 		err := fmt.Errorf("query contains no queries")
 		instrumentation.UpdateQueryDataMetrics(err, nil)
@@ -111,6 +127,11 @@ func (s *Service) CallResource(ctx context.Context, req *backend.CallResourceReq
 	i, err := s.getInstance(ctx, req.PluginContext)
 	if err != nil {
 		return err
+	}
+
+	// Route schemads requests (abstractionSchema/*) through the SchemaDatasource handler.
+	if strings.HasPrefix(req.Path, schemas.BaseResourcePath) {
+		return i.schemaDatasource.CallResource(ctx, req, sender)
 	}
 
 	switch {
