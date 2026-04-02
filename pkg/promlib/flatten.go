@@ -102,5 +102,17 @@ func flattenTimeSeriesToTabular(frames data.Frames) data.Frames {
 	}
 
 	out := data.NewFrame("", fields...)
+
+	// Preserve ExecutedQueryString from the source frames so the
+	// dsabstraction response includes the PromQL that was actually run.
+	for _, frame := range frames {
+		if frame.Meta != nil && frame.Meta.ExecutedQueryString != "" {
+			out.Meta = &data.FrameMeta{
+				ExecutedQueryString: frame.Meta.ExecutedQueryString,
+			}
+			break
+		}
+	}
+
 	return data.Frames{out}
 }
