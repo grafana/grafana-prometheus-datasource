@@ -93,6 +93,7 @@ func newInstanceSettings(httpClientProvider *sdkhttpclient.Provider, log log.Log
 			nil,            // ColumnValuesHandler
 			nil,            // fallback CallResourceHandler (handled below)
 		)
+		schemaDs.FunctionsHandler = schemaProvider
 
 		return instance{
 			queryData:        qd,
