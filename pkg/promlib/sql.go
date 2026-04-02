@@ -44,10 +44,21 @@ func normalizeGrafanaSQLRequest(req *backend.QueryDataRequest) (*backend.QueryDa
 			continue
 		}
 
-		// The table name is the metric name — use it directly as the PromQL expression.
+		// Build the PromQL expression. If a table function is specified
+		// (e.g. prometheus_rate), wrap the metric accordingly.
+		expr := query.Table
+		funcName, funcArgs := extractFunctionContext(q.JSON)
+		if funcName == "prometheus_rate" {
+			duration := funcArgs["duration"]
+			if duration == "" {
+				duration = "5m"
+			}
+			expr = "rate(" + query.Table + "[" + duration + "])"
+		}
+
 		promQuery := models.QueryModel{
 			PrometheusQueryProperties: models.PrometheusQueryProperties{
-				Expr:   query.Table,
+				Expr:   expr,
 				Range:  true,
 				Format: models.PromQueryFormatTimeSeries,
 			},
@@ -73,4 +84,18 @@ func normalizeGrafanaSQLRequest(req *backend.QueryDataRequest) (*backend.QueryDa
 		return req, nil
 	}
 	return req, schemadsRefIDs
+}
+
+// extractFunctionContext extracts functionName and functionArgs from the raw
+// query JSON. These fields are set by the dsabstraction table function engine
+// when a query originates from a table function call.
+func extractFunctionContext(raw json.RawMessage) (string, map[string]string) {
+	var payload struct {
+		FunctionName string            `json:"functionName"`
+		FunctionArgs map[string]string `json:"functionArgs"`
+	}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return "", nil
+	}
+	return payload.FunctionName, payload.FunctionArgs
 }

@@ -70,6 +70,25 @@ func (p *SchemaProvider) Columns(ctx context.Context, req *schemas.ColumnsReques
 	return &schemas.ColumnsResponse{Columns: columns}, nil
 }
 
+// Functions implements schemas.FunctionsHandler.
+// Returns the table functions that the Prometheus datasource supports.
+func (p *SchemaProvider) Functions(_ context.Context, _ *schemas.FunctionsRequest) (*schemas.FunctionsResponse, error) {
+	return &schemas.FunctionsResponse{
+		Functions: []schemas.Function{
+			{
+				Name: "prometheus_rate",
+				Kind: schemas.FunctionKindTable,
+				Params: []schemas.FunctionParam{
+					{Name: "datasource", Type: schemas.ColumnTypeString, Required: true, Description: "Datasource reference (type::uid)"},
+					{Name: "metric", Type: schemas.ColumnTypeString, Required: true, Description: "Metric name"},
+					{Name: "duration", Type: schemas.ColumnTypeString, Required: true, Description: "Rate window (e.g. '5m')"},
+				},
+				Description: "Per-second rate of increase of a counter over the given duration window",
+			},
+		},
+	}, nil
+}
+
 // buildMetricColumns returns timestamp + value + alphabetically sorted label columns.
 func buildMetricColumns(labels []string) []schemas.Column {
 	sort.Strings(labels)
