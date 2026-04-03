@@ -48,9 +48,10 @@ func normalizeGrafanaSQLRequest(req *backend.QueryDataRequest) (*backend.QueryDa
 			continue
 		}
 
-		// Build the PromQL expression from the table name, filters, and table parameters.
+		// Build the PromQL expression from the table name, filters, table parameters, and aggregation.
 		params := extractTableParams(q.JSON)
-		expr, err := buildPromQLExpr(query.Table, query.Filters, params)
+		agg := extractAggregation(q.JSON)
+		expr, err := buildPromQLExpr(query.Table, query.Filters, params, agg)
 		if err != nil {
 			backend.Logger.Warn("failed to build PromQL expression from schemads", "error", err)
 			queries = append(queries, q)
@@ -100,6 +101,24 @@ func normalizeGrafanaSQLRequest(req *backend.QueryDataRequest) (*backend.QueryDa
 	return req, schemadsRefIDs
 }
 
+// aggregationContext describes an aggregation pushdown from the dsabstraction engine.
+type aggregationContext struct {
+	Function string   `json:"function"`
+	Column   string   `json:"column"`
+	GroupBy  []string `json:"groupBy"`
+}
+
+// extractAggregation reads aggregation context from the raw query JSON.
+func extractAggregation(raw json.RawMessage) *aggregationContext {
+	var payload struct {
+		Aggregation *aggregationContext `json:"aggregation"`
+	}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return nil
+	}
+	return payload.Aggregation
+}
+
 // extractTableParams reads tableParameterValues from the raw query JSON.
 func extractTableParams(raw json.RawMessage) map[string]string {
 	var payload struct {
@@ -118,7 +137,7 @@ func extractTableParams(raw json.RawMessage) map[string]string {
 // buildPromQLExpr constructs a PromQL expression from a metric name, schemads
 // filters, and table parameters. Uses the Prometheus parser for safe AST
 // construction.
-func buildPromQLExpr(metric string, filters []schemas.ColumnFilter, params map[string]string) (string, error) {
+func buildPromQLExpr(metric string, filters []schemas.ColumnFilter, params map[string]string, agg *aggregationContext) (string, error) {
 	// Build label matchers from schemads filters.
 	var matchers []*labels.Matcher
 	for _, f := range filters {
@@ -161,10 +180,56 @@ func buildPromQLExpr(metric string, filters []schemas.ColumnFilter, params map[s
 				},
 			},
 		}
-		return call.String(), nil
+		return wrapAggregation(call, agg), nil
+	}
+
+	if agg != nil {
+		parsed, err := parser.ParseExpr(baseExpr)
+		if err != nil {
+			return baseExpr, nil
+		}
+		return wrapAggregation(parsed, agg), nil
 	}
 
 	return baseExpr, nil
+}
+
+// wrapAggregation wraps a PromQL expression with an aggregation operator.
+func wrapAggregation(expr parser.Expr, agg *aggregationContext) string {
+	if agg == nil {
+		return expr.String()
+	}
+
+	var aggType parser.ItemType
+	switch agg.Function {
+	case "SUM":
+		aggType = parser.SUM
+	case "AVG":
+		aggType = parser.AVG
+	case "COUNT":
+		aggType = parser.COUNT
+	case "MIN":
+		aggType = parser.MIN
+	case "MAX":
+		aggType = parser.MAX
+	default:
+		return expr.String()
+	}
+
+	// Filter out "timestamp" from GROUP BY — it's the time axis, not a label.
+	var grouping []string
+	for _, g := range agg.GroupBy {
+		if g != "timestamp" && g != agg.Column {
+			grouping = append(grouping, g)
+		}
+	}
+
+	aggExpr := &parser.AggregateExpr{
+		Op:       aggType,
+		Expr:     expr,
+		Grouping: grouping,
+	}
+	return aggExpr.String()
 }
 
 // schemadsFilterToMatcher converts a schemads filter condition to a Prometheus
