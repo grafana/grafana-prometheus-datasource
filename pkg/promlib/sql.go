@@ -73,6 +73,11 @@ func normalizeGrafanaSQLRequest(req *backend.QueryDataRequest) (*backend.QueryDa
 		if step := params["promstep"]; step != "" {
 			if stepDur, err := time.ParseDuration(step); err == nil {
 				promQuery.IntervalMS = float64(stepDur.Milliseconds())
+				promQuery.Interval = step
+				// Override Interval and MaxDataPoints on the backend.DataQuery
+				// so the interval calculator doesn't override our explicit step.
+				q.Interval = stepDur
+				q.MaxDataPoints = int64(q.TimeRange.Duration().Seconds() / stepDur.Seconds())
 			}
 		}
 
