@@ -32,9 +32,9 @@ var baseColumns = []schemas.Column{
 // They appear as virtual columns in WHERE clauses. Optional (not required)
 // so they don't interfere with underscore-based table name encoding.
 var prometheusTableParams = []schemas.TableParameter{
-	{Name: "promrate", Root: true, Required: false},    // rate duration e.g. "5m"
-	{Name: "promtype", Root: true, Required: false},    // "range" (default) or "instant"
-	{Name: "promstep", Root: true, Required: false},    // query step/resolution e.g. "15s", "1m"
+	{Name: "promrate", Root: true, Required: false},       // rate duration e.g. "5m"
+	{Name: "prominstant", Root: true, Required: false},   // "true" for instant query (default: range)
+	{Name: "promstep", Root: true, Required: false},      // query step/resolution e.g. "15s", "1m"
 }
 
 // Schema implements schemas.SchemaHandler.

@@ -57,7 +57,7 @@ func normalizeGrafanaSQLRequest(req *backend.QueryDataRequest) (*backend.QueryDa
 			continue
 		}
 
-		isInstant := params["promtype"] == "instant"
+		isInstant := params["prominstant"] == "true"
 		promQuery := models.QueryModel{
 			PrometheusQueryProperties: models.PrometheusQueryProperties{
 				Expr:    expr,
