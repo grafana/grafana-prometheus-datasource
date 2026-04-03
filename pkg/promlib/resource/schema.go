@@ -28,6 +28,15 @@ var baseColumns = []schemas.Column{
 	{Name: "value", Type: schemas.ColumnTypeFloat64},
 }
 
+// prometheusTableParams are table parameters that control query behavior.
+// They appear as virtual columns in WHERE clauses. Optional (not required)
+// so they don't interfere with underscore-based table name encoding.
+var prometheusTableParams = []schemas.TableParameter{
+	{Name: "promrate", Root: true, Required: false},    // rate duration e.g. "5m"
+	{Name: "promtype", Root: true, Required: false},    // "range" (default) or "instant"
+	{Name: "promstep", Root: true, Required: false},    // query step/resolution e.g. "15s", "1m"
+}
+
 // Schema implements schemas.SchemaHandler.
 // For fullSchema, tables are returned without label columns since that would
 // require a per-metric labels call for every metric. Use Columns() for
@@ -50,7 +59,12 @@ func (p *SchemaProvider) Tables(ctx context.Context, _ *schemas.TablesRequest) (
 	if err != nil {
 		return nil, err
 	}
-	return &schemas.TablesResponse{Tables: names}, nil
+	// Declare table parameters for every metric.
+	tableParams := make(map[string][]schemas.TableParameter, len(names))
+	for _, name := range names {
+		tableParams[name] = prometheusTableParams
+	}
+	return &schemas.TablesResponse{Tables: names, TableParameters: tableParams}, nil
 }
 
 // Columns implements schemas.ColumnsHandler.
@@ -147,8 +161,9 @@ func (p *SchemaProvider) fetchMetricTables(ctx context.Context) ([]schemas.Table
 	tables := make([]schemas.Table, len(names))
 	for i, name := range names {
 		tables[i] = schemas.Table{
-			Name:    name,
-			Columns: baseColumns,
+			Name:            name,
+			Columns:         baseColumns,
+			TableParameters: prometheusTableParams,
 		}
 	}
 	return tables, nil
