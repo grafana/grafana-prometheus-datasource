@@ -2,8 +2,12 @@ package promlib
 
 import (
 	"encoding/json"
+	"fmt"
+	"time"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
+	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/promql/parser"
 	schemas "github.com/grafana/schemads"
 
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/models"
@@ -44,17 +48,39 @@ func normalizeGrafanaSQLRequest(req *backend.QueryDataRequest) (*backend.QueryDa
 			continue
 		}
 
-		// The table name is the metric name — use it directly as the PromQL expression.
+		// Build the PromQL expression from the table name, filters, table parameters, and aggregation.
+		params := extractTableParams(q.JSON)
+		agg := extractAggregation(q.JSON)
+		expr, err := buildPromQLExpr(query.Table, query.Filters, params, agg)
+		if err != nil {
+			backend.Logger.Warn("failed to build PromQL expression from schemads", "error", err)
+			queries = append(queries, q)
+			continue
+		}
+
+		_, isInstant := params["prominstant"]
 		promQuery := models.QueryModel{
 			PrometheusQueryProperties: models.PrometheusQueryProperties{
-				Expr:   query.Table,
-				Range:  true,
-				Format: models.PromQueryFormatTimeSeries,
+				Expr:    expr,
+				Range:   !isInstant,
+				Instant: isInstant,
+				Format:  models.PromQueryFormatTimeSeries,
 			},
 		}
 		promQuery.RefID = query.RefID
 		promQuery.MaxDataPoints = q.MaxDataPoints
 		promQuery.IntervalMS = float64(q.Interval.Milliseconds())
+
+		if step := params["promstep"]; step != "" {
+			if stepDur, err := time.ParseDuration(step); err == nil {
+				promQuery.IntervalMS = float64(stepDur.Milliseconds())
+				promQuery.Interval = step
+				// Override Interval and MaxDataPoints on the backend.DataQuery
+				// so the interval calculator doesn't override our explicit step.
+				q.Interval = stepDur
+				q.MaxDataPoints = int64(q.TimeRange.Duration().Seconds() / stepDur.Seconds())
+			}
+		}
 
 		raw, err := json.Marshal(promQuery)
 		if err != nil {
@@ -73,4 +99,153 @@ func normalizeGrafanaSQLRequest(req *backend.QueryDataRequest) (*backend.QueryDa
 		return req, nil
 	}
 	return req, schemadsRefIDs
+}
+
+// aggregationContext describes an aggregation pushdown from the dsabstraction engine.
+type aggregationContext struct {
+	Function string   `json:"function"`
+	Column   string   `json:"column"`
+	GroupBy  []string `json:"groupBy"`
+}
+
+// extractAggregation reads aggregation context from the raw query JSON.
+func extractAggregation(raw json.RawMessage) *aggregationContext {
+	var payload struct {
+		Aggregation *aggregationContext `json:"aggregation"`
+	}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return nil
+	}
+	return payload.Aggregation
+}
+
+// extractTableParams reads tableParameterValues from the raw query JSON.
+func extractTableParams(raw json.RawMessage) map[string]string {
+	var payload struct {
+		TableParameterValues map[string]any `json:"tableParameterValues"`
+	}
+	if err := json.Unmarshal(raw, &payload); err != nil || payload.TableParameterValues == nil {
+		return nil
+	}
+	result := make(map[string]string, len(payload.TableParameterValues))
+	for k, v := range payload.TableParameterValues {
+		result[k] = fmt.Sprintf("%v", v)
+	}
+	return result
+}
+
+// buildPromQLExpr constructs a PromQL expression from a metric name, schemads
+// filters, and table parameters. Uses the Prometheus parser for safe AST
+// construction.
+func buildPromQLExpr(metric string, filters []schemas.ColumnFilter, params map[string]string, agg *aggregationContext) (string, error) {
+	// Build label matchers from schemads filters.
+	var matchers []*labels.Matcher
+	for _, f := range filters {
+		for _, cond := range f.Conditions {
+			m, err := schemadsFilterToMatcher(f.Name, cond)
+			if err != nil {
+				continue
+			}
+			matchers = append(matchers, m)
+		}
+	}
+
+	// Build the base metric selector with any filters.
+	var baseExpr string
+	if len(matchers) > 0 {
+		allMatchers := append([]*labels.Matcher{labels.MustNewMatcher(labels.MatchEqual, "__name__", metric)}, matchers...)
+		vs := &parser.VectorSelector{LabelMatchers: allMatchers}
+		baseExpr = vs.String()
+	} else {
+		baseExpr = metric
+	}
+
+	// Apply rate if promrate is set.
+	rateDuration := params["promrate"]
+	if rateDuration != "" {
+		dur, err := time.ParseDuration(rateDuration)
+		if err != nil {
+			return "", fmt.Errorf("invalid promrate %q: %w", rateDuration, err)
+		}
+		innerExpr, err := parser.ParseExpr(baseExpr)
+		if err != nil {
+			return "", fmt.Errorf("failed to parse base expression %q: %w", baseExpr, err)
+		}
+		call := &parser.Call{
+			Func: parser.Functions["rate"],
+			Args: parser.Expressions{
+				&parser.MatrixSelector{
+					VectorSelector: innerExpr,
+					Range:          dur,
+				},
+			},
+		}
+		return wrapAggregation(call, agg), nil
+	}
+
+	if agg != nil {
+		parsed, err := parser.ParseExpr(baseExpr)
+		if err != nil {
+			return baseExpr, nil
+		}
+		return wrapAggregation(parsed, agg), nil
+	}
+
+	return baseExpr, nil
+}
+
+// wrapAggregation wraps a PromQL expression with an aggregation operator.
+func wrapAggregation(expr parser.Expr, agg *aggregationContext) string {
+	if agg == nil {
+		return expr.String()
+	}
+
+	var aggType parser.ItemType
+	switch agg.Function {
+	case "SUM":
+		aggType = parser.SUM
+	case "AVG":
+		aggType = parser.AVG
+	case "COUNT":
+		aggType = parser.COUNT
+	case "MIN":
+		aggType = parser.MIN
+	case "MAX":
+		aggType = parser.MAX
+	default:
+		return expr.String()
+	}
+
+	// Filter out "timestamp" from GROUP BY — it's the time axis, not a label.
+	var grouping []string
+	for _, g := range agg.GroupBy {
+		if g != "timestamp" && g != agg.Column {
+			grouping = append(grouping, g)
+		}
+	}
+
+	aggExpr := &parser.AggregateExpr{
+		Op:       aggType,
+		Expr:     expr,
+		Grouping: grouping,
+	}
+	return aggExpr.String()
+}
+
+// schemadsFilterToMatcher converts a schemads filter condition to a Prometheus
+// label matcher.
+func schemadsFilterToMatcher(name string, cond schemas.FilterCondition) (*labels.Matcher, error) {
+	var mt labels.MatchType
+	switch cond.Operator {
+	case schemas.OperatorEquals:
+		mt = labels.MatchEqual
+	case schemas.OperatorNotEquals:
+		mt = labels.MatchNotEqual
+	case schemas.OperatorLike:
+		mt = labels.MatchRegexp
+	default:
+		return nil, fmt.Errorf("unsupported operator %q for Prometheus", cond.Operator)
+	}
+	value := fmt.Sprintf("%v", cond.Value)
+	return labels.NewMatcher(mt, name, value)
 }
