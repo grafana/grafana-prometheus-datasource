@@ -28,6 +28,14 @@ var baseColumns = []schemas.Column{
 	{Name: "value", Type: schemas.ColumnTypeFloat64},
 }
 
+// prometheusTableHints declares the per-table execution hints that
+// Prometheus supports via FOR (...) clauses.
+var prometheusTableHints = []schemas.TableHint{
+	{Name: "rate", Description: "Apply rate() with the given duration window, e.g. rate('5m')", HasValue: true},
+	{Name: "step", Description: "Override the query step/resolution, e.g. step('30s')", HasValue: true},
+	{Name: "instant", Description: "Execute as an instant query instead of a range query"},
+}
+
 // Schema implements schemas.SchemaHandler.
 // For fullSchema, tables are returned without label columns since that would
 // require a per-metric labels call for every metric. Use Columns() for
@@ -149,6 +157,7 @@ func (p *SchemaProvider) fetchMetricTables(ctx context.Context) ([]schemas.Table
 		tables[i] = schemas.Table{
 			Name:    name,
 			Columns: baseColumns,
+			TableHints: prometheusTableHints,
 		}
 	}
 	return tables, nil
