@@ -17,7 +17,7 @@ import (
 // dsabstraction query model but aren't part of the schemads schema type.
 type schemadsQuery struct {
 	schemas.Query
-	DatasourceHints map[string]string  `json:"datasourceHints,omitempty"`
+	TableHintValues map[string]string  `json:"tableHintValues,omitempty"`
 	Aggregation     *aggregationContext `json:"aggregation,omitempty"`
 }
 
@@ -73,7 +73,7 @@ func normalizeGrafanaSQLRequest(req *backend.QueryDataRequest) (*backend.QueryDa
 			continue
 		}
 
-		hints := query.DatasourceHints
+		hints := query.TableHintValues
 		if hints == nil {
 			hints = map[string]string{}
 		}
