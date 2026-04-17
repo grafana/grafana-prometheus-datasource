@@ -55,12 +55,17 @@ jobs:
           node-version-file: '.nvmrc'
           cache: 'npm'
 
-      # npm trusted publishing (OIDC provenance) requires npm >= 11.5.1;
-      # GitHub Actions runners ship with an older version.
-      # This must run BEFORE the registry-url setup below, because
-      # setup-node's .npmrc config breaks npm's global self-upgrade.
+      # npm trusted publishing (OIDC provenance) requires npm >= 11.5.1.
+      # The npm bundled with Node 22 on GitHub runners has broken
+      # dependencies, so we download a fresh copy and use it to
+      # self-install globally.
       - name: Install npm >= 11.5.1
-        run: npm install -g npm@^11.5.1
+        run: |
+          NPM_VERSION="11.5.1"
+          curl -fsSL "https://registry.npmjs.org/npm/-/npm-${NPM_VERSION}.tgz" -o /tmp/npm.tgz
+          mkdir -p /tmp/npm-fresh && tar xzf /tmp/npm.tgz -C /tmp/npm-fresh --strip-components=1
+          node /tmp/npm-fresh/bin/npm-cli.js install -g "npm@^${NPM_VERSION}"
+          echo "npm $(npm --version)"
 
       - name: Configure npm registry
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
