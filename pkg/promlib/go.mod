@@ -6,6 +6,7 @@ require (
 	github.com/grafana/dskit v0.0.0-20260108123158-1a1acfb6ef2e
 	github.com/grafana/grafana-plugin-sdk-go v0.290.0
 	github.com/grafana/grafana/apps/scope v0.0.0-20251007093103-792853df9134
+	github.com/grafana/schemads v0.0.6
 	github.com/json-iterator/go v1.1.12
 	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/common v0.67.5
@@ -70,6 +71,9 @@ require (
 	github.com/hashicorp/go-hclog v1.6.3 // indirect
 	github.com/hashicorp/go-plugin v1.7.0 // indirect
 	github.com/hashicorp/yamux v0.1.2 // indirect
+	github.com/huandu/go-clone v1.7.3 // indirect
+	github.com/huandu/go-sqlbuilder v1.39.1 // indirect
+	github.com/huandu/xstrings v1.4.0 // indirect
 	github.com/invopop/jsonschema v0.13.0 // indirect
 	github.com/jaegertracing/jaeger-idl v0.6.0 // indirect
 	github.com/jszwedko/go-datemath v0.1.1-0.20230526204004-640a500621d6 // indirect
@@ -124,7 +128,7 @@ require (
 	google.golang.org/api v0.256.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260209200024-4cfbd4190f57 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260209200024-4cfbd4190f57 // indirect
-	google.golang.org/grpc v1.79.1 // indirect
+	google.golang.org/grpc v1.79.3 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/client-go v0.35.1 // indirect
@@ -135,3 +139,5 @@ require (
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.2 // indirect
 )
+
+replace github.com/grafana/schemads => /home/kbrandt/go/src/github.com/grafana/schemads
