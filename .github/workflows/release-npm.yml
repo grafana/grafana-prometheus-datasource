@@ -13,7 +13,7 @@ on:
 jobs:
   publish:
     name: Publish @grafana/prometheus
-    runs-on: ubuntu-latest
+    runs-on: github-hosted-ubuntu-x64-small
     environment: npm-publish
     permissions:
       contents: read
@@ -36,7 +36,7 @@ jobs:
           persist-credentials: false
 
       - name: Check version is newer than npm
-        uses: EndBug/version-check@5102328418c0130d66ca712d755c303e93368ce2 # v2.1.7
+        uses: EndBug/version-check@095362f3cd50f690c8fa0e6afeea81834bd8d320 # v3.0.0
         id: version_check
         with:
           file-name: packages/grafana-prometheus/package.json
@@ -54,12 +54,15 @@ jobs:
         with:
           node-version-file: '.nvmrc'
           cache: 'npm'
-          registry-url: 'https://registry.npmjs.org'
 
-      # npm trusted publishing (OIDC provenance) requires npm >= 11.5.1;
-      # GitHub Actions runners ship with an older version.
-      - name: Install npm >= 11.5.1
+      # Trusted Publishing is only available in npm v11.5.1 and later
+      - name: Update npm
         run: npm install -g npm@^11.5.1
+
+      - name: Configure npm registry
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
         run: cd packages/grafana-prometheus && npm ci
