@@ -1,4 +1,5 @@
 {
+  "extends": "./tsconfig.json",
   "compilerOptions": {
     "rootDir": "./src"
   },
@@ -8,8 +9,6 @@
     "__mocks__",
     "test",
     "**/*.test.ts*",
-    "src/querybuilder/testUtils.ts",
-    "../../public/test/setupTests.ts"
-  ],
-  "extends": "./tsconfig.json"
+    "src/querybuilder/testUtils.ts"
+  ]
 }
