@@ -54,12 +54,18 @@ jobs:
         with:
           node-version-file: '.nvmrc'
           cache: 'npm'
-          registry-url: 'https://registry.npmjs.org'
 
       # npm trusted publishing (OIDC provenance) requires npm >= 11.5.1;
       # GitHub Actions runners ship with an older version.
+      # This must run BEFORE the registry-url setup below, because
+      # setup-node's .npmrc config breaks npm's global self-upgrade.
       - name: Install npm >= 11.5.1
         run: npm install -g npm@^11.5.1
+
+      - name: Configure npm registry
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
         run: cd packages/grafana-prometheus && npm ci
