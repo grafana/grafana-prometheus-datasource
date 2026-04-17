@@ -1,5 +1,3 @@
-// TODO: Remove once @grafana/data devDependency is bumped to >=13.0.0 and featureToggles.d.ts is deleted.
-/// <reference path="./typings/featureToggles.d.ts" />
 import { defaults } from 'lodash';
 import { tz } from 'moment-timezone';
 import { lastValueFrom, type Observable, throwError } from 'rxjs';
