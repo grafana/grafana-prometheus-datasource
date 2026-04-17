@@ -21,7 +21,6 @@
   "exports": {
     "./package.json": "./package.json",
     ".": {
-      "@grafana-app/source": "./src/index.ts",
       "types": "./dist/types/index.d.ts",
       "import": "./dist/esm/index.mjs",
       "require": "./dist/cjs/index.cjs"
