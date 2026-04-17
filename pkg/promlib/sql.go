@@ -13,19 +13,11 @@ import (
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/models"
 )
 
-// schemadsQuery extends schemas.Query with fields that arrive from the
-// dsabstraction query model but aren't part of the schemads schema type.
+// schemadsQuery extends schemas.Query with the tableHintValues field
+// that comes from FOR (...) clauses in SQL.
 type schemadsQuery struct {
 	schemas.Query
-	TableHintValues map[string]string  `json:"tableHintValues,omitempty"`
-	Aggregation     *aggregationContext `json:"aggregation,omitempty"`
-}
-
-// aggregationContext describes an aggregation pushdown from the dsabstraction engine.
-type aggregationContext struct {
-	Function string   `json:"function"`
-	Column   string   `json:"column"`
-	GroupBy  []string `json:"groupBy"`
+	TableHintValues map[string]string `json:"tableHintValues,omitempty"`
 }
 
 // normalizeGrafanaSQLRequest rewrites schemads tabular queries into native
@@ -37,9 +29,6 @@ type aggregationContext struct {
 //	RATE('5m')  — wraps metric with rate(metric[5m])
 //	STEP('30s') — overrides query step/resolution
 //	INSTANT     — switches to instant query mode
-//
-// Aggregation pushdown from the SQL plan (SUM/AVG/COUNT/MIN/MAX + GROUP BY)
-// is translated to PromQL aggregation operators.
 //
 // Returns the modified request and the set of refIDs that were schemads queries
 // (so their responses can be flattened).
@@ -78,7 +67,7 @@ func normalizeGrafanaSQLRequest(req *backend.QueryDataRequest) (*backend.QueryDa
 			hints = map[string]string{}
 		}
 
-		expr, err := buildPromQLExpr(query.Table, query.Filters, hints, query.Aggregation)
+		expr, err := buildPromQLExpr(query.Table, query.Filters, hints)
 		if err != nil {
 			backend.Logger.Warn("failed to build PromQL expression from schemads", "error", err)
 			queries = append(queries, q)
@@ -128,9 +117,9 @@ func normalizeGrafanaSQLRequest(req *backend.QueryDataRequest) (*backend.QueryDa
 }
 
 // buildPromQLExpr constructs a PromQL expression from a metric name, schemads
-// filters, datasource hints, and optional aggregation context. Uses the
-// Prometheus parser for safe AST construction.
-func buildPromQLExpr(metric string, filters []schemas.ColumnFilter, hints map[string]string, agg *aggregationContext) (string, error) {
+// filters, and datasource hints. Uses the Prometheus parser for safe AST
+// construction.
+func buildPromQLExpr(metric string, filters []schemas.ColumnFilter, hints map[string]string) (string, error) {
 	// Build label matchers from schemads filters.
 	var matchers []*labels.Matcher
 	for _, f := range filters {
@@ -172,57 +161,10 @@ func buildPromQLExpr(metric string, filters []schemas.ColumnFilter, hints map[st
 				},
 			},
 		}
-		return wrapAggregation(call, agg), nil
-	}
-
-	if agg != nil {
-		parsed, err := parser.ParseExpr(baseExpr)
-		if err != nil {
-			return baseExpr, nil
-		}
-		return wrapAggregation(parsed, agg), nil
+		return call.String(), nil
 	}
 
 	return baseExpr, nil
-}
-
-// wrapAggregation wraps a PromQL expression with an aggregation operator.
-func wrapAggregation(expr parser.Expr, agg *aggregationContext) string {
-	if agg == nil {
-		return expr.String()
-	}
-
-	var aggType parser.ItemType
-	switch agg.Function {
-	case "SUM":
-		aggType = parser.SUM
-	case "AVG":
-		aggType = parser.AVG
-	case "COUNT":
-		aggType = parser.COUNT
-	case "MIN":
-		aggType = parser.MIN
-	case "MAX":
-		aggType = parser.MAX
-	default:
-		return expr.String()
-	}
-
-	// Filter out "timestamp" from GROUP BY — it's the time axis, not a label.
-	// Also filter the aggregation column itself (e.g. "value").
-	var grouping []string
-	for _, g := range agg.GroupBy {
-		if g != "timestamp" && g != agg.Column {
-			grouping = append(grouping, g)
-		}
-	}
-
-	aggExpr := &parser.AggregateExpr{
-		Op:       aggType,
-		Expr:     expr,
-		Grouping: grouping,
-	}
-	return aggExpr.String()
 }
 
 // schemadsFilterToMatcher converts a schemads filter condition to a Prometheus
