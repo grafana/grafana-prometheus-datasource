@@ -1,0 +1,94 @@
+name: Publish @grafana/prometheus to NPM
+
+permissions: {}
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: 'Dry run (skip actual publish)'
+        type: boolean
+        default: false
+
+jobs:
+  publish:
+    name: Publish @grafana/prometheus
+    runs-on: ubuntu-latest
+    environment: npm-publish
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Verify caller is a repo admin
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          PERMISSION=$(gh api "repos/${{ github.repository }}/collaborators/${ACTOR}/permission" --jq '.permission')
+          if [[ "$PERMISSION" != "admin" ]]; then
+            echo "::error::Only repository admins can run this workflow. Your permission level: ${PERMISSION}"
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Check version is newer than npm
+        uses: EndBug/version-check@5102328418c0130d66ca712d755c303e93368ce2 # v2.1.7
+        id: version_check
+        with:
+          file-name: packages/grafana-prometheus/package.json
+          file-url: https://unpkg.com/@grafana/prometheus/package.json
+          static-checking: localIsNew
+
+      - name: Abort if version not newer
+        if: steps.version_check.outputs.changed != 'true'
+        run: |
+          echo "::error::Local version is not newer than npm. Bump the version in packages/grafana-prometheus/package.json first."
+          exit 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
+
+      # npm trusted publishing (OIDC provenance) requires npm >= 11.5.1;
+      # GitHub Actions runners ship with an older version.
+      - name: Install npm >= 11.5.1
+        run: npm install -g npm@^11.5.1
+
+      - name: Install dependencies
+        run: cd packages/grafana-prometheus && npm ci
+
+      - name: Build library
+        run: cd packages/grafana-prometheus && npm run build
+
+      - name: Determine npm tag
+        id: npm_tag
+        env:
+          VERSION: ${{ steps.version_check.outputs.version }}
+        run: |
+          if [[ "$VERSION" == *-* ]]; then
+            TAG=$(echo "$VERSION" | sed 's/.*-\([a-zA-Z]*\).*/\1/')
+            echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=latest" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish to NPM
+        if: inputs.dry-run != true
+        working-directory: packages/grafana-prometheus
+        run: npm publish --access public --tag ${{ steps.npm_tag.outputs.tag }}
+
+      - name: Dry run summary
+        if: inputs.dry-run == true
+        env:
+          VERSION: ${{ steps.version_check.outputs.version }}
+          TAG: ${{ steps.npm_tag.outputs.tag }}
+        run: |
+          echo "## Dry run complete" >> "$GITHUB_STEP_SUMMARY"
+          echo "Would publish @grafana/prometheus@${VERSION} with tag ${TAG}" >> "$GITHUB_STEP_SUMMARY"
