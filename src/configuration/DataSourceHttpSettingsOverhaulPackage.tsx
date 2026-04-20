@@ -2,6 +2,7 @@ import { ReactElement, useState } from 'react';
 import * as React from 'react';
 
 import { Auth, ConnectionSettings, convertLegacyAuthProps, AuthMethod } from '@grafana/plugin-ui';
+// @ts-ignore - @grafana/prometheus not yet available; remove once resolved
 import { docsTip, overhaulStyles } from '@grafana/prometheus';
 import { Alert, SecureSocksProxySettings, useTheme2 } from '@grafana/ui';
 // @ts-ignore - @grafana/ui/internal not yet exported; remove once available
@@ -49,6 +50,7 @@ export const DataSourcehttpSettingsOverhaul = (props: Props) => {
   // for custom auth methods sigV4 and azure auth
   let customMethods: CustomMethod[] = [];
 
+  // @ts-ignore - sigV4Auth not on AzurePromDataSourceOptions; remove once resolved
   const [sigV4Selected, setSigV4Selected] = useState<boolean>(options.jsonData.sigV4Auth || false);
 
   const sigV4Id = 'custom-sigV4Id';
@@ -169,6 +171,7 @@ export const DataSourcehttpSettingsOverhaul = (props: Props) => {
             jsonData: {
               ...options.jsonData,
               azureCredentials: method === azureAuthId ? options.jsonData.azureCredentials : undefined,
+              // @ts-ignore - sigV4Auth not on AzurePromDataSourceOptions; remove once resolved
               sigV4Auth: method === sigV4Id,
               oauthPassThru: method === AuthMethod.OAuthForward,
             },

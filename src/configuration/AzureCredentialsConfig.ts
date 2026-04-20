@@ -9,6 +9,7 @@ import {
   updateDatasourceCredentials,
 } from '@grafana/azure-sdk';
 import { DataSourceSettings, SelectableValue } from '@grafana/data';
+// @ts-ignore - @grafana/prometheus not yet available; remove once resolved
 import { PromOptions } from '@grafana/prometheus';
 import { config } from '@grafana/runtime';
 
