@@ -6,14 +6,14 @@ require (
 	github.com/grafana/dskit v0.0.0-20260108123158-1a1acfb6ef2e
 	github.com/grafana/grafana-plugin-sdk-go v0.290.0
 	github.com/grafana/grafana/apps/scope v0.0.0-20251007093103-792853df9134
-	github.com/grafana/schemads v0.0.6
+	github.com/grafana/schemads v0.0.9
 	github.com/json-iterator/go v1.1.12
 	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/common v0.67.5
 	github.com/prometheus/prometheus v0.303.1
 	github.com/stretchr/testify v1.11.1
-	go.opentelemetry.io/otel v1.40.0
-	go.opentelemetry.io/otel/trace v1.40.0
+	go.opentelemetry.io/otel v1.43.0
+	go.opentelemetry.io/otel/trace v1.43.0
 	google.golang.org/protobuf v1.36.11
 	k8s.io/apimachinery v0.35.1
 )
@@ -109,8 +109,8 @@ require (
 	go.opentelemetry.io/contrib/samplers/jaegerremote v0.34.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.40.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.40.0 // indirect
-	go.opentelemetry.io/otel/metric v1.40.0 // indirect
-	go.opentelemetry.io/otel/sdk v1.40.0 // indirect
+	go.opentelemetry.io/otel/metric v1.43.0 // indirect
+	go.opentelemetry.io/otel/sdk v1.43.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.9.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
@@ -119,7 +119,7 @@ require (
 	golang.org/x/mod v0.33.0 // indirect
 	golang.org/x/net v0.51.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
-	golang.org/x/sys v0.41.0 // indirect
+	golang.org/x/sys v0.42.0 // indirect
 	golang.org/x/telemetry v0.0.0-20260209163413-e7419c687ee4 // indirect
 	golang.org/x/text v0.34.0 // indirect
 	golang.org/x/tools v0.42.0 // indirect
@@ -139,5 +139,3 @@ require (
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.2 // indirect
 )
-
-replace github.com/grafana/schemads => /home/kbrandt/go/src/github.com/grafana/schemads
