@@ -2,7 +2,7 @@ apiVersion: 1
 
 datasources:
   - name: 'prometheus'
-    type: 'grafana-prometheus-datasource'
+    type: 'prometheus'
     access: proxy
     isDefault: false
     orgId: 1
