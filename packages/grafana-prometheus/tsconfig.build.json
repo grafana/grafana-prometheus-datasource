@@ -9,6 +9,7 @@
     "__mocks__",
     "test",
     "**/*.test.ts*",
-    "src/querybuilder/testUtils.ts"
+    "src/querybuilder/testUtils.ts",
+    "rollup.config.ts"
   ]
 }
