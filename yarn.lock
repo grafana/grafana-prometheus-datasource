@@ -1275,16 +1275,16 @@ __metadata:
     "@testing-library/user-event": "npm:14.6.1"
     "@types/debounce-promise": "npm:3.1.9"
     "@types/jest": "npm:29.5.14"
-    "@types/lodash": "npm:4.17.20"
-    "@types/node": "npm:24.10.1"
+    "@types/lodash": "npm:4.17.24"
+    "@types/node": "npm:24.11.2"
     "@types/pluralize": "npm:^0.0.33"
     "@types/prismjs": "npm:1.26.5"
-    "@types/react": "npm:18.3.12"
-    "@types/react-dom": "npm:18.3.1"
-    "@types/react-highlight-words": "npm:0.20.0"
+    "@types/react": "npm:18.3.28"
+    "@types/react-dom": "npm:18.3.7"
+    "@types/react-highlight-words": "npm:0.20.1"
     "@types/react-window": "npm:^1.8.8"
     "@types/semver": "npm:7.7.1"
-    "@types/uuid": "npm:10.0.0"
+    "@types/uuid": "npm:11.0.0"
     debounce-promise: "npm:3.1.2"
     esbuild: "npm:0.25.8"
     i18next-cli: "npm:^1.48.0"
@@ -1302,7 +1302,7 @@ __metadata:
     react-highlight-words: "npm:0.21.0"
     react-select-event: "npm:5.5.1"
     react-use: "npm:17.6.0"
-    react-window: "npm:1.8.11"
+    react-window: "npm:^1.8.11"
     rimraf: "npm:6.0.1"
     rollup: "npm:^4.60.1"
     rollup-plugin-esbuild: "npm:6.2.1"
@@ -4129,6 +4129,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@types/lodash@npm:4.17.24":
+  version: 4.17.24
+  resolution: "@types/lodash@npm:4.17.24"
+  checksum: 10c0/b72f60d4daacdad1fa643edb3faba204c02a01eb1ac00a83ff73496a6d236fc55e459c06106e8ced42277dba932d087d8fc090f8de4ef590d3f91e6d6f7ce85a
+  languageName: node
+  linkType: hard
+
 "@types/node@npm:*, @types/node@npm:>=13.7.0":
   version: 25.6.0
   resolution: "@types/node@npm:25.6.0"
@@ -4138,21 +4145,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/node@npm:24.10.1":
-  version: 24.10.1
-  resolution: "@types/node@npm:24.10.1"
+"@types/node@npm:24.11.2":
+  version: 24.11.2
+  resolution: "@types/node@npm:24.11.2"
   dependencies:
     undici-types: "npm:~7.16.0"
-  checksum: 10c0/d6bca7a78f550fbb376f236f92b405d676003a8a09a1b411f55920ef34286ee3ee51f566203920e835478784df52662b5b2af89159d9d319352e9ea21801c002
-  languageName: node
-  linkType: hard
-
-"@types/node@npm:^24.0.0":
-  version: 24.12.2
-  resolution: "@types/node@npm:24.12.2"
-  dependencies:
-    undici-types: "npm:~7.16.0"
-  checksum: 10c0/710050c42f89075c4479e4e1e4c2532486b0c41b1e2a8a13ad88641c88b88cdaea87414e19224f30028719737bd70e327edcaa184d50e86b9418941edd7eb02b
+  checksum: 10c0/643d992b8c90bbde2514b21191bfe017610df3fc84a9346af062dc857d5ca43f913ddff97ef010a6457e7eb3954415ea52efe607a849dcac956a411fe15f8007
   languageName: node
   linkType: hard
 
@@ -4198,16 +4196,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/react-dom@npm:18.3.1":
-  version: 18.3.1
-  resolution: "@types/react-dom@npm:18.3.1"
-  dependencies:
-    "@types/react": "npm:*"
-  checksum: 10c0/8b416551c60bb6bd8ec10e198c957910cfb271bc3922463040b0d57cf4739cdcd24b13224f8d68f10318926e1ec3cd69af0af79f0291b599a992f8c80d47f1eb
-  languageName: node
-  linkType: hard
-
-"@types/react-dom@npm:^18.3.0":
+"@types/react-dom@npm:18.3.7, @types/react-dom@npm:^18.3.0":
   version: 18.3.7
   resolution: "@types/react-dom@npm:18.3.7"
   peerDependencies:
@@ -4216,12 +4205,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/react-highlight-words@npm:0.20.0":
-  version: 0.20.0
-  resolution: "@types/react-highlight-words@npm:0.20.0"
+"@types/react-highlight-words@npm:0.20.1":
+  version: 0.20.1
+  resolution: "@types/react-highlight-words@npm:0.20.1"
   dependencies:
     "@types/react": "npm:*"
-  checksum: 10c0/95d268fc24f4ad43e1b4c5be41f66b6401b90977fd4e2c9de37bf696b0c97fd216c1f6c4a833236886183dbda766d3d0485333997ac193360c35a2a36f46534b
+  checksum: 10c0/af05728a1bb0a9249e07b17741f1d69a0251d0a67120d2cf0cb407055d3eefe70822211b76da2e8cf27c8e2feaec59e602d0870c4e12f1ef5dcdc699ddd446be
   languageName: node
   linkType: hard
 
@@ -4261,17 +4250,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/react@npm:18.3.12":
-  version: 18.3.12
-  resolution: "@types/react@npm:18.3.12"
-  dependencies:
-    "@types/prop-types": "npm:*"
-    csstype: "npm:^3.0.2"
-  checksum: 10c0/8bae8d9a41619804561574792e29112b413044eb0d53746dde2b9720c1f9a59f71c895bbd7987cd8ce9500b00786e53bc032dced38cddf42910458e145675290
-  languageName: node
-  linkType: hard
-
-"@types/react@npm:^18.3.0":
+"@types/react@npm:18.3.28, @types/react@npm:^18.3.0":
   version: 18.3.28
   resolution: "@types/react@npm:18.3.28"
   dependencies:
@@ -4351,10 +4330,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/uuid@npm:10.0.0":
-  version: 10.0.0
-  resolution: "@types/uuid@npm:10.0.0"
-  checksum: 10c0/9a1404bf287164481cb9b97f6bb638f78f955be57c40c6513b7655160beb29df6f84c915aaf4089a1559c216557dc4d2f79b48d978742d3ae10b937420ddac60
+"@types/uuid@npm:11.0.0":
+  version: 11.0.0
+  resolution: "@types/uuid@npm:11.0.0"
+  dependencies:
+    uuid: "npm:*"
+  checksum: 10c0/6ebf1448d8fdc78d348a8a84389b74083f2f58bed75a5a6cf3be8419d33dcf757735c8b2de746b066ff8ef07f4384d02549774dc84195ffa46b24745471e9d8e
   languageName: node
   linkType: hard
 
@@ -7837,7 +7818,7 @@ __metadata:
     "@testing-library/jest-dom": "npm:^6.6.0"
     "@testing-library/react": "npm:^16.3.0"
     "@types/jest": "npm:^29.5.0"
-    "@types/node": "npm:^24.0.0"
+    "@types/node": "npm:24.11.2"
     "@types/react": "npm:^18.3.0"
     "@types/react-dom": "npm:^18.3.0"
     "@typescript-eslint/eslint-plugin": "npm:^8.38.0"
@@ -11577,7 +11558,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-window@npm:1.8.11":
+"react-window@npm:1.8.11, react-window@npm:^1.8.11":
   version: 1.8.11
   resolution: "react-window@npm:1.8.11"
   dependencies:
@@ -13481,6 +13462,15 @@ __metadata:
   version: 1.0.2
   resolution: "util-deprecate@npm:1.0.2"
   checksum: 10c0/41a5bdd214df2f6c3ecf8622745e4a366c4adced864bc3c833739791aeeeb1838119af7daed4ba36428114b5c67dcda034a79c882e97e43c03e66a4dd7389942
+  languageName: node
+  linkType: hard
+
+"uuid@npm:*":
+  version: 14.0.0
+  resolution: "uuid@npm:14.0.0"
+  bin:
+    uuid: dist-node/bin/uuid
+  checksum: 10c0/a57ae7794c45005c1a9208989196c5baf79a7679c30f43c1bee9033a2c4d113a2cea216fa6fcc9663b08b0d55635df1a7c6eb7e7f3d21c3e50688c698fa39a50
   languageName: node
   linkType: hard
 

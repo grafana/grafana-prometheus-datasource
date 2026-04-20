@@ -32,6 +32,7 @@
   },
   "exclude": ["dist/**/*"],
   "include": [
-    "src/**/*.ts*"
+    "src/**/*.ts*",
+    "rollup.config.ts"
   ]
 }
