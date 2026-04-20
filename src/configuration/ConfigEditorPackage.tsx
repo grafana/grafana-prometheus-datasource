@@ -1,5 +1,5 @@
 import { css } from '@emotion/css';
-import React, { type JSX } from 'react';
+import { type JSX } from 'react';
 
 import { SIGV4ConnectionConfig } from '@grafana/aws-sdk';
 import { hasCredentials } from '@grafana/azure-sdk';
