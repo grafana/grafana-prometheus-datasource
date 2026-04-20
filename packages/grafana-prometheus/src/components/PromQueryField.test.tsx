@@ -11,6 +11,11 @@ import * as queryHints from '../query_hints';
 import { PromQueryField } from './PromQueryField';
 import { type Props } from './monaco-query-field/MonacoQueryFieldProps';
 
+jest.mock('../query_hints', () => ({
+  ...jest.requireActual('../query_hints'),
+  getInitHints: jest.fn().mockReturnValue([]),
+}));
+
 // the monaco-based editor uses lazy-loading and that does not work
 // well with this test, and we do not need the monaco-related
 // functionality in this test anyway, so we mock it out.
@@ -97,7 +102,7 @@ describe('PromQueryField', () => {
     const props = defaultProps;
     props.datasource.lookupsDisabled = true;
 
-    jest.spyOn(queryHints, 'getInitHints').mockReturnValue([{ label: 'Initial hint', type: 'INFO' }]);
+    jest.mocked(queryHints.getInitHints).mockReturnValue([{ label: 'Initial hint', type: 'INFO' }]);
 
     render(<PromQueryField {...props} />);
 
