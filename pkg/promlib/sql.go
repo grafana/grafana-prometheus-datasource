@@ -17,7 +17,6 @@ import (
 // that comes from FOR (...) clauses in SQL.
 type schemadsQuery struct {
 	schemas.Query
-	TableHintValues map[string]string `json:"tableHintValues,omitempty"`
 }
 
 // normalizeGrafanaSQLRequest rewrites schemads tabular queries into native
