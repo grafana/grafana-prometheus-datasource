@@ -118,7 +118,7 @@ func (p *SchemaProvider) fetchLabelNames(ctx context.Context, metric string) ([]
 }
 
 // fetchPrometheusLabels is the shared helper for fetching label data from Prometheus.
-func (p *SchemaProvider) fetchPrometheusLabels(ctx context.Context, path string, params url.Values, context string) ([]string, error) {
+func (p *SchemaProvider) fetchPrometheusLabels(ctx context.Context, path string, params url.Values, description string) ([]string, error) {
 	reqURL := path
 	if len(params) > 0 {
 		reqURL = path + "?" + params.Encode()
@@ -129,17 +129,17 @@ func (p *SchemaProvider) fetchPrometheusLabels(ctx context.Context, path string,
 		URL:    reqURL,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch labels (context=%q): %w", context, err)
+		return nil, fmt.Errorf("failed to fetch labels (description=%q): %w", description, err)
 	}
 	defer resp.Body.Close()
 
 	var result prometheusLabelsResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode labels response (context=%q): %w", context, err)
+		return nil, fmt.Errorf("failed to decode labels response (description=%q): %w", description, err)
 	}
 
 	if result.Status != "success" {
-		return nil, fmt.Errorf("prometheus returned status %q (context=%q)", result.Status, context)
+		return nil, fmt.Errorf("prometheus returned status %q (description=%q)", result.Status, description)
 	}
 
 	return result.Data, nil
