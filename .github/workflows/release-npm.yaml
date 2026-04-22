@@ -40,7 +40,7 @@ jobs:
         id: version_check
         with:
           file-name: packages/grafana-prometheus/package.json
-          file-url: https://unpkg.com/@grafana/prometheus/package.json
+          file-url: https://cdn.jsdelivr.net/npm/@grafana/prometheus/package.json
           static-checking: localIsNew
 
       - name: Abort if version not newer
