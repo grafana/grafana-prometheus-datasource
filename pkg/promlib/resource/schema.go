@@ -36,6 +36,12 @@ var prometheusTableHints = []schemas.TableHint{
 	{Name: "instant", Description: "Execute as an instant query instead of a range query"},
 }
 
+// prometheusCapabilities declares what SQL operations Prometheus can
+// handle natively. The SQL engine uses this to push operations down.
+var prometheusCapabilities = &schemas.DatasourceCapabilities{
+	AggregateFunctions: []string{"SUM", "AVG", "COUNT", "MIN", "MAX"},
+}
+
 // Schema implements schemas.SchemaHandler.
 // For fullSchema, tables are returned without label columns since that would
 // require a per-metric labels call for every metric. Use Columns() for
@@ -47,7 +53,8 @@ func (p *SchemaProvider) Schema(ctx context.Context, _ *schemas.SchemaRequest) (
 	}
 	return &schemas.SchemaResponse{
 		FullSchema: &schemas.Schema{
-			Tables: tables,
+			Tables:       tables,
+			Capabilities: prometheusCapabilities,
 		},
 	}, nil
 }

@@ -152,3 +152,4 @@ require (
 )
 
 replace github.com/grafana/grafana-prometheus-datasource/pkg/promlib => ./pkg/promlib
+replace github.com/grafana/schemads => /home/kbrandt/go/src/github.com/grafana/schemads
