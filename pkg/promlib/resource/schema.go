@@ -65,7 +65,7 @@ func (p *SchemaProvider) Tables(ctx context.Context, _ *schemas.TablesRequest) (
 	if err != nil {
 		return nil, err
 	}
-	return &schemas.TablesResponse{Tables: names}, nil
+	return &schemas.TablesResponse{Tables: names, Capabilities: prometheusCapabilities}, nil
 }
 
 // Columns implements schemas.ColumnsHandler.
