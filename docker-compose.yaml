@@ -3,3 +3,22 @@ services:
     extends:
       file: .config/docker-compose-base.yaml
       service: grafana
+    environment:
+      # Grafana 13 enables splashScreen by default; the overlay blocks Playwright interactions.
+      GF_FEATURE_TOGGLES_splashScreen: 'false'
+      # Override the base value now that the plugin ID is 'prometheus'.
+      GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: prometheus
+    configs:
+      # Run the externalized plugin in place of the core Prometheus plugin.
+      # Without as_external=true, DuplicatePluginIDValidation (pkg/services/pluginsintegration/pipeline/steps.go)
+      # drops the external plugin because the core one is already registered under id=prometheus.
+      # Env vars won't work here because Grafana only applies GF_PLUGIN_PROMETHEUS_* overrides if
+      # [plugin.prometheus] already exists in defaults.ini — and it doesn't.
+      - source: grafana_custom_ini
+        target: /etc/grafana/grafana.ini
+
+configs:
+  grafana_custom_ini:
+    content: |
+      [plugin.prometheus]
+      as_external = true

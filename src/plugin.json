@@ -1,9 +1,9 @@
 {
   "type": "datasource",
   "name": "Prometheus",
-  "id": "grafana-prometheus-datasource",
+  "id": "prometheus",
   "category": "tsdb",
-  "executable": "gpx_prometheus",
+  "executable": "gpx_grafana_prometheus_datasource",
   "routes": [
     {
       "method": "POST",
@@ -66,23 +66,7 @@
       "reqAction": "alert.rules.external:write"
     }
   ],
-  "includes": [
-    {
-      "type": "dashboard",
-      "name": "Prometheus Stats",
-      "path": "dashboards/prometheus_stats.json"
-    },
-    {
-      "type": "dashboard",
-      "name": "Prometheus 2.0 Stats",
-      "path": "dashboards/prometheus_2_stats.json"
-    },
-    {
-      "type": "dashboard",
-      "name": "Grafana Stats",
-      "path": "dashboards/grafana_stats.json"
-    }
-  ],
+  "includes": [],
   "metrics": true,
   "alerting": true,
   "annotations": true,
@@ -93,6 +77,8 @@
   "multiValueFilterOperators": true,
   "info": {
     "description": "Open source time series database & alerting",
+    "version": "%VERSION%",
+    "updated": "%TODAY%",
     "author": {
       "name": "Grafana Labs",
       "url": "https://grafana.com"
@@ -108,7 +94,7 @@
       },
       {
         "name": "Raise issue",
-        "url": "https://github.com/grafana/grafana/issues/new"
+        "url": "https://github.com/grafana/grafana-prometheus-datasource/issues/new"
       },
       {
         "name": "Documentation",
@@ -117,6 +103,6 @@
     ]
   },
   "dependencies": {
-    "grafanaDependency": ">=12.2.5"
+    "grafanaDependency": ">=12.3.0"
   }
 }

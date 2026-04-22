@@ -23,6 +23,11 @@ import { type PromVisualQuery } from '../types';
 import { PromQueryBuilder } from './PromQueryBuilder';
 import { EXPLAIN_LABEL_FILTER_CONTENT } from './PromQueryBuilderExplained';
 
+jest.mock('../../query_hints', () => ({
+  ...jest.requireActual('../../query_hints'),
+  getInitHints: jest.fn().mockReturnValue([]),
+}));
+
 const defaultQuery: PromVisualQuery = {
   metric: 'random_metric',
   labels: [],
@@ -258,7 +263,7 @@ describe('PromQueryBuilder', () => {
 
   it('renders hint if initial hint provided', async () => {
     const { datasource } = createDatasource();
-    jest.spyOn(queryHints, 'getInitHints').mockReturnValue([{ label: 'Initial hint', type: 'warning' }]);
+    jest.mocked(queryHints.getInitHints).mockReturnValue([{ label: 'Initial hint', type: 'warning' }]);
     const props = createProps(datasource);
     render(
       <PromQueryBuilder
@@ -275,7 +280,7 @@ describe('PromQueryBuilder', () => {
 
   it('renders no hint if no initial hint provided', async () => {
     const { datasource } = createDatasource();
-    jest.spyOn(queryHints, 'getInitHints').mockReturnValue([]);
+    jest.mocked(queryHints.getInitHints).mockReturnValue([]);
     const props = createProps(datasource);
     render(
       <PromQueryBuilder

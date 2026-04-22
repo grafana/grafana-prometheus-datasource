@@ -1,5 +1,5 @@
 import { cx } from '@emotion/css';
-import React, { ChangeEvent, useMemo } from 'react';
+import { ChangeEvent, useMemo } from 'react';
 
 import { AzureAuthType, AzureCredentials } from '@grafana/azure-sdk';
 import { SelectableValue } from '@grafana/data';

@@ -10,10 +10,12 @@ import { getMockTimeRange } from '../../test/mocks/datasource';
 import * as selectorBuilderModule from './selectorBuilder';
 import { useMetricsLabelsValues } from './useMetricsLabelsValues';
 
+jest.mock('./selectorBuilder');
+
 // Test utilities to reduce boilerplate
 const setupMocks = () => {
   // Mock the buildSelector module
-  jest.spyOn(selectorBuilderModule, 'buildSelector').mockImplementation(() => EMPTY_SELECTOR);
+  jest.mocked(selectorBuilderModule.buildSelector).mockImplementation(() => EMPTY_SELECTOR);
 
   // Mock localStorage
   const localStorageMock = (() => {
@@ -465,7 +467,7 @@ describe('useMetricsLabelsValues', () => {
   describe('helper functions', () => {
     describe('buildSafeSelector', () => {
       it('should convert EMPTY_SELECTOR to undefined', async () => {
-        jest.spyOn(selectorBuilderModule, 'buildSelector').mockReturnValue(EMPTY_SELECTOR);
+        jest.mocked(selectorBuilderModule.buildSelector).mockReturnValue(EMPTY_SELECTOR);
 
         const { result } = await renderHookWithInit(mocks);
 
@@ -477,7 +479,7 @@ describe('useMetricsLabelsValues', () => {
 
       it('should return the selector value when not empty', async () => {
         const expectedSelector = 'metric1{job="prometheus"}';
-        jest.spyOn(selectorBuilderModule, 'buildSelector').mockReturnValue(expectedSelector);
+        jest.mocked(selectorBuilderModule.buildSelector).mockReturnValue(expectedSelector);
 
         const { result } = await renderHookWithInit(mocks);
 
