@@ -1049,35 +1049,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@grafana/async-query-data@npm:0.4.2":
-  version: 0.4.2
-  resolution: "@grafana/async-query-data@npm:0.4.2"
-  dependencies:
-    semver: "npm:^7.6.3"
-    tslib: "npm:^2.8.0"
-  checksum: 10c0/239145fb092c94418c4297a9ae18c191f1d3eeec842b81c836bf120e46fe4a805e1710ba9c5027313d81ba0f0e98c8cdc1ba8e50a53464ff6e0114b62bd50380
-  languageName: node
-  linkType: hard
-
-"@grafana/aws-sdk@npm:0.10.2":
-  version: 0.10.2
-  resolution: "@grafana/aws-sdk@npm:0.10.2"
-  dependencies:
-    "@grafana/async-query-data": "npm:0.4.2"
-    "@grafana/plugin-ui": "npm:^0.13.0"
-  checksum: 10c0/de9809075c52853441a6e46b21681e83b38099ac1ee70272d8f1397262fd3ea495b1fa898c8df7a29a70c46a97cc6bf614a2283e3a78aba3be4f6000d852e382
-  languageName: node
-  linkType: hard
-
-"@grafana/azure-sdk@npm:0.1.0":
-  version: 0.1.0
-  resolution: "@grafana/azure-sdk@npm:0.1.0"
-  dependencies:
-    react-dom: "npm:18.3.1"
-  checksum: 10c0/474c861e8d795b067d78026f66cd736810136d9c6dec7ac147925408807ec0c6cff4fef5a478e2ac96d48742f1584db4f8c2561d3bf4fef14d2946218f46d741
-  languageName: node
-  linkType: hard
-
 "@grafana/data@npm:13.1.0-24668211370":
   version: 13.1.0-24668211370
   resolution: "@grafana/data@npm:13.1.0-24668211370"
@@ -1214,7 +1185,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@grafana/plugin-ui@npm:0.13.1, @grafana/plugin-ui@npm:^0.13.0":
+"@grafana/plugin-ui@npm:0.13.1":
   version: 0.13.1
   resolution: "@grafana/plugin-ui@npm:0.13.1"
   dependencies:
@@ -7754,8 +7725,6 @@ __metadata:
   resolution: "grafana-prometheus-datasource@workspace:."
   dependencies:
     "@emotion/css": "npm:11.10.6"
-    "@grafana/aws-sdk": "npm:0.10.2"
-    "@grafana/azure-sdk": "npm:0.1.0"
     "@grafana/data": "npm:13.1.0-24668211370"
     "@grafana/e2e-selectors": "npm:13.1.0-24668211370"
     "@grafana/eslint-config": "npm:^9.0.0"
@@ -7775,6 +7744,7 @@ __metadata:
     "@testing-library/dom": "npm:10.4.1"
     "@testing-library/jest-dom": "npm:6.6.4"
     "@testing-library/react": "npm:16.3.0"
+    "@testing-library/user-event": "npm:14.6.1"
     "@types/jest": "npm:^29.5.0"
     "@types/node": "npm:24.11.2"
     "@types/react": "npm:18.3.28"
