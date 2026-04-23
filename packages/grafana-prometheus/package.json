@@ -123,11 +123,6 @@
     "react": "^18.0.0",
     "react-dom": "^18.0.0"
   },
-  "peerDependenciesMeta": {
-    "@grafana/assistant": {
-      "optional": true
-    }
-  },
   "overrides": {
     "@grafana/data": "$@grafana/data",
     "@grafana/schema": "$@grafana/schema",

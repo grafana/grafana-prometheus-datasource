@@ -1293,9 +1293,6 @@ __metadata:
     "@grafana/ui": ">=11.5.0"
     react: ^18.0.0
     react-dom: ^18.0.0
-  peerDependenciesMeta:
-    "@grafana/assistant":
-      optional: true
   languageName: unknown
   linkType: soft
 
