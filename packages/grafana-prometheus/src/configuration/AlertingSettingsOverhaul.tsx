@@ -11,10 +11,8 @@ import { InlineField, Switch, useTheme2 } from '@grafana/ui';
 
 import { docsTip, overhaulStyles } from './shared/utils';
 
-interface Props<T extends DataSourceJsonData> extends Pick<
-  DataSourcePluginOptionsEditorProps<T>,
-  'options' | 'onOptionsChange'
-> {}
+interface Props<T extends DataSourceJsonData>
+  extends Pick<DataSourcePluginOptionsEditorProps<T>, 'options' | 'onOptionsChange'> {}
 
 interface AlertingConfig extends DataSourceJsonData {
   manageAlerts?: boolean;
