@@ -38,8 +38,13 @@ var prometheusTableHints = []schemas.TableHint{
 
 // prometheusCapabilities declares what SQL operations Prometheus can
 // handle natively. The SQL engine uses this to push operations down.
+//
+// AVG is intentionally excluded: Prometheus's "avg by" preserves the
+// time axis (one value per timestamp), so re-averaging those values
+// gives an incorrect result when series cardinality varies across
+// timestamps. The SQL engine handles AVG from raw data instead.
 var prometheusCapabilities = &schemas.DatasourceCapabilities{
-	AggregateFunctions: []string{"SUM", "AVG", "COUNT", "MIN", "MAX"},
+	AggregateFunctions: []string{"SUM", "COUNT", "MIN", "MAX"},
 }
 
 // Schema implements schemas.SchemaHandler.
