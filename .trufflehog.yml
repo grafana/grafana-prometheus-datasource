@@ -2,4 +2,4 @@
 # https://github.com/trufflesecurity/trufflehog
 
 exclude_paths:
-  - .yarn
+  - \.yarn/
