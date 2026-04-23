@@ -47,7 +47,6 @@ export interface PromOptions extends DataSourceJsonData {
   incrementalQueryOverlapWindow?: string;
   disableRecordingRules?: boolean;
   allowAsRecordingRulesTarget?: boolean;
-  sigV4Auth?: boolean;
   oauthPassThru?: boolean;
   seriesEndpoint?: boolean;
   seriesLimit?: number;
