@@ -10,7 +10,7 @@
     "dev": "webpack -w -c ./webpack.config.ts --env development",
     "test": "jest --watch --onlyChanged",
     "test:ci": "jest --passWithNoTests --maxWorkers 4 && yarn workspace @grafana/prometheus test:ci",
-    "typecheck": "tsc --noEmit && yarn workspace @grafana/prometheus typecheck",
+    "typecheck": "tsc -p ./packages/grafana-prometheus/tsconfig.build.json && tsc --noEmit && yarn workspace @grafana/prometheus typecheck",
     "lint": "eslint --cache . && yarn workspace @grafana/prometheus lint",
     "lint:fix": "eslint --cache --fix . && prettier --write --list-different . && yarn workspace @grafana/prometheus lint:fix",
     "e2e": "playwright test",

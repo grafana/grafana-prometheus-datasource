@@ -1,6 +1,5 @@
 // Core Grafana history https://github.com/grafana/grafana/blob/v11.0.0-preview/public/app/plugins/datasource/prometheus/components/PromQueryField.test.tsx
 import { getByTestId, render, screen } from '@testing-library/react';
-// @ts-ignore
 import userEvent from '@testing-library/user-event';
 
 import { CoreApp, type DataFrame, dateTime, LoadingState, type PanelData } from '@grafana/data';
