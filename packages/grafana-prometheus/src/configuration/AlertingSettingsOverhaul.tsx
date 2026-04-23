@@ -24,8 +24,6 @@ export function AlertingSettingsOverhaul<T extends AlertingConfig>({
   onOptionsChange,
 }: Props<T>): JSX.Element {
   const theme = useTheme2();
-  // imported GrafanaTheme2 from @grafana/data does not match type of same from @grafana/ui
-  // @ts-ignore
   const styles = overhaulStyles(theme);
 
   return (

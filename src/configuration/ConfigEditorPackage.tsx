@@ -5,7 +5,6 @@ import { SIGV4ConnectionConfig } from '@grafana/aws-sdk';
 import { hasCredentials } from '@grafana/azure-sdk';
 import { DataSourcePluginOptionsEditorProps, GrafanaTheme2 } from '@grafana/data';
 import { AdvancedHttpSettings, ConfigSection, DataSourceDescription } from '@grafana/plugin-ui';
-// @ts-ignore - @grafana/prometheus not yet available; remove once resolved
 import { AlertingSettingsOverhaul, PromOptions, PromSettings } from '@grafana/prometheus';
 import { config } from '@grafana/runtime';
 import { Alert, FieldValidationMessage, TextLink, useTheme2 } from '@grafana/ui';
