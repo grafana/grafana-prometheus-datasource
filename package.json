@@ -1,5 +1,5 @@
 {
-  "name": "grafana-prometheus-datasource",
+  "name": "prometheus",
   "version": "13.1.0",
   "workspaces": [
     "packages/*"
