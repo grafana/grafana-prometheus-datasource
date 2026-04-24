@@ -1283,7 +1283,7 @@ __metadata:
     semver: "npm:7.7.3"
     testing-library-selector: "npm:0.3.1"
     typescript: "npm:6.0.2"
-    uuid: "npm:11.1.0"
+    uuid: "npm:14.0.0"
   peerDependencies:
     "@grafana/data": ">=11.5.0"
     "@grafana/e2e-selectors": ">=11.5.0"
@@ -13382,7 +13382,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"uuid@npm:*":
+"uuid@npm:*, uuid@npm:14.0.0":
   version: 14.0.0
   resolution: "uuid@npm:14.0.0"
   bin:

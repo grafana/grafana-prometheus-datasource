@@ -69,7 +69,7 @@
     "react-window": "1.8.11",
     "rxjs": "7.8.2",
     "semver": "7.7.3",
-    "uuid": "11.1.0"
+    "uuid": "14.0.0"
   },
   "devDependencies": {
     "@grafana/assistant": "0.1.24",
