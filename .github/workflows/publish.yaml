@@ -13,11 +13,19 @@ on:
         description: Branch to publish from. Can be used to deploy PRs to dev
         default: main
       environment:
-        description: Environment to publish to
+        description: Environment to publish to. Selecting "ops" publishes to dev as well (if not already done); "prod" publishes to all environments.
         required: true
         type: choice
         options:
           - 'dev'
+      scope:
+        description: Cloud will publish scoped only to Grafana Cloud, On Prem will publish with Universal scope. Please use Cloud unless emergency fix needed for On Prem customer.
+        required: true
+        type: choice
+        default: "cloud (recommended)"
+        options:
+          - "cloud (recommended)"
+          - "on-prem (for emergencies fix to On Prem customers)"
       docs-only:
         description: Only publish docs, do not publish the plugin
         default: false
@@ -31,5 +39,5 @@ jobs:
       branch: ${{ github.event.inputs.branch }}
       environment: ${{ github.event.inputs.environment }}
       docs-only: ${{ fromJSON(github.event.inputs.docs-only) }}
-      run-playwright: true
+      run-playwright: false
       github-draft-release: false
