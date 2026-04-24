@@ -1237,6 +1237,7 @@ __metadata:
     "@lezer/highlight": "npm:1.2.3"
     "@lezer/lr": "npm:1.4.8"
     "@prometheus-io/lezer-promql": "npm:0.307.3"
+    "@rollup/plugin-commonjs": "npm:28.0.9"
     "@rollup/plugin-dynamic-import-vars": "npm:2.1.5"
     "@rollup/plugin-image": "npm:3.0.3"
     "@rollup/plugin-json": "npm:6.1.0"
@@ -1284,7 +1285,6 @@ __metadata:
     typescript: "npm:6.0.2"
     uuid: "npm:11.1.0"
   peerDependencies:
-    "@grafana/assistant": ">=0.1.0"
     "@grafana/data": ">=11.5.0"
     "@grafana/e2e-selectors": ">=11.5.0"
     "@grafana/i18n": ">=12.3.0"
@@ -3234,6 +3234,26 @@ __metadata:
   version: 1.23.2
   resolution: "@remix-run/router@npm:1.23.2"
   checksum: 10c0/7096b7f2086b2cd80c9e06873b71a8317e04858c01edc06a6fed187b660408a90f47c8e120e8af4c369cf1fa6b6a316a66b0917f42b6eb8a566e98b277c50449
+  languageName: node
+  linkType: hard
+
+"@rollup/plugin-commonjs@npm:28.0.9":
+  version: 28.0.9
+  resolution: "@rollup/plugin-commonjs@npm:28.0.9"
+  dependencies:
+    "@rollup/pluginutils": "npm:^5.0.1"
+    commondir: "npm:^1.0.1"
+    estree-walker: "npm:^2.0.2"
+    fdir: "npm:^6.2.0"
+    is-reference: "npm:1.2.1"
+    magic-string: "npm:^0.30.3"
+    picomatch: "npm:^4.0.2"
+  peerDependencies:
+    rollup: ^2.68.0||^3.0.0||^4.0.0
+  peerDependenciesMeta:
+    rollup:
+      optional: true
+  checksum: 10c0/b7af70614a53c549a1ba1e9647879b644bcf44ec78850f04018b929f4ee414274f867fa438308409a06ef8a3a179ed24c25e4f8ef77eb341dfddd2b0cb88c389
   languageName: node
   linkType: hard
 
@@ -5538,6 +5558,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"commondir@npm:^1.0.1":
+  version: 1.0.1
+  resolution: "commondir@npm:1.0.1"
+  checksum: 10c0/33a124960e471c25ee19280c9ce31ccc19574b566dc514fe4f4ca4c34fa8b0b57cf437671f5de380e11353ea9426213fca17687dd2ef03134fea2dbc53809fd6
+  languageName: node
+  linkType: hard
+
 "compute-scroll-into-view@npm:^3.1.1":
   version: 3.1.1
   resolution: "compute-scroll-into-view@npm:3.1.1"
@@ -7204,7 +7231,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"fdir@npm:^6.5.0":
+"fdir@npm:^6.2.0, fdir@npm:^6.5.0":
   version: 6.5.0
   resolution: "fdir@npm:6.5.0"
   peerDependencies:
@@ -7709,74 +7736,6 @@ __metadata:
   checksum: 10c0/386d011a553e02bc594ac2ca0bd6d9e4c22d7fa8cfbfc448a6d148c59ea881b092db9dbe3547ae4b88e55f1b01f7c4a2ecc53b310c042793e63aa44cf6c257f2
   languageName: node
   linkType: hard
-
-"grafana-prometheus-datasource@workspace:.":
-  version: 0.0.0-use.local
-  resolution: "grafana-prometheus-datasource@workspace:."
-  dependencies:
-    "@emotion/css": "npm:11.10.6"
-    "@grafana/data": "npm:13.1.0-24668211370"
-    "@grafana/e2e-selectors": "npm:13.1.0-24668211370"
-    "@grafana/eslint-config": "npm:9.0.0"
-    "@grafana/i18n": "npm:13.1.0-24668211370"
-    "@grafana/plugin-e2e": "npm:3.5.1"
-    "@grafana/plugin-ui": "npm:0.13.1"
-    "@grafana/prometheus": "workspace:*"
-    "@grafana/runtime": "npm:13.1.0-24668211370"
-    "@grafana/schema": "npm:13.1.0-24668211370"
-    "@grafana/tsconfig": "npm:2.0.1"
-    "@grafana/ui": "npm:13.1.0-24668211370"
-    "@playwright/test": "npm:1.59.1"
-    "@stylistic/eslint-plugin-ts": "npm:4.4.1"
-    "@swc/core": "npm:1.15.30"
-    "@swc/helpers": "npm:0.5.21"
-    "@swc/jest": "npm:0.2.39"
-    "@testing-library/dom": "npm:10.4.1"
-    "@testing-library/jest-dom": "npm:6.6.4"
-    "@testing-library/react": "npm:16.3.0"
-    "@testing-library/user-event": "npm:14.6.1"
-    "@types/jest": "npm:29.5.14"
-    "@types/node": "npm:24.11.2"
-    "@types/react": "npm:18.3.28"
-    "@types/react-dom": "npm:18.3.7"
-    "@typescript-eslint/eslint-plugin": "npm:8.58.2"
-    "@typescript-eslint/parser": "npm:8.58.2"
-    copy-webpack-plugin: "npm:13.0.1"
-    css-loader: "npm:7.1.4"
-    eslint: "npm:9.39.4"
-    eslint-config-prettier: "npm:10.1.8"
-    eslint-plugin-jsdoc: "npm:52.0.4"
-    eslint-plugin-react: "npm:7.37.5"
-    eslint-plugin-react-hooks: "npm:7.1.1"
-    eslint-webpack-plugin: "npm:5.0.3"
-    fork-ts-checker-webpack-plugin: "npm:9.1.0"
-    glob: "npm:11.1.0"
-    identity-obj-proxy: "npm:3.0.0"
-    imports-loader: "npm:5.0.0"
-    jest: "npm:29.7.0"
-    jest-environment-jsdom: "npm:29.7.0"
-    prettier: "npm:3.8.3"
-    react: "npm:18.3.1"
-    react-dom: "npm:18.3.1"
-    replace-in-file-webpack-plugin: "npm:1.0.6"
-    rxjs: "npm:7.8.2"
-    sass: "npm:1.99.0"
-    sass-loader: "npm:16.0.7"
-    semver: "npm:7.7.4"
-    style-loader: "npm:4.0.0"
-    swc-loader: "npm:0.2.7"
-    terser-webpack-plugin: "npm:5.4.0"
-    ts-node: "npm:10.9.2"
-    tslib: "npm:2.8.1"
-    typescript: "npm:6.0.2"
-    webpack: "npm:5.106.2"
-    webpack-cli: "npm:6.0.1"
-    webpack-livereload-plugin: "npm:3.0.2"
-    webpack-merge: "npm:6.0.1"
-    webpack-subresource-integrity: "npm:5.1.0"
-    webpack-virtual-modules: "npm:0.6.2"
-  languageName: unknown
-  linkType: soft
 
 "harmony-reflect@npm:^1.4.6":
   version: 1.6.2
@@ -8531,6 +8490,15 @@ __metadata:
   version: 1.0.1
   resolution: "is-potential-custom-element-name@npm:1.0.1"
   checksum: 10c0/b73e2f22bc863b0939941d369486d308b43d7aef1f9439705e3582bfccaa4516406865e32c968a35f97a99396dac84e2624e67b0a16b0a15086a785e16ce7db9
+  languageName: node
+  linkType: hard
+
+"is-reference@npm:1.2.1":
+  version: 1.2.1
+  resolution: "is-reference@npm:1.2.1"
+  dependencies:
+    "@types/estree": "npm:*"
+  checksum: 10c0/7dc819fc8de7790264a0a5d531164f9f5b9ef5aa1cd05f35322d14db39c8a2ec78fd5d4bf57f9789f3ddd2b3abeea7728432b759636157a42db12a9e8c3b549b
   languageName: node
   linkType: hard
 
@@ -10726,6 +10694,74 @@ __metadata:
   checksum: 10c0/4f178d4062733ead9d71a9b1ab24ebcecdfe2250916a5b1555f04fe2eda972a0ec76fbaa8df1ad9c02707add6749219d118a4fc46dc56bdfe4dde4b47d80bb82
   languageName: node
   linkType: hard
+
+"prometheus@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "prometheus@workspace:."
+  dependencies:
+    "@emotion/css": "npm:11.10.6"
+    "@grafana/data": "npm:13.1.0-24668211370"
+    "@grafana/e2e-selectors": "npm:13.1.0-24668211370"
+    "@grafana/eslint-config": "npm:9.0.0"
+    "@grafana/i18n": "npm:13.1.0-24668211370"
+    "@grafana/plugin-e2e": "npm:3.5.1"
+    "@grafana/plugin-ui": "npm:0.13.1"
+    "@grafana/prometheus": "workspace:*"
+    "@grafana/runtime": "npm:13.1.0-24668211370"
+    "@grafana/schema": "npm:13.1.0-24668211370"
+    "@grafana/tsconfig": "npm:2.0.1"
+    "@grafana/ui": "npm:13.1.0-24668211370"
+    "@playwright/test": "npm:1.59.1"
+    "@stylistic/eslint-plugin-ts": "npm:4.4.1"
+    "@swc/core": "npm:1.15.30"
+    "@swc/helpers": "npm:0.5.21"
+    "@swc/jest": "npm:0.2.39"
+    "@testing-library/dom": "npm:10.4.1"
+    "@testing-library/jest-dom": "npm:6.6.4"
+    "@testing-library/react": "npm:16.3.0"
+    "@testing-library/user-event": "npm:14.6.1"
+    "@types/jest": "npm:29.5.14"
+    "@types/node": "npm:24.11.2"
+    "@types/react": "npm:18.3.28"
+    "@types/react-dom": "npm:18.3.7"
+    "@typescript-eslint/eslint-plugin": "npm:8.58.2"
+    "@typescript-eslint/parser": "npm:8.58.2"
+    copy-webpack-plugin: "npm:13.0.1"
+    css-loader: "npm:7.1.4"
+    eslint: "npm:9.39.4"
+    eslint-config-prettier: "npm:10.1.8"
+    eslint-plugin-jsdoc: "npm:52.0.4"
+    eslint-plugin-react: "npm:7.37.5"
+    eslint-plugin-react-hooks: "npm:7.1.1"
+    eslint-webpack-plugin: "npm:5.0.3"
+    fork-ts-checker-webpack-plugin: "npm:9.1.0"
+    glob: "npm:11.1.0"
+    identity-obj-proxy: "npm:3.0.0"
+    imports-loader: "npm:5.0.0"
+    jest: "npm:29.7.0"
+    jest-environment-jsdom: "npm:29.7.0"
+    prettier: "npm:3.8.3"
+    react: "npm:18.3.1"
+    react-dom: "npm:18.3.1"
+    replace-in-file-webpack-plugin: "npm:1.0.6"
+    rxjs: "npm:7.8.2"
+    sass: "npm:1.99.0"
+    sass-loader: "npm:16.0.7"
+    semver: "npm:7.7.4"
+    style-loader: "npm:4.0.0"
+    swc-loader: "npm:0.2.7"
+    terser-webpack-plugin: "npm:5.4.0"
+    ts-node: "npm:10.9.2"
+    tslib: "npm:2.8.1"
+    typescript: "npm:6.0.2"
+    webpack: "npm:5.106.2"
+    webpack-cli: "npm:6.0.1"
+    webpack-livereload-plugin: "npm:3.0.2"
+    webpack-merge: "npm:6.0.1"
+    webpack-subresource-integrity: "npm:5.1.0"
+    webpack-virtual-modules: "npm:0.6.2"
+  languageName: unknown
+  linkType: soft
 
 "prompts@npm:^2.0.1":
   version: 2.4.2

@@ -1,3 +1,4 @@
+import commonjs from '@rollup/plugin-commonjs';
 import dynamicImportVars from '@rollup/plugin-dynamic-import-vars';
 import image from '@rollup/plugin-image';
 import json from '@rollup/plugin-json';
@@ -24,6 +25,7 @@ export default [
     plugins: [
       nodeExternals({ deps: true, packagePath: './package.json' }),
       resolve(),
+      commonjs(),
       esbuild({
         target: 'es2018',
         tsconfig: 'tsconfig.build.json',
