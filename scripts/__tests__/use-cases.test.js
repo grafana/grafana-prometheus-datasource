@@ -299,6 +299,18 @@ describe('Use case 1.4 — `yarn changeset:version --datasource`', () => {
     const rootChangelog = fs.readFileSync(path.join(root, 'CHANGELOG.md'), 'utf8');
     expect(rootChangelog).toContain('14.0.0');
 
+    // The release section must be flat — no Major/Minor/Patch sub-headings,
+    // and the three entries (one per bump level) sit on consecutive lines
+    // immediately under the version heading.
+    expect(rootChangelog).not.toMatch(/### (?:Major|Minor|Patch) Changes/);
+    const versionSectionMatch = rootChangelog.match(/## 14\.0\.0\n\n([\s\S]*?)(?=\n## |\n*$)/);
+    expect(versionSectionMatch).not.toBeNull();
+    const entryLines = versionSectionMatch[1]
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
+    expect(entryLines.sort()).toEqual(['- Add B', '- Break C', '- Fix A'].sort());
+
     expect(fs.existsSync(path.join(root, '.changeset-hold'))).toBe(false);
   });
 });

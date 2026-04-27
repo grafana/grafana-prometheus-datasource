@@ -31,6 +31,14 @@ const PACKAGES = [DATASOURCE, LIBRARY, PROMLIB];
 // after `changeset version` runs.
 const STUB_PACKAGES = new Set([DATASOURCE, PROMLIB]);
 
+// Where each package's CHANGELOG.md lives, relative to the repo root. Used to
+// post-process the file after `changeset version` runs (see flattenChangelog).
+const PACKAGE_DIRS = {
+  [DATASOURCE]: path.join('packages', 'grafana-prometheus-datasource'),
+  [LIBRARY]: path.join('packages', 'grafana-prometheus'),
+  [PROMLIB]: path.join('packages', 'promlib'),
+};
+
 const CHANGESET_SUBDIR = '.changeset';
 const HOLD_SUBDIR = '.changeset-hold';
 
@@ -137,6 +145,76 @@ function restoreHeldChangesets(held, holdDir) {
   }
 }
 
+// Rewrites a CHANGELOG.md produced by `@changesets/cli` so that, within each
+// `## <version>` release section, the `### Major Changes` / `### Minor Changes`
+// / `### Patch Changes` sub-headings are removed and the entries underneath
+// them are collapsed into a single, blank-line-free block.
+//
+// The bump type is already encoded in our per-line prefix emoji (🎉 / 🚀 / 🐛
+// — see .changeset/changelog.js), so the sub-section headings are redundant.
+//
+// `applyReleasePlan` inside @changesets/cli hard-codes those sub-headings, so
+// they cannot be removed via the changelog-functions API; this is a small
+// post-processing pass instead.
+//
+// Returns true when the file was rewritten, false when it was missing or
+// already in the desired shape.
+function flattenChangelog(changelogPath) {
+  if (!fs.existsSync(changelogPath)) return false;
+
+  const original = fs.readFileSync(changelogPath, 'utf8');
+  const lines = original.split('\n');
+  const out = [];
+  let inVersionSection = false;
+
+  const pushBlankSeparator = () => {
+    if (out.length > 0 && out[out.length - 1] !== '') out.push('');
+  };
+
+  for (const line of lines) {
+    if (/^## /.test(line)) {
+      pushBlankSeparator();
+      out.push(line);
+      out.push('');
+      inVersionSection = true;
+      continue;
+    }
+
+    if (/^# /.test(line)) {
+      pushBlankSeparator();
+      out.push(line);
+      out.push('');
+      inVersionSection = false;
+      continue;
+    }
+
+    if (inVersionSection) {
+      if (/^### (?:Major|Minor|Patch) Changes\s*$/.test(line)) continue;
+      if (line.trim() === '') continue;
+      out.push(line);
+      continue;
+    }
+
+    out.push(line);
+  }
+
+  while (out.length > 0 && out[out.length - 1] === '') out.pop();
+  out.push('');
+
+  const result = out
+    .reduce((acc, line) => {
+      // Collapse runs of blank lines anywhere in the output to at most one.
+      if (line === '' && acc.length > 0 && acc[acc.length - 1] === '') return acc;
+      acc.push(line);
+      return acc;
+    }, [])
+    .join('\n');
+
+  if (result === original) return false;
+  fs.writeFileSync(changelogPath, result);
+  return true;
+}
+
 // Default runner that shells out to the local `@changesets/cli` binary.
 function defaultRunChangesetVersion({ repoRoot, changesetBin, stdio = 'inherit' }) {
   const bin = changesetBin || path.join(repoRoot, 'node_modules', '.bin', 'changeset');
@@ -181,6 +259,11 @@ async function runVersion({
 
   if (exitCode !== 0) {
     return { exitCode, versioned: false, heldCount: held.length };
+  }
+
+  const pkgDir = PACKAGE_DIRS[pkg];
+  if (pkgDir) {
+    flattenChangelog(path.join(repoRoot, pkgDir, 'CHANGELOG.md'));
   }
 
   if (STUB_PACKAGES.has(pkg) && typeof syncChangelog === 'function') {
@@ -231,6 +314,7 @@ module.exports = {
   LIBRARY,
   PROMLIB,
   PACKAGES,
+  PACKAGE_DIRS,
   STUB_PACKAGES,
   CHANGESET_SUBDIR,
   HOLD_SUBDIR,
@@ -239,6 +323,7 @@ module.exports = {
   listChangesetFiles,
   moveChangesetsAside,
   restoreHeldChangesets,
+  flattenChangelog,
   runVersion,
   defaultRunChangesetVersion,
   pickPackageInteractively,

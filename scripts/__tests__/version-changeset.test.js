@@ -13,6 +13,7 @@ const {
   listChangesetFiles,
   moveChangesetsAside,
   restoreHeldChangesets,
+  flattenChangelog,
   runVersion,
 } = require('../version-changeset');
 const { syncChangelog } = require('../sync-changelog');
@@ -185,6 +186,128 @@ describe('version-changeset / moveChangesetsAside + restoreHeldChangesets', () =
   });
 });
 
+describe('version-changeset / flattenChangelog', () => {
+  let root;
+
+  beforeEach(() => {
+    root = createFixture();
+  });
+
+  afterEach(() => {
+    destroyFixture(root);
+  });
+
+  function writeChangelog(content) {
+    const file = path.join(root, 'CHANGELOG.md');
+    fs.writeFileSync(file, content);
+    return file;
+  }
+
+  it('removes Major/Minor/Patch sub-headings and collapses blank lines between entries', () => {
+    const file = writeChangelog(
+      [
+        '# @grafana/prometheus',
+        '',
+        '## 14.0.0',
+        '',
+        '### Major Changes',
+        '',
+        '🎉 Breaking change',
+        '',
+        '### Minor Changes',
+        '',
+        '🚀 Add util',
+        '',
+        '### Patch Changes',
+        '',
+        '🐛 Fix panel',
+        '',
+      ].join('\n'),
+    );
+
+    const changed = flattenChangelog(file);
+
+    expect(changed).toBe(true);
+    expect(fs.readFileSync(file, 'utf8')).toBe(
+      [
+        '# @grafana/prometheus',
+        '',
+        '## 14.0.0',
+        '',
+        '🎉 Breaking change',
+        '🚀 Add util',
+        '🐛 Fix panel',
+        '',
+      ].join('\n'),
+    );
+  });
+
+  it('flattens every release section in a multi-version changelog', () => {
+    const file = writeChangelog(
+      [
+        '# @grafana/prometheus',
+        '',
+        '## 14.0.0',
+        '',
+        '### Major Changes',
+        '',
+        '🎉 Break',
+        '',
+        '### Patch Changes',
+        '',
+        '🐛 Fix A',
+        '',
+        '## 13.2.0',
+        '',
+        '### Minor Changes',
+        '',
+        '🚀 Util',
+        '',
+      ].join('\n'),
+    );
+
+    flattenChangelog(file);
+
+    expect(fs.readFileSync(file, 'utf8')).toBe(
+      [
+        '# @grafana/prometheus',
+        '',
+        '## 14.0.0',
+        '',
+        '🎉 Break',
+        '🐛 Fix A',
+        '',
+        '## 13.2.0',
+        '',
+        '🚀 Util',
+        '',
+      ].join('\n'),
+    );
+  });
+
+  it('is a no-op when the file is already flat', () => {
+    const flat = [
+      '# @grafana/prometheus',
+      '',
+      '## 14.0.0',
+      '',
+      '🎉 Breaking change',
+      '🚀 Add util',
+      '🐛 Fix panel',
+      '',
+    ].join('\n');
+
+    const file = writeChangelog(flat);
+
+    expect(flattenChangelog(file)).toBe(false);
+    expect(fs.readFileSync(file, 'utf8')).toBe(flat);
+  });
+
+  it('returns false when the file does not exist', () => {
+    expect(flattenChangelog(path.join(root, 'missing.md'))).toBe(false);
+  });
+});
+
 describe('version-changeset / runVersion (end-to-end with real changeset binary)', () => {
   let root;
 
@@ -243,6 +366,8 @@ describe('version-changeset / runVersion (end-to-end with real changeset binary)
     const rootChangelog = fs.readFileSync(path.join(root, 'CHANGELOG.md'), 'utf8');
     expect(rootChangelog).toContain('## 13.1.1');
     expect(rootChangelog).toContain('Fix panel');
+    // The Major/Minor/Patch sub-headings must be stripped by flattenChangelog.
+    expect(rootChangelog).not.toMatch(/### (?:Major|Minor|Patch) Changes/);
 
     expect(listChangesetMdFiles(root)).toEqual([]);
   });
