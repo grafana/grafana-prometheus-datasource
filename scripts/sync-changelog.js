@@ -7,22 +7,29 @@
 const fs = require('fs');
 const path = require('path');
 
-const repoRoot = path.join(__dirname, '..');
-const stubDir = path.join(repoRoot, 'packages', 'grafana-prometheus-datasource');
+function syncChangelog(repoRoot) {
+  const stubDir = path.join(repoRoot, 'packages', 'grafana-prometheus-datasource');
 
-const stubChangelog = path.join(stubDir, 'CHANGELOG.md');
-const rootChangelog = path.join(repoRoot, 'CHANGELOG.md');
-const stubPkgPath = path.join(stubDir, 'package.json');
-const rootPkgPath = path.join(repoRoot, 'package.json');
+  const stubChangelog = path.join(stubDir, 'CHANGELOG.md');
+  const rootChangelog = path.join(repoRoot, 'CHANGELOG.md');
+  const stubPkgPath = path.join(stubDir, 'package.json');
+  const rootPkgPath = path.join(repoRoot, 'package.json');
 
-if (fs.existsSync(stubChangelog)) {
-  fs.copyFileSync(stubChangelog, rootChangelog);
+  if (fs.existsSync(stubChangelog)) {
+    fs.copyFileSync(stubChangelog, rootChangelog);
+  }
+
+  const stubPkg = JSON.parse(fs.readFileSync(stubPkgPath, 'utf8'));
+  const rootPkg = JSON.parse(fs.readFileSync(rootPkgPath, 'utf8'));
+
+  if (stubPkg.version && rootPkg.version !== stubPkg.version) {
+    rootPkg.version = stubPkg.version;
+    fs.writeFileSync(rootPkgPath, JSON.stringify(rootPkg, null, 2) + '\n');
+  }
 }
 
-const stubPkg = JSON.parse(fs.readFileSync(stubPkgPath, 'utf8'));
-const rootPkg = JSON.parse(fs.readFileSync(rootPkgPath, 'utf8'));
-
-if (stubPkg.version && rootPkg.version !== stubPkg.version) {
-  rootPkg.version = stubPkg.version;
-  fs.writeFileSync(rootPkgPath, JSON.stringify(rootPkg, null, 2) + '\n');
+if (require.main === module) {
+  syncChangelog(path.join(__dirname, '..'));
 }
+
+module.exports = { syncChangelog };

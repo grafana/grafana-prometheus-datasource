@@ -21,10 +21,8 @@ const { spawnSync } = require('child_process');
 
 const DATASOURCE = 'grafana-prometheus-datasource';
 const LIBRARY = '@grafana/prometheus';
-
-const repoRoot = path.join(__dirname, '..');
-const changesetDir = path.join(repoRoot, '.changeset');
-const holdDir = path.join(repoRoot, '.changeset-hold');
+const CHANGESET_SUBDIR = '.changeset';
+const HOLD_SUBDIR = '.changeset-hold';
 
 function parseArgs(argv) {
   let pkg = null;
@@ -90,7 +88,7 @@ function getChangesetPackages(filePath) {
   return packages;
 }
 
-function listChangesetFiles() {
+function listChangesetFiles(changesetDir) {
   if (!fs.existsSync(changesetDir)) return [];
   return fs
     .readdirSync(changesetDir)
@@ -98,9 +96,9 @@ function listChangesetFiles() {
     .map((name) => path.join(changesetDir, name));
 }
 
-function moveChangesetsAside(targetPkg) {
+function moveChangesetsAside(targetPkg, changesetDir, holdDir) {
   const held = [];
-  const files = listChangesetFiles();
+  const files = listChangesetFiles(changesetDir);
   for (const file of files) {
     const pkgs = getChangesetPackages(file);
     if (pkgs.size === 0 || pkgs.has(targetPkg)) continue;
@@ -112,7 +110,7 @@ function moveChangesetsAside(targetPkg) {
   return held;
 }
 
-function restoreHeldChangesets(held) {
+function restoreHeldChangesets(held, holdDir) {
   for (const { from, to } of held) {
     if (fs.existsSync(to)) fs.renameSync(to, from);
   }
@@ -121,43 +119,85 @@ function restoreHeldChangesets(held) {
   }
 }
 
-async function main() {
-  const argPkg = parseArgs(process.argv.slice(2));
-  const pkg = argPkg || (await pickPackageInteractively());
+// Default runner that shells out to the local `@changesets/cli` binary.
+function defaultRunChangesetVersion({ repoRoot, changesetBin, stdio = 'inherit' }) {
+  const bin = changesetBin || path.join(repoRoot, 'node_modules', '.bin', 'changeset');
+  const result = spawnSync(bin, ['version'], { cwd: repoRoot, stdio });
+  return result.status ?? 1;
+}
 
-  const targeted = listChangesetFiles().filter((f) => getChangesetPackages(f).has(pkg));
+async function runVersion({
+  pkg,
+  repoRoot,
+  changesetBin,
+  runChangesetVersion = defaultRunChangesetVersion,
+  syncChangelog,
+  log = console.log,
+}) {
+  if (![DATASOURCE, LIBRARY].includes(pkg)) {
+    throw new Error(`Invalid package: "${pkg}". Expected "${DATASOURCE}" or "${LIBRARY}".`);
+  }
+
+  const changesetDir = path.join(repoRoot, CHANGESET_SUBDIR);
+  const holdDir = path.join(repoRoot, HOLD_SUBDIR);
+
+  const targeted = listChangesetFiles(changesetDir).filter((f) => getChangesetPackages(f).has(pkg));
   if (targeted.length === 0) {
-    console.log(`No pending changesets reference "${pkg}". Nothing to version.`);
-    return;
+    log(`No pending changesets reference "${pkg}". Nothing to version.`);
+    return { exitCode: 0, versioned: false, heldCount: 0 };
   }
 
-  const held = moveChangesetsAside(pkg);
+  const held = moveChangesetsAside(pkg, changesetDir, holdDir);
   if (held.length > 0) {
-    console.log(`Holding ${held.length} unrelated changeset(s) aside while versioning "${pkg}".`);
+    log(`Holding ${held.length} unrelated changeset(s) aside while versioning "${pkg}".`);
   }
 
-  const changesetBin = path.join(repoRoot, 'node_modules', '.bin', 'changeset');
   let exitCode = 0;
   try {
-    const result = spawnSync(changesetBin, ['version'], {
-      cwd: repoRoot,
-      stdio: 'inherit',
-    });
-    exitCode = result.status ?? 1;
+    exitCode = runChangesetVersion({ repoRoot, changesetBin });
   } finally {
-    restoreHeldChangesets(held);
+    restoreHeldChangesets(held, holdDir);
   }
 
   if (exitCode !== 0) {
-    process.exit(exitCode);
+    return { exitCode, versioned: false, heldCount: held.length };
   }
 
-  if (pkg === DATASOURCE) {
-    require('./sync-changelog.js');
+  if (pkg === DATASOURCE && typeof syncChangelog === 'function') {
+    syncChangelog(repoRoot);
+  }
+
+  return { exitCode: 0, versioned: true, heldCount: held.length };
+}
+
+async function main() {
+  const argPkg = parseArgs(process.argv.slice(2));
+  const pkg = argPkg || (await pickPackageInteractively());
+  const repoRoot = path.join(__dirname, '..');
+  const { syncChangelog } = require('./sync-changelog.js');
+  const { exitCode } = await runVersion({ pkg, repoRoot, syncChangelog });
+  if (exitCode !== 0) {
+    process.exit(exitCode);
   }
 }
 
-main().catch((err) => {
-  console.error(err.message || err);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(err.message || err);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  DATASOURCE,
+  LIBRARY,
+  CHANGESET_SUBDIR,
+  HOLD_SUBDIR,
+  parseArgs,
+  getChangesetPackages,
+  listChangesetFiles,
+  moveChangesetsAside,
+  restoreHeldChangesets,
+  runVersion,
+  defaultRunChangesetVersion,
+};

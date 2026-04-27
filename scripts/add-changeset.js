@@ -74,6 +74,20 @@ async function pickPackageInteractively() {
   }
 }
 
+async function createChangeset({ pkg, bump, summary, repoRoot }) {
+  if (![DATASOURCE, LIBRARY].includes(pkg)) {
+    throw new Error(`Invalid package: "${pkg}". Expected "${DATASOURCE}" or "${LIBRARY}".`);
+  }
+  if (!BUMP_TYPES.includes(bump)) {
+    throw new Error(`Invalid bump type: "${bump}". Expected one of: ${BUMP_TYPES.join(', ')}.`);
+  }
+  if (!summary) {
+    throw new Error('A summary is required.');
+  }
+  const id = await write({ summary, releases: [{ name: pkg, type: bump }] }, repoRoot);
+  return id;
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
 
@@ -83,31 +97,30 @@ async function main() {
   if (!bump) {
     bump = (await prompt('Bump type [patch/minor/major] (patch): ', 'patch')).toLowerCase();
   }
-  if (!BUMP_TYPES.includes(bump)) {
-    console.error(`Invalid bump type: "${bump}". Expected one of: ${BUMP_TYPES.join(', ')}.`);
-    process.exit(1);
-  }
 
   let summary = args.summary;
   if (!summary) {
     summary = await prompt('Summary: ', '');
   }
-  if (!summary) {
-    console.error('A summary is required.');
-    process.exit(1);
-  }
 
   const repoRoot = path.join(__dirname, '..');
-  const id = await write(
-    { summary, releases: [{ name: pkg, type: bump }] },
-    repoRoot,
-  );
+  const id = await createChangeset({ pkg, bump, summary, repoRoot });
 
   console.log(`Created .changeset/${id}.md`);
   console.log(`  - ${pkg}: ${bump}`);
 }
 
-main().catch((err) => {
-  console.error(err.message || err);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(err.message || err);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  DATASOURCE,
+  LIBRARY,
+  BUMP_TYPES,
+  parseArgs,
+  createChangeset,
+};
