@@ -1,0 +1,14 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+compiled/
+
+# Generated / vendored files that must not be reformatted
+testdata/
+src/locales/
+pkg/
+
+# Cache
+.eslintcache
