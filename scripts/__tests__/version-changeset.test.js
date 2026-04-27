@@ -106,10 +106,7 @@ describe('version-changeset / getChangesetPackages', () => {
 
   it('returns multiple packages when a changeset references both', () => {
     const file = path.join(root, '.changeset', 'd.md');
-    fs.writeFileSync(
-      file,
-      "---\n'grafana-prometheus-datasource': patch\n'@grafana/prometheus': minor\n---\n\nx\n",
-    );
+    fs.writeFileSync(file, "---\n'grafana-prometheus-datasource': patch\n'@grafana/prometheus': minor\n---\n\nx\n");
     expect(getChangesetPackages(file)).toEqual(new Set([DATASOURCE, LIBRARY]));
   });
 
@@ -222,23 +219,14 @@ describe('version-changeset / flattenChangelog', () => {
         '',
         '🐛 Fix panel',
         '',
-      ].join('\n'),
+      ].join('\n')
     );
 
     const changed = flattenChangelog(file);
 
     expect(changed).toBe(true);
     expect(fs.readFileSync(file, 'utf8')).toBe(
-      [
-        '# @grafana/prometheus',
-        '',
-        '## 14.0.0',
-        '',
-        '🎉 Breaking change',
-        '🚀 Add util',
-        '🐛 Fix panel',
-        '',
-      ].join('\n'),
+      ['# @grafana/prometheus', '', '## 14.0.0', '', '🎉 Breaking change', '🚀 Add util', '🐛 Fix panel', ''].join('\n')
     );
   });
 
@@ -263,25 +251,15 @@ describe('version-changeset / flattenChangelog', () => {
         '',
         '🚀 Util',
         '',
-      ].join('\n'),
+      ].join('\n')
     );
 
     flattenChangelog(file);
 
     expect(fs.readFileSync(file, 'utf8')).toBe(
-      [
-        '# @grafana/prometheus',
-        '',
-        '## 14.0.0',
-        '',
-        '🎉 Break',
-        '🐛 Fix A',
-        '',
-        '## 13.2.0',
-        '',
-        '🚀 Util',
-        '',
-      ].join('\n'),
+      ['# @grafana/prometheus', '', '## 14.0.0', '', '🎉 Break', '🐛 Fix A', '', '## 13.2.0', '', '🚀 Util', ''].join(
+        '\n'
+      )
     );
   });
 
@@ -482,7 +460,7 @@ describe('version-changeset / runVersion (end-to-end with real changeset binary)
         repoRoot: root,
         runChangesetVersion: realRunner,
         syncChangelog,
-      }),
+      })
     ).rejects.toThrow(/Invalid package/);
   });
 
@@ -506,10 +484,7 @@ describe('version-changeset / runVersion (end-to-end with real changeset binary)
     expect(readPackageVersion(root, STUB_REL)).toBe('13.1.0');
     expect(readPackageVersion(root, '.')).toBe('13.1.0');
 
-    const promlibChangelog = fs.readFileSync(
-      path.join(root, PROMLIB_TARGET_REL, 'CHANGELOG.md'),
-      'utf8',
-    );
+    const promlibChangelog = fs.readFileSync(path.join(root, PROMLIB_TARGET_REL, 'CHANGELOG.md'), 'utf8');
     expect(promlibChangelog).toContain('0.0.11');
     expect(promlibChangelog).toContain('Fix promlib bug');
 

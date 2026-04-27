@@ -105,17 +105,23 @@ async function pickPackageInteractively(prompt, log) {
 function getChangesetPackages(filePath) {
   const content = fs.readFileSync(filePath, 'utf8');
   const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
-  if (!match) return new Set();
+  if (!match) {
+    return new Set();
+  }
   const packages = new Set();
   for (const line of match[1].split(/\r?\n/)) {
     const m = line.match(/^\s*(?:"([^"]+)"|'([^']+)'|([^\s'":]+))\s*:\s*(patch|minor|major)\s*$/);
-    if (m) packages.add(m[1] || m[2] || m[3]);
+    if (m) {
+      packages.add(m[1] || m[2] || m[3]);
+    }
   }
   return packages;
 }
 
 function listChangesetFiles(changesetDir) {
-  if (!fs.existsSync(changesetDir)) return [];
+  if (!fs.existsSync(changesetDir)) {
+    return [];
+  }
   return fs
     .readdirSync(changesetDir)
     .filter((name) => name.endsWith('.md') && name.toLowerCase() !== 'readme.md')
@@ -127,8 +133,12 @@ function moveChangesetsAside(targetPkg, changesetDir, holdDir) {
   const files = listChangesetFiles(changesetDir);
   for (const file of files) {
     const pkgs = getChangesetPackages(file);
-    if (pkgs.size === 0 || pkgs.has(targetPkg)) continue;
-    if (!fs.existsSync(holdDir)) fs.mkdirSync(holdDir, { recursive: true });
+    if (pkgs.size === 0 || pkgs.has(targetPkg)) {
+      continue;
+    }
+    if (!fs.existsSync(holdDir)) {
+      fs.mkdirSync(holdDir, { recursive: true });
+    }
     const dest = path.join(holdDir, path.basename(file));
     fs.renameSync(file, dest);
     held.push({ from: file, to: dest });
@@ -138,7 +148,9 @@ function moveChangesetsAside(targetPkg, changesetDir, holdDir) {
 
 function restoreHeldChangesets(held, holdDir) {
   for (const { from, to } of held) {
-    if (fs.existsSync(to)) fs.renameSync(to, from);
+    if (fs.existsSync(to)) {
+      fs.renameSync(to, from);
+    }
   }
   if (fs.existsSync(holdDir) && fs.readdirSync(holdDir).length === 0) {
     fs.rmdirSync(holdDir);
@@ -160,7 +172,9 @@ function restoreHeldChangesets(held, holdDir) {
 // Returns true when the file was rewritten, false when it was missing or
 // already in the desired shape.
 function flattenChangelog(changelogPath) {
-  if (!fs.existsSync(changelogPath)) return false;
+  if (!fs.existsSync(changelogPath)) {
+    return false;
+  }
 
   const original = fs.readFileSync(changelogPath, 'utf8');
   const lines = original.split('\n');
@@ -168,7 +182,9 @@ function flattenChangelog(changelogPath) {
   let inVersionSection = false;
 
   const pushBlankSeparator = () => {
-    if (out.length > 0 && out[out.length - 1] !== '') out.push('');
+    if (out.length > 0 && out[out.length - 1] !== '') {
+      out.push('');
+    }
   };
 
   for (const line of lines) {
@@ -189,8 +205,12 @@ function flattenChangelog(changelogPath) {
     }
 
     if (inVersionSection) {
-      if (/^### (?:Major|Minor|Patch) Changes\s*$/.test(line)) continue;
-      if (line.trim() === '') continue;
+      if (/^### (?:Major|Minor|Patch) Changes\s*$/.test(line)) {
+        continue;
+      }
+      if (line.trim() === '') {
+        continue;
+      }
       out.push(line);
       continue;
     }
@@ -198,19 +218,25 @@ function flattenChangelog(changelogPath) {
     out.push(line);
   }
 
-  while (out.length > 0 && out[out.length - 1] === '') out.pop();
+  while (out.length > 0 && out[out.length - 1] === '') {
+    out.pop();
+  }
   out.push('');
 
   const result = out
     .reduce((acc, line) => {
       // Collapse runs of blank lines anywhere in the output to at most one.
-      if (line === '' && acc.length > 0 && acc[acc.length - 1] === '') return acc;
+      if (line === '' && acc.length > 0 && acc[acc.length - 1] === '') {
+        return acc;
+      }
       acc.push(line);
       return acc;
     }, [])
     .join('\n');
 
-  if (result === original) return false;
+  if (result === original) {
+    return false;
+  }
   fs.writeFileSync(changelogPath, result);
   return true;
 }
@@ -231,9 +257,7 @@ async function runVersion({
   log = console.log,
 }) {
   if (!PACKAGES.includes(pkg)) {
-    throw new Error(
-      `Invalid package: "${pkg}". Expected one of: ${PACKAGES.map((p) => `"${p}"`).join(', ')}.`,
-    );
+    throw new Error(`Invalid package: "${pkg}". Expected one of: ${PACKAGES.map((p) => `"${p}"`).join(', ')}.`);
   }
 
   const changesetDir = path.join(repoRoot, CHANGESET_SUBDIR);
@@ -301,7 +325,9 @@ async function run({
 if (require.main === module) {
   run({ argv: process.argv.slice(2), repoRoot: path.join(__dirname, '..') })
     .then(({ exitCode }) => {
-      if (exitCode !== 0) process.exit(exitCode);
+      if (exitCode !== 0) {
+        process.exit(exitCode);
+      }
     })
     .catch((err) => {
       console.error(err.message || err);

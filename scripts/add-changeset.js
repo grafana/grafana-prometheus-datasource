@@ -90,9 +90,7 @@ async function pickPackageInteractively(prompt, log) {
 
 async function createChangeset({ pkg, bump, summary, repoRoot }) {
   if (!PACKAGES.includes(pkg)) {
-    throw new Error(
-      `Invalid package: "${pkg}". Expected one of: ${PACKAGES.map((p) => `"${p}"`).join(', ')}.`,
-    );
+    throw new Error(`Invalid package: "${pkg}". Expected one of: ${PACKAGES.map((p) => `"${p}"`).join(', ')}.`);
   }
   if (!BUMP_TYPES.includes(bump)) {
     throw new Error(`Invalid bump type: "${bump}". Expected one of: ${BUMP_TYPES.join(', ')}.`);

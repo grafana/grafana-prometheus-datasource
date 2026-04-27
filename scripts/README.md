@@ -7,11 +7,11 @@ workspace root and the `pkg/promlib` Go module).
 
 ## Packages
 
-| Name                              | Path                                  | What gets versioned                                    |
-| --------------------------------- | ------------------------------------- | ------------------------------------------------------ |
-| `grafana-prometheus-datasource`   | `packages/grafana-prometheus-datasource` (stub) | The plugin/workspace root — version + `CHANGELOG.md` mirrored to repo root. |
-| `@grafana/prometheus`             | `packages/grafana-prometheus`         | The published library, versioned in place.            |
-| `promlib`                         | `packages/promlib` (stub)             | The `pkg/promlib` Go module — `CHANGELOG.md` mirrored to `pkg/promlib/`. The Go module itself is released via `pkg/promlib/vX.Y.Z` git tags. |
+| Name                            | Path                                            | What gets versioned                                                                                                                          |
+| ------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `grafana-prometheus-datasource` | `packages/grafana-prometheus-datasource` (stub) | The plugin/workspace root — version + `CHANGELOG.md` mirrored to repo root.                                                                  |
+| `@grafana/prometheus`           | `packages/grafana-prometheus`                   | The published library, versioned in place.                                                                                                   |
+| `promlib`                       | `packages/promlib` (stub)                       | The `pkg/promlib` Go module — `CHANGELOG.md` mirrored to `pkg/promlib/`. The Go module itself is released via `pkg/promlib/vX.Y.Z` git tags. |
 
 Stub packages are private, contain no source, and exist only because
 `@changesets/cli` can only target packages it finds via the `packages/*`
@@ -64,10 +64,10 @@ fails.
 Mirrors a stub package's `CHANGELOG.md` (and, where relevant, its
 `package.json` version) to the real location it represents:
 
-| Stub                                     | Mirrored to                  | Version mirrored? |
-| ---------------------------------------- | ---------------------------- | ----------------- |
-| `packages/grafana-prometheus-datasource` | repo root                    | yes               |
-| `packages/promlib`                       | `pkg/promlib/CHANGELOG.md`   | no (Go module — version lives in git tags) |
+| Stub                                     | Mirrored to                | Version mirrored?                          |
+| ---------------------------------------- | -------------------------- | ------------------------------------------ |
+| `packages/grafana-prometheus-datasource` | repo root                  | yes                                        |
+| `packages/promlib`                       | `pkg/promlib/CHANGELOG.md` | no (Go module — version lives in git tags) |
 
 Called automatically from `version-changeset.js` after a successful
 `changeset version`. Can also be invoked directly:

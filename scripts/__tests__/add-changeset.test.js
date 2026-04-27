@@ -4,14 +4,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const {
-  DATASOURCE,
-  LIBRARY,
-  PROMLIB,
-  parseArgs,
-  createChangeset,
-  BUMP_TYPES,
-} = require('../add-changeset');
+const { DATASOURCE, LIBRARY, PROMLIB, parseArgs, createChangeset, BUMP_TYPES } = require('../add-changeset');
 const { createFixture, destroyFixture, listChangesetMdFiles } = require('./fixture');
 
 describe('add-changeset / parseArgs', () => {
@@ -77,11 +70,7 @@ describe('add-changeset / createChangeset', () => {
   // valid. Match either form so we don't lock the test to whichever quoting
   // style `@changesets/write` happens to emit today.
   function expectFrontmatterEntry(content, pkg, bump) {
-    const matchers = [
-      `"${pkg}": ${bump}`,
-      `'${pkg}': ${bump}`,
-      `${pkg}: ${bump}`,
-    ];
+    const matchers = [`"${pkg}": ${bump}`, `'${pkg}': ${bump}`, `${pkg}: ${bump}`];
     expect(matchers.some((m) => content.includes(m))).toBe(true);
   }
 
@@ -141,21 +130,21 @@ describe('add-changeset / createChangeset', () => {
   });
 
   it('rejects an invalid package name', async () => {
-    await expect(
-      createChangeset({ pkg: 'random-pkg', bump: 'patch', summary: 'x', repoRoot: root }),
-    ).rejects.toThrow(/Invalid package/);
+    await expect(createChangeset({ pkg: 'random-pkg', bump: 'patch', summary: 'x', repoRoot: root })).rejects.toThrow(
+      /Invalid package/
+    );
   });
 
   it('rejects an invalid bump type', async () => {
-    await expect(
-      createChangeset({ pkg: LIBRARY, bump: 'huge', summary: 'x', repoRoot: root }),
-    ).rejects.toThrow(/Invalid bump type/);
+    await expect(createChangeset({ pkg: LIBRARY, bump: 'huge', summary: 'x', repoRoot: root })).rejects.toThrow(
+      /Invalid bump type/
+    );
   });
 
   it('rejects an empty summary', async () => {
-    await expect(
-      createChangeset({ pkg: LIBRARY, bump: 'patch', summary: '', repoRoot: root }),
-    ).rejects.toThrow(/summary is required/);
+    await expect(createChangeset({ pkg: LIBRARY, bump: 'patch', summary: '', repoRoot: root })).rejects.toThrow(
+      /summary is required/
+    );
   });
 
   it('creates multiple distinct changesets in the same fixture', async () => {

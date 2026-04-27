@@ -136,9 +136,9 @@ describe('Use case 1.1 — `yarn changeset` interactive', () => {
   it('user submits empty package selection → run rejects, no changeset is written', async () => {
     const prompt = makePrompt(['']);
 
-    await expect(
-      addChangeset.run({ argv: [], repoRoot: root, prompt, log: () => {} }),
-    ).rejects.toThrow(/A package must be selected/);
+    await expect(addChangeset.run({ argv: [], repoRoot: root, prompt, log: () => {} })).rejects.toThrow(
+      /A package must be selected/
+    );
 
     expect(listChangesetMdFiles(root)).toEqual([]);
   });
@@ -463,10 +463,7 @@ describe('Use case 1.6 — `yarn changeset:version --promlib`', () => {
     expect(readPackageVersion(root, STUB_REL)).toBe('13.1.0');
     expect(readPackageVersion(root, '.')).toBe('13.1.0');
 
-    const promlibChangelog = fs.readFileSync(
-      path.join(root, PROMLIB_TARGET_REL, 'CHANGELOG.md'),
-      'utf8',
-    );
+    const promlibChangelog = fs.readFileSync(path.join(root, PROMLIB_TARGET_REL, 'CHANGELOG.md'), 'utf8');
     expect(promlibChangelog).toContain('0.1.0');
     expect(promlibChangelog).toContain('Promlib bugfix 1');
     expect(promlibChangelog).toContain('Promlib feature');
@@ -478,9 +475,7 @@ describe('Use case 1.6 — `yarn changeset:version --promlib`', () => {
     expect(remaining).toHaveLength(2);
     const remainingPackages = new Set();
     for (const file of remaining) {
-      for (const pkg of versionChangeset.getChangesetPackages(
-        path.join(root, '.changeset', file),
-      )) {
+      for (const pkg of versionChangeset.getChangesetPackages(path.join(root, '.changeset', file))) {
         remainingPackages.add(pkg);
       }
     }

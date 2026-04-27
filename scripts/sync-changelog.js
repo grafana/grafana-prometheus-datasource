@@ -32,9 +32,7 @@ const STUBS = {
 function syncChangelog(repoRoot, pkg = DATASOURCE) {
   const cfg = STUBS[pkg];
   if (!cfg) {
-    throw new Error(
-      `Unknown stub package: "${pkg}". Expected one of: ${Object.keys(STUBS).join(', ')}.`,
-    );
+    throw new Error(`Unknown stub package: "${pkg}". Expected one of: ${Object.keys(STUBS).join(', ')}.`);
   }
 
   const stubDir = path.join(repoRoot, cfg.stubDir);

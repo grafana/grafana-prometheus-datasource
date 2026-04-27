@@ -72,7 +72,7 @@ function createFixture({
       '  getDependencyReleaseLine: async () => "",',
       '};',
       '',
-    ].join('\n'),
+    ].join('\n')
   );
   writeJson(path.join(root, '.changeset', 'config.json'), {
     $schema: 'https://unpkg.com/@changesets/config@3.1.4/schema.json',

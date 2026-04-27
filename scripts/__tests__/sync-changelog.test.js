@@ -5,11 +5,7 @@ const fs = require('fs');
 const path = require('path');
 
 const { syncChangelog } = require('../sync-changelog');
-const {
-  createFixture,
-  destroyFixture,
-  readJson,
-} = require('./fixture');
+const { createFixture, destroyFixture, readJson } = require('./fixture');
 
 const STUB_REL = path.join('packages', 'grafana-prometheus-datasource');
 const PROMLIB_STUB_REL = path.join('packages', 'promlib');
@@ -27,10 +23,7 @@ describe('sync-changelog', () => {
   });
 
   it('mirrors the stub CHANGELOG.md to the workspace root', () => {
-    fs.writeFileSync(
-      path.join(root, STUB_REL, 'CHANGELOG.md'),
-      '# stub\n\n## 13.1.1\n\nstub entry\n',
-    );
+    fs.writeFileSync(path.join(root, STUB_REL, 'CHANGELOG.md'), '# stub\n\n## 13.1.1\n\nstub entry\n');
 
     syncChangelog(root);
 
@@ -65,26 +58,17 @@ describe('sync-changelog', () => {
   });
 
   it('mirrors the promlib stub CHANGELOG.md to pkg/promlib when target=promlib', () => {
-    fs.writeFileSync(
-      path.join(root, PROMLIB_STUB_REL, 'CHANGELOG.md'),
-      '# promlib\n\n## 0.0.11\n\npromlib entry\n',
-    );
+    fs.writeFileSync(path.join(root, PROMLIB_STUB_REL, 'CHANGELOG.md'), '# promlib\n\n## 0.0.11\n\npromlib entry\n');
 
     syncChangelog(root, 'promlib');
 
-    const mirrored = fs.readFileSync(
-      path.join(root, PROMLIB_TARGET_REL, 'CHANGELOG.md'),
-      'utf8',
-    );
+    const mirrored = fs.readFileSync(path.join(root, PROMLIB_TARGET_REL, 'CHANGELOG.md'), 'utf8');
     expect(mirrored).toContain('## 0.0.11');
     expect(mirrored).toContain('promlib entry');
   });
 
   it('does not write a package.json into pkg/promlib (Go module, no version mirror)', () => {
-    fs.writeFileSync(
-      path.join(root, PROMLIB_STUB_REL, 'CHANGELOG.md'),
-      '# promlib\n\n## 0.0.11\n\nentry\n',
-    );
+    fs.writeFileSync(path.join(root, PROMLIB_STUB_REL, 'CHANGELOG.md'), '# promlib\n\n## 0.0.11\n\nentry\n');
 
     syncChangelog(root, 'promlib');
 
@@ -92,10 +76,7 @@ describe('sync-changelog', () => {
   });
 
   it('does not touch the workspace root when target=promlib', () => {
-    fs.writeFileSync(
-      path.join(root, PROMLIB_STUB_REL, 'CHANGELOG.md'),
-      '# promlib\n\n## 0.0.11\n\nentry\n',
-    );
+    fs.writeFileSync(path.join(root, PROMLIB_STUB_REL, 'CHANGELOG.md'), '# promlib\n\n## 0.0.11\n\nentry\n');
 
     syncChangelog(root, 'promlib');
 
