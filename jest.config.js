@@ -13,6 +13,12 @@ module.exports = {
   moduleNameMapper: {
     ...require('./.config/jest.config').moduleNameMapper,
     '^@grafana/prometheus$': '<rootDir>/packages/grafana-prometheus/src/index.ts',
+    // Force all code (including packages/grafana-prometheus) to share the root React instance.
+    // Without this, the nested node_modules/react in that package causes "Invalid hook call" errors.
+    '^react$': '<rootDir>/node_modules/react',
+    '^react-dom$': '<rootDir>/node_modules/react-dom',
+    '^react/jsx-runtime$': '<rootDir>/node_modules/react/jsx-runtime',
+    '^react/jsx-dev-runtime$': '<rootDir>/node_modules/react/jsx-dev-runtime',
   },
 
   // Use automatic JSX runtime so tests don't need `import React from 'react'`
