@@ -7,6 +7,11 @@ artifacts/
 work/
 ci/
 
+# Generated / vendored files that must not be reformatted
+testdata/
+locales/
+pkg/
+
 # Test outputs
 playwright-report/
 blob-report/
