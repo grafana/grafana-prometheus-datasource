@@ -22,10 +22,10 @@ on:
         description: Cloud will publish scoped only to Grafana Cloud, On Prem will publish with Universal scope. Please use Cloud unless emergency fix needed for On Prem customer.
         required: true
         type: choice
-        default: "cloud (recommended)"
+        default: 'cloud (recommended)'
         options:
-          - "cloud (recommended)"
-          - "on-prem (for emergencies fix to On Prem customers)"
+          - 'cloud (recommended)'
+          - 'on-prem (for emergencies fix to On Prem customers)'
       docs-only:
         description: Only publish docs, do not publish the plugin
         default: false

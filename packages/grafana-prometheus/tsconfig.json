@@ -31,8 +31,5 @@
     "moduleResolution": "bundler"
   },
   "exclude": ["dist/**/*"],
-  "include": [
-    "src/**/*.ts*",
-    "rollup.config.ts"
-  ]
+  "include": ["src/**/*.ts*", "rollup.config.ts"]
 }
