@@ -85,7 +85,7 @@ func (r *Resource) Execute(ctx context.Context, req *backend.CallResourceRequest
 }
 
 func getSelectors(expr string) ([]string, error) {
-	parsed, err := parser.ParseExpr(expr)
+	parsed, err := models.ParseExpr(expr)
 	if err != nil {
 		return nil, err
 	}

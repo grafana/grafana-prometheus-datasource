@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
+	schemas "github.com/grafana/schemads"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/promql/parser"
-	schemas "github.com/grafana/schemads"
 
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/models"
 )
@@ -147,7 +147,7 @@ func buildPromQLExpr(metric string, filters []schemas.ColumnFilter, hints map[st
 		if err != nil {
 			return "", fmt.Errorf("invalid rate duration %q: %w", rateDuration, err)
 		}
-		innerExpr, err := parser.ParseExpr(baseExpr)
+		innerExpr, err := models.ParseExpr(baseExpr)
 		if err != nil {
 			return "", fmt.Errorf("failed to parse base expression %q: %w", baseExpr, err)
 		}
