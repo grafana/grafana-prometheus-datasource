@@ -38,7 +38,7 @@ require (
 	github.com/grafana/grafana/apps/scope v0.0.0-20251007093103-792853df9134 // indirect
 	github.com/grafana/grafana/pkg/apimachinery v0.0.0-20251007081214-26e147d01f0a // indirect
 	github.com/grafana/regexp v0.0.0-20240518133315-a468a5bfb3bc // indirect
-	github.com/grafana/schemads v0.0.9 // indirect
+	github.com/grafana/schemads v0.0.11 // indirect
 	github.com/huandu/go-clone v1.7.3 // indirect
 	github.com/huandu/go-sqlbuilder v1.39.1 // indirect
 	github.com/huandu/xstrings v1.4.0 // indirect
@@ -98,7 +98,7 @@ require (
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.18.4 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
-	github.com/magefile/mage v1.15.0 // indirect
+	github.com/magefile/mage v1.15.0
 	github.com/mattetti/filebuffer v1.0.1 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
@@ -152,4 +152,3 @@ require (
 )
 
 replace github.com/grafana/grafana-prometheus-datasource/pkg/promlib => ./pkg/promlib
-replace github.com/grafana/schemads => /home/kbrandt/go/src/github.com/grafana/schemads
