@@ -49,6 +49,21 @@ func (d *Datasource) CheckHealth(ctx context.Context, req *backend.CheckHealthRe
 	return d.Service.CheckHealth(ctx, req)
 }
 
+func (d *Datasource) ValidateAdmission(ctx context.Context, req *backend.AdmissionRequest) (*backend.ValidationResponse, error) {
+	ctx = d.contextualMiddlewares(ctx)
+	return d.Service.ValidateAdmission(ctx, req)
+}
+
+func (d *Datasource) MutateAdmission(ctx context.Context, req *backend.AdmissionRequest) (*backend.MutationResponse, error) {
+	ctx = d.contextualMiddlewares(ctx)
+	return d.Service.MutateAdmission(ctx, req)
+}
+
+func (d *Datasource) ConvertObjects(ctx context.Context, req *backend.ConversionRequest) (*backend.ConversionResponse, error) {
+	ctx = d.contextualMiddlewares(ctx)
+	return d.Service.ConvertObjects(ctx, req)
+}
+
 func (d *Datasource) contextualMiddlewares(ctx context.Context) context.Context {
 	cfg := config.GrafanaConfigFromContext(ctx)
 
