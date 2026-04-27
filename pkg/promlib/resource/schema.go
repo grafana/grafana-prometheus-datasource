@@ -44,7 +44,12 @@ var prometheusTableHints = []schemas.TableHint{
 // gives an incorrect result when series cardinality varies across
 // timestamps. The SQL engine handles AVG from raw data instead.
 var prometheusCapabilities = &schemas.DatasourceCapabilities{
-	AggregateFunctions: []string{"SUM", "COUNT", "MIN", "MAX"},
+	AggregateFunctions: []schemas.AggregateFunction{
+		schemas.AggregateSum,
+		schemas.AggregateCount,
+		schemas.AggregateMin,
+		schemas.AggregateMax,
+	},
 }
 
 // Schema implements schemas.SchemaHandler.
