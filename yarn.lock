@@ -11242,6 +11242,12 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"promlib@workspace:packages/promlib":
+  version: 0.0.0-use.local
+  resolution: "promlib@workspace:packages/promlib"
+  languageName: unknown
+  linkType: soft
+
 "prompts@npm:^2.0.1":
   version: 2.4.2
   resolution: "prompts@npm:2.4.2"
