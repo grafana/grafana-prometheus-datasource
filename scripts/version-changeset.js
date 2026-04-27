@@ -44,7 +44,7 @@ function parseArgs(argv) {
   return pkg;
 }
 
-function prompt(question) {
+function defaultPrompt(question) {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((resolve) => {
     rl.question(question, (answer) => {
@@ -54,10 +54,10 @@ function prompt(question) {
   });
 }
 
-async function pickPackageInteractively() {
-  console.log('Which package do you want to version?');
-  console.log(`  1) ${DATASOURCE}`);
-  console.log(`  2) ${LIBRARY}`);
+async function pickPackageInteractively(prompt, log) {
+  log('Which package do you want to version?');
+  log(`  1) ${DATASOURCE}`);
+  log(`  2) ${LIBRARY}`);
   const choice = (await prompt('Select [1/2]: ')).toLowerCase();
   switch (choice) {
     case '1':
@@ -170,22 +170,40 @@ async function runVersion({
   return { exitCode: 0, versioned: true, heldCount: held.length };
 }
 
-async function main() {
-  const argPkg = parseArgs(process.argv.slice(2));
-  const pkg = argPkg || (await pickPackageInteractively());
-  const repoRoot = path.join(__dirname, '..');
-  const { syncChangelog } = require('./sync-changelog.js');
-  const { exitCode } = await runVersion({ pkg, repoRoot, syncChangelog });
-  if (exitCode !== 0) {
-    process.exit(exitCode);
-  }
+// Drives the full CLI flow: parse args, prompt if needed, then version.
+// Exposed so tests can exercise the entire `yarn changeset:version` pipeline
+// (including the interactive picker) without spawning a shell.
+async function run({
+  argv,
+  repoRoot,
+  prompt = defaultPrompt,
+  log = console.log,
+  runChangesetVersion,
+  syncChangelog,
+} = {}) {
+  const argPkg = parseArgs(argv);
+  const pkg = argPkg || (await pickPackageInteractively(prompt, log));
+
+  const resolvedSync = syncChangelog || require('./sync-changelog.js').syncChangelog;
+
+  return runVersion({
+    pkg,
+    repoRoot,
+    runChangesetVersion,
+    syncChangelog: resolvedSync,
+    log,
+  });
 }
 
 if (require.main === module) {
-  main().catch((err) => {
-    console.error(err.message || err);
-    process.exit(1);
-  });
+  run({ argv: process.argv.slice(2), repoRoot: path.join(__dirname, '..') })
+    .then(({ exitCode }) => {
+      if (exitCode !== 0) process.exit(exitCode);
+    })
+    .catch((err) => {
+      console.error(err.message || err);
+      process.exit(1);
+    });
 }
 
 module.exports = {
@@ -200,4 +218,6 @@ module.exports = {
   restoreHeldChangesets,
   runVersion,
   defaultRunChangesetVersion,
+  pickPackageInteractively,
+  run,
 };

@@ -43,7 +43,7 @@ function parseArgs(argv) {
   return args;
 }
 
-function prompt(question, defaultValue) {
+function defaultPrompt(question, defaultValue) {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((resolve) => {
     rl.question(question, (answer) => {
@@ -53,10 +53,10 @@ function prompt(question, defaultValue) {
   });
 }
 
-async function pickPackageInteractively() {
-  console.log('Which package?');
-  console.log(`  1) ${DATASOURCE}`);
-  console.log(`  2) ${LIBRARY}`);
+async function pickPackageInteractively(prompt, log) {
+  log('Which package?');
+  log(`  1) ${DATASOURCE}`);
+  log(`  2) ${LIBRARY}`);
   const choice = (await prompt('Select [1/2]: ', '')).toLowerCase();
   switch (choice) {
     case '1':
@@ -88,10 +88,14 @@ async function createChangeset({ pkg, bump, summary, repoRoot }) {
   return id;
 }
 
-async function main() {
-  const args = parseArgs(process.argv.slice(2));
+// Drives the full CLI flow: parse args, fill in any missing inputs via the
+// supplied prompt, and write the changeset. Exposed (and broken out from
+// `main`) so tests can simulate both the interactive and flag-driven paths
+// without spawning a shell.
+async function run({ argv, repoRoot, prompt = defaultPrompt, log = console.log } = {}) {
+  const args = parseArgs(argv);
 
-  const pkg = args.pkg || (await pickPackageInteractively());
+  const pkg = args.pkg || (await pickPackageInteractively(prompt, log));
 
   let bump = args.bump;
   if (!bump) {
@@ -103,15 +107,15 @@ async function main() {
     summary = await prompt('Summary: ', '');
   }
 
-  const repoRoot = path.join(__dirname, '..');
   const id = await createChangeset({ pkg, bump, summary, repoRoot });
 
-  console.log(`Created .changeset/${id}.md`);
-  console.log(`  - ${pkg}: ${bump}`);
+  log(`Created .changeset/${id}.md`);
+  log(`  - ${pkg}: ${bump}`);
+  return { id, pkg, bump, summary };
 }
 
 if (require.main === module) {
-  main().catch((err) => {
+  run({ argv: process.argv.slice(2), repoRoot: path.join(__dirname, '..') }).catch((err) => {
     console.error(err.message || err);
     process.exit(1);
   });
@@ -123,4 +127,6 @@ module.exports = {
   BUMP_TYPES,
   parseArgs,
   createChangeset,
+  pickPackageInteractively,
+  run,
 };
