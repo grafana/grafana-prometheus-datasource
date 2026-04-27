@@ -7,6 +7,7 @@ const path = require('path');
 const {
   DATASOURCE,
   LIBRARY,
+  PROMLIB,
   parseArgs,
   getChangesetPackages,
   listChangesetFiles,
@@ -26,6 +27,8 @@ const {
 
 const STUB_REL = path.join('packages', 'grafana-prometheus-datasource');
 const LIB_REL = path.join('packages', 'grafana-prometheus');
+const PROMLIB_STUB_REL = path.join('packages', 'promlib');
+const PROMLIB_TARGET_REL = path.join('pkg', 'promlib');
 
 // Always run end-to-end runVersion calls against the real `changeset` binary
 // installed in this repo, but with `cwd` pointing at our fixture so the test
@@ -50,12 +53,20 @@ describe('version-changeset / parseArgs', () => {
     expect(parseArgs(['--lib'])).toBe(LIBRARY);
   });
 
+  it('returns PROMLIB for --promlib', () => {
+    expect(parseArgs(['--promlib'])).toBe(PROMLIB);
+  });
+
   it('returns null when no flag is passed', () => {
     expect(parseArgs([])).toBe(null);
   });
 
-  it('throws on conflicting flags', () => {
+  it('throws on conflicting flags (datasource + library)', () => {
     expect(() => parseArgs(['--datasource', '--library'])).toThrow(/Only one of/);
+  });
+
+  it('throws on conflicting flags (library + promlib)', () => {
+    expect(() => parseArgs(['--library', '--promlib'])).toThrow(/Only one of/);
   });
 
   it('throws on unknown arguments', () => {
@@ -348,5 +359,63 @@ describe('version-changeset / runVersion (end-to-end with real changeset binary)
         syncChangelog,
       }),
     ).rejects.toThrow(/Invalid package/);
+  });
+
+  it('versions the promlib stub and mirrors CHANGELOG to pkg/promlib (no version mirror)', async () => {
+    writeChangeset(root, 'pl.md', { [PROMLIB]: 'patch' }, 'Fix promlib bug');
+
+    const result = await runVersion({
+      pkg: PROMLIB,
+      repoRoot: root,
+      runChangesetVersion: realRunner,
+      syncChangelog,
+      log: () => {},
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.versioned).toBe(true);
+
+    expect(readPackageVersion(root, PROMLIB_STUB_REL)).toBe('0.0.11');
+
+    expect(readPackageVersion(root, LIB_REL)).toBe('13.1.0');
+    expect(readPackageVersion(root, STUB_REL)).toBe('13.1.0');
+    expect(readPackageVersion(root, '.')).toBe('13.1.0');
+
+    const promlibChangelog = fs.readFileSync(
+      path.join(root, PROMLIB_TARGET_REL, 'CHANGELOG.md'),
+      'utf8',
+    );
+    expect(promlibChangelog).toContain('0.0.11');
+    expect(promlibChangelog).toContain('Fix promlib bug');
+
+    expect(fs.existsSync(path.join(root, PROMLIB_TARGET_REL, 'package.json'))).toBe(false);
+    expect(fs.existsSync(path.join(root, 'CHANGELOG.md'))).toBe(false);
+
+    expect(listChangesetMdFiles(root)).toEqual([]);
+  });
+
+  it('--promlib leaves library, datasource and root untouched and holds their changesets aside', async () => {
+    writeChangeset(root, 'lib.md', { [LIBRARY]: 'minor' }, 'Lib change');
+    writeChangeset(root, 'ds.md', { [DATASOURCE]: 'patch' }, 'DS change');
+    writeChangeset(root, 'pl.md', { [PROMLIB]: 'minor' }, 'Promlib feature');
+
+    const result = await runVersion({
+      pkg: PROMLIB,
+      repoRoot: root,
+      runChangesetVersion: realRunner,
+      syncChangelog,
+      log: () => {},
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.heldCount).toBe(2);
+
+    expect(readPackageVersion(root, PROMLIB_STUB_REL)).toBe('0.1.0');
+    expect(readPackageVersion(root, LIB_REL)).toBe('13.1.0');
+    expect(readPackageVersion(root, STUB_REL)).toBe('13.1.0');
+    expect(readPackageVersion(root, '.')).toBe('13.1.0');
+
+    expect(listChangesetMdFiles(root).sort()).toEqual(['ds.md', 'lib.md']);
+    expect(fs.existsSync(path.join(root, '.changeset-hold'))).toBe(false);
   });
 });

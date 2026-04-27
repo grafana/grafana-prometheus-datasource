@@ -3,17 +3,21 @@
 //
 // `@changesets/cli version` always consumes every pending changeset and bumps
 // every referenced package. To scope it to one package, this script:
-//   1. Picks a target package (interactive prompt, or --datasource / --library).
+//   1. Picks a target package (interactive prompt, or
+//      --datasource / --library / --promlib).
 //   2. Moves changesets that don't reference that package into a hold folder.
 //   3. Runs `changeset version`.
 //   4. Restores the held changesets so they remain pending for next time.
-//   5. For the datasource stub, mirrors version + CHANGELOG to the workspace
-//      root via sync-changelog.js.
+//   5. For stub packages, mirrors version + CHANGELOG to their real location
+//      via sync-changelog.js:
+//        - grafana-prometheus-datasource → workspace root
+//        - promlib                       → pkg/promlib (CHANGELOG only)
 //
 // Usage:
 //   yarn changeset:version                  # interactive
 //   yarn changeset:version --datasource     # version the plugin/datasource only
 //   yarn changeset:version --library        # version @grafana/prometheus only
+//   yarn changeset:version --promlib        # version promlib (pkg/promlib) only
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
@@ -21,22 +25,32 @@ const { spawnSync } = require('child_process');
 
 const DATASOURCE = 'grafana-prometheus-datasource';
 const LIBRARY = '@grafana/prometheus';
+const PROMLIB = 'promlib';
+const PACKAGES = [DATASOURCE, LIBRARY, PROMLIB];
+// Packages whose CHANGELOG/version need to be mirrored to a real location
+// after `changeset version` runs.
+const STUB_PACKAGES = new Set([DATASOURCE, PROMLIB]);
+
 const CHANGESET_SUBDIR = '.changeset';
 const HOLD_SUBDIR = '.changeset-hold';
 
+const CONFLICT_MESSAGE = 'Only one of --datasource / --library / --promlib may be used.';
+
 function parseArgs(argv) {
   let pkg = null;
+  const setPkg = (next) => {
+    if (pkg && pkg !== next) {
+      throw new Error(CONFLICT_MESSAGE);
+    }
+    pkg = next;
+  };
   for (const arg of argv) {
     if (arg === '--datasource' || arg === '--plugin') {
-      if (pkg && pkg !== DATASOURCE) {
-        throw new Error('Only one of --datasource / --library may be used.');
-      }
-      pkg = DATASOURCE;
+      setPkg(DATASOURCE);
     } else if (arg === '--library' || arg === '--lib') {
-      if (pkg && pkg !== LIBRARY) {
-        throw new Error('Only one of --datasource / --library may be used.');
-      }
-      pkg = LIBRARY;
+      setPkg(LIBRARY);
+    } else if (arg === '--promlib') {
+      setPkg(PROMLIB);
     } else {
       throw new Error(`Unknown argument: "${arg}"`);
     }
@@ -58,7 +72,8 @@ async function pickPackageInteractively(prompt, log) {
   log('Which package do you want to version?');
   log(`  1) ${DATASOURCE}`);
   log(`  2) ${LIBRARY}`);
-  const choice = (await prompt('Select [1/2]: ')).toLowerCase();
+  log(`  3) ${PROMLIB}`);
+  const choice = (await prompt('Select [1/2/3]: ')).toLowerCase();
   switch (choice) {
     case '1':
     case 'datasource':
@@ -68,6 +83,9 @@ async function pickPackageInteractively(prompt, log) {
     case 'library':
     case 'lib':
       return LIBRARY;
+    case '3':
+    case 'promlib':
+      return PROMLIB;
     case '':
       throw new Error('A package must be selected.');
     default:
@@ -134,8 +152,10 @@ async function runVersion({
   syncChangelog,
   log = console.log,
 }) {
-  if (![DATASOURCE, LIBRARY].includes(pkg)) {
-    throw new Error(`Invalid package: "${pkg}". Expected "${DATASOURCE}" or "${LIBRARY}".`);
+  if (!PACKAGES.includes(pkg)) {
+    throw new Error(
+      `Invalid package: "${pkg}". Expected one of: ${PACKAGES.map((p) => `"${p}"`).join(', ')}.`,
+    );
   }
 
   const changesetDir = path.join(repoRoot, CHANGESET_SUBDIR);
@@ -163,8 +183,8 @@ async function runVersion({
     return { exitCode, versioned: false, heldCount: held.length };
   }
 
-  if (pkg === DATASOURCE && typeof syncChangelog === 'function') {
-    syncChangelog(repoRoot);
+  if (STUB_PACKAGES.has(pkg) && typeof syncChangelog === 'function') {
+    syncChangelog(repoRoot, pkg);
   }
 
   return { exitCode: 0, versioned: true, heldCount: held.length };
@@ -209,6 +229,9 @@ if (require.main === module) {
 module.exports = {
   DATASOURCE,
   LIBRARY,
+  PROMLIB,
+  PACKAGES,
+  STUB_PACKAGES,
   CHANGESET_SUBDIR,
   HOLD_SUBDIR,
   parseArgs,

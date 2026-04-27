@@ -3,21 +3,35 @@
 //
 // The user MUST pick a package — either `grafana-prometheus-datasource` (the
 // stub package that mirrors the workspace root — see
-// scripts/sync-changelog.js) or `@grafana/prometheus` — via `--datasource` /
-// `--library`, or interactively when no flag is passed. There is no default.
+// scripts/sync-changelog.js), `@grafana/prometheus`, or `promlib` (the stub
+// that mirrors `pkg/promlib`'s CHANGELOG) — via `--datasource` /
+// `--library` / `--promlib`, or interactively when no flag is passed. There
+// is no default.
 //
 // Usage:
 //   yarn changeset                                     # fully interactive
 //   yarn changeset --datasource --patch "Fix panel"
 //   yarn changeset --library --minor "Add new util"
 //   yarn changeset --library --major "Breaking change"
+//   yarn changeset --promlib --patch "Fix promlib bug"
 const path = require('path');
 const readline = require('readline');
 const write = require('@changesets/write').default;
 
 const DATASOURCE = 'grafana-prometheus-datasource';
 const LIBRARY = '@grafana/prometheus';
+const PROMLIB = 'promlib';
+const PACKAGES = [DATASOURCE, LIBRARY, PROMLIB];
 const BUMP_TYPES = ['patch', 'minor', 'major'];
+
+const CONFLICT_MESSAGE = 'Only one of --datasource / --library / --promlib may be used.';
+
+function setPkg(args, pkg) {
+  if (args.pkg && args.pkg !== pkg) {
+    throw new Error(CONFLICT_MESSAGE);
+  }
+  args.pkg = pkg;
+}
 
 function parseArgs(argv) {
   const args = { pkg: null, bump: null, summary: '' };
@@ -26,15 +40,11 @@ function parseArgs(argv) {
     if (arg === '--patch' || arg === '--minor' || arg === '--major') {
       args.bump = arg.slice(2);
     } else if (arg === '--datasource' || arg === '--plugin') {
-      if (args.pkg && args.pkg !== DATASOURCE) {
-        throw new Error('Only one of --datasource / --library may be used.');
-      }
-      args.pkg = DATASOURCE;
+      setPkg(args, DATASOURCE);
     } else if (arg === '--library' || arg === '--lib') {
-      if (args.pkg && args.pkg !== LIBRARY) {
-        throw new Error('Only one of --datasource / --library may be used.');
-      }
-      args.pkg = LIBRARY;
+      setPkg(args, LIBRARY);
+    } else if (arg === '--promlib') {
+      setPkg(args, PROMLIB);
     } else {
       rest.push(arg);
     }
@@ -57,7 +67,8 @@ async function pickPackageInteractively(prompt, log) {
   log('Which package?');
   log(`  1) ${DATASOURCE}`);
   log(`  2) ${LIBRARY}`);
-  const choice = (await prompt('Select [1/2]: ', '')).toLowerCase();
+  log(`  3) ${PROMLIB}`);
+  const choice = (await prompt('Select [1/2/3]: ', '')).toLowerCase();
   switch (choice) {
     case '1':
     case 'datasource':
@@ -67,6 +78,9 @@ async function pickPackageInteractively(prompt, log) {
     case 'library':
     case 'lib':
       return LIBRARY;
+    case '3':
+    case 'promlib':
+      return PROMLIB;
     case '':
       throw new Error('A package must be selected.');
     default:
@@ -75,8 +89,10 @@ async function pickPackageInteractively(prompt, log) {
 }
 
 async function createChangeset({ pkg, bump, summary, repoRoot }) {
-  if (![DATASOURCE, LIBRARY].includes(pkg)) {
-    throw new Error(`Invalid package: "${pkg}". Expected "${DATASOURCE}" or "${LIBRARY}".`);
+  if (!PACKAGES.includes(pkg)) {
+    throw new Error(
+      `Invalid package: "${pkg}". Expected one of: ${PACKAGES.map((p) => `"${p}"`).join(', ')}.`,
+    );
   }
   if (!BUMP_TYPES.includes(bump)) {
     throw new Error(`Invalid bump type: "${bump}". Expected one of: ${BUMP_TYPES.join(', ')}.`);
@@ -124,6 +140,8 @@ if (require.main === module) {
 module.exports = {
   DATASOURCE,
   LIBRARY,
+  PROMLIB,
+  PACKAGES,
   BUMP_TYPES,
   parseArgs,
   createChangeset,

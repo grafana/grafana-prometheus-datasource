@@ -14,6 +14,7 @@ const { syncChangelog } = require('../sync-changelog');
 const {
   DATASOURCE,
   LIBRARY,
+  PROMLIB,
   createFixture,
   destroyFixture,
   readPackageVersion,
@@ -23,6 +24,8 @@ const {
 
 const STUB_REL = path.join('packages', 'grafana-prometheus-datasource');
 const LIB_REL = path.join('packages', 'grafana-prometheus');
+const PROMLIB_STUB_REL = path.join('packages', 'promlib');
+const PROMLIB_TARGET_REL = path.join('pkg', 'promlib');
 
 // Build a prompt mock from a list of canned answers, in order.
 function makePrompt(answers) {
@@ -383,5 +386,117 @@ describe('Use case 1.5 — `yarn changeset:version --library`', () => {
     expect(result.exitCode).toBe(0);
     expect(result.versioned).toBe(true);
     expect(readPackageVersion(root, LIB_REL)).toBe('13.2.0');
+  });
+});
+
+describe('Use case 1.6 — `yarn changeset:version --promlib`', () => {
+  let root;
+
+  beforeEach(() => {
+    root = createFixture({
+      rootVersion: '13.1.0',
+      libraryVersion: '13.1.0',
+      datasourceVersion: '13.1.0',
+      promlibVersion: '0.0.10',
+    });
+  });
+
+  afterEach(() => {
+    destroyFixture(root);
+  });
+
+  it('consumes ALL promlib changesets, mirrors the CHANGELOG to pkg/promlib, and leaves the other packages untouched', async () => {
+    await addChangeset.run({
+      argv: ['--promlib', '--patch', 'Promlib bugfix 1'],
+      repoRoot: root,
+      prompt: makePrompt([]),
+      log: () => {},
+    });
+    await addChangeset.run({
+      argv: ['--promlib', '--minor', 'Promlib feature'],
+      repoRoot: root,
+      prompt: makePrompt([]),
+      log: () => {},
+    });
+    await addChangeset.run({
+      argv: ['--library', '--minor', 'Lib unrelated'],
+      repoRoot: root,
+      prompt: makePrompt([]),
+      log: () => {},
+    });
+    await addChangeset.run({
+      argv: ['--datasource', '--patch', 'DS unrelated'],
+      repoRoot: root,
+      prompt: makePrompt([]),
+      log: () => {},
+    });
+
+    expect(listChangesetMdFiles(root)).toHaveLength(4);
+
+    const result = await versionChangeset.run({
+      argv: ['--promlib'],
+      repoRoot: root,
+      runChangesetVersion: realRunner,
+      syncChangelog,
+      log: () => {},
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.versioned).toBe(true);
+    expect(result.heldCount).toBe(2);
+
+    expect(readPackageVersion(root, PROMLIB_STUB_REL)).toBe('0.1.0');
+
+    expect(readPackageVersion(root, LIB_REL)).toBe('13.1.0');
+    expect(readPackageVersion(root, STUB_REL)).toBe('13.1.0');
+    expect(readPackageVersion(root, '.')).toBe('13.1.0');
+
+    const promlibChangelog = fs.readFileSync(
+      path.join(root, PROMLIB_TARGET_REL, 'CHANGELOG.md'),
+      'utf8',
+    );
+    expect(promlibChangelog).toContain('0.1.0');
+    expect(promlibChangelog).toContain('Promlib bugfix 1');
+    expect(promlibChangelog).toContain('Promlib feature');
+
+    expect(fs.existsSync(path.join(root, 'CHANGELOG.md'))).toBe(false);
+    expect(fs.existsSync(path.join(root, PROMLIB_TARGET_REL, 'package.json'))).toBe(false);
+
+    const remaining = listChangesetMdFiles(root);
+    expect(remaining).toHaveLength(2);
+    const remainingPackages = new Set();
+    for (const file of remaining) {
+      for (const pkg of versionChangeset.getChangesetPackages(
+        path.join(root, '.changeset', file),
+      )) {
+        remainingPackages.add(pkg);
+      }
+    }
+    expect(remainingPackages).toEqual(new Set([LIBRARY, DATASOURCE]));
+
+    expect(fs.existsSync(path.join(root, '.changeset-hold'))).toBe(false);
+  });
+
+  it('also works through the interactive picker (user types "3" for promlib)', async () => {
+    await addChangeset.run({
+      argv: ['--promlib', '--patch', 'Promlib via picker'],
+      repoRoot: root,
+      prompt: makePrompt([]),
+      log: () => {},
+    });
+
+    const versionPrompt = makePrompt(['3']);
+    const result = await versionChangeset.run({
+      argv: [],
+      repoRoot: root,
+      prompt: versionPrompt,
+      runChangesetVersion: realRunner,
+      syncChangelog,
+      log: () => {},
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.versioned).toBe(true);
+    expect(readPackageVersion(root, PROMLIB_STUB_REL)).toBe('0.0.11');
   });
 });

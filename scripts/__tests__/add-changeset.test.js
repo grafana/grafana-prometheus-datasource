@@ -4,7 +4,14 @@
 const fs = require('fs');
 const path = require('path');
 
-const { DATASOURCE, LIBRARY, parseArgs, createChangeset, BUMP_TYPES } = require('../add-changeset');
+const {
+  DATASOURCE,
+  LIBRARY,
+  PROMLIB,
+  parseArgs,
+  createChangeset,
+  BUMP_TYPES,
+} = require('../add-changeset');
 const { createFixture, destroyFixture, listChangesetMdFiles } = require('./fixture');
 
 describe('add-changeset / parseArgs', () => {
@@ -26,12 +33,28 @@ describe('add-changeset / parseArgs', () => {
     expect(parseArgs(['--lib', '--patch', 'Y']).pkg).toBe(LIBRARY);
   });
 
+  it('parses --promlib --patch with summary', () => {
+    expect(parseArgs(['--promlib', '--patch', 'Fix promlib'])).toEqual({
+      pkg: PROMLIB,
+      bump: 'patch',
+      summary: 'Fix promlib',
+    });
+  });
+
   it('treats missing flags as null / empty', () => {
     expect(parseArgs([])).toEqual({ pkg: null, bump: null, summary: '' });
   });
 
   it('throws when both --datasource and --library are passed', () => {
     expect(() => parseArgs(['--datasource', '--library'])).toThrow(/Only one of/);
+  });
+
+  it('throws when both --library and --promlib are passed', () => {
+    expect(() => parseArgs(['--library', '--promlib'])).toThrow(/Only one of/);
+  });
+
+  it('throws when both --datasource and --promlib are passed', () => {
+    expect(() => parseArgs(['--datasource', '--promlib'])).toThrow(/Only one of/);
   });
 
   it('exposes the canonical bump-type list', () => {
@@ -140,5 +163,18 @@ describe('add-changeset / createChangeset', () => {
     await createChangeset({ pkg: LIBRARY, bump: 'minor', summary: 'B', repoRoot: root });
 
     expect(listChangesetMdFiles(root)).toHaveLength(2);
+  });
+
+  it('writes a changeset for promlib with the right frontmatter', async () => {
+    const id = await createChangeset({
+      pkg: PROMLIB,
+      bump: 'patch',
+      summary: 'Fix promlib bug',
+      repoRoot: root,
+    });
+
+    const content = fs.readFileSync(path.join(root, '.changeset', `${id}.md`), 'utf8');
+    expectFrontmatterEntry(content, PROMLIB, 'patch');
+    expect(content).toContain('Fix promlib bug');
   });
 });
