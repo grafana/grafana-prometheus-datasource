@@ -173,7 +173,7 @@ func buildPromQLExpr(metric string, filters []schemas.ColumnFilter, hints map[st
 
 	// Aggregation without RATE hint
 	if agg != nil {
-		parsed, err := parser.ParseExpr(baseExpr)
+		parsed, err := parser.NewParser(parser.Options{}).ParseExpr(baseExpr)
 		if err != nil {
 			return baseExpr, nil
 		}
