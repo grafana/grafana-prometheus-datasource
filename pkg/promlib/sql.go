@@ -147,7 +147,7 @@ func buildPromQLExpr(metric string, filters []schemas.ColumnFilter, hints map[st
 		if err != nil {
 			return "", fmt.Errorf("invalid rate duration %q: %w", rateDuration, err)
 		}
-		innerExpr, err := models.ParseExpr(baseExpr)
+		innerExpr, err := parser.NewParser(parser.Options{}).ParseExpr(baseExpr)
 		if err != nil {
 			return "", fmt.Errorf("failed to parse base expression %q: %w", baseExpr, err)
 		}
