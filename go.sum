@@ -181,8 +181,8 @@ github.com/grafana/pyroscope-go/godeltaprof v0.1.9 h1:c1Us8i6eSmkW+Ez05d3co8kasn
 github.com/grafana/pyroscope-go/godeltaprof v0.1.9/go.mod h1:2+l7K7twW49Ct4wFluZD3tZ6e0SjanjcUUBPVD/UuGU=
 github.com/grafana/regexp v0.0.0-20240518133315-a468a5bfb3bc h1:GN2Lv3MGO7AS6PrRoT6yV5+wkrOpcszoIsO4+4ds248=
 github.com/grafana/regexp v0.0.0-20240518133315-a468a5bfb3bc/go.mod h1:+JKpmjMGhpgPL+rXZ5nsZieVzvarn86asRlBg4uNGnk=
-github.com/grafana/schemads v0.0.9 h1:9lM7O5bHW1qSWyl3wE2IeouIXHkkjHI4r/CgFq5p7vg=
-github.com/grafana/schemads v0.0.9/go.mod h1:5mjuxhSmbQZLjUSjzv+vTmNp+R2fYhSdiZLSPxeM3LA=
+github.com/grafana/schemads v0.0.11 h1:cxMEs+3GqkvyVGxkg/Fo5jj1dZaQNay5dOFOUR/XhuU=
+github.com/grafana/schemads v0.0.11/go.mod h1:5mjuxhSmbQZLjUSjzv+vTmNp+R2fYhSdiZLSPxeM3LA=
 github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus v1.1.0 h1:QGLs/O40yoNK9vmy4rhUGBVyMf1lISBGtXRpsu/Qu/o=
 github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus v1.1.0/go.mod h1:hM2alZsMUni80N33RBe6J0e423LB+odMj7d3EMP9l20=
 github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.3.3 h1:B+8ClL/kCQkRiU82d9xajRPKYMrB7E0MbtzWVi1K4ns=

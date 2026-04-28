@@ -36,6 +36,22 @@ var prometheusTableHints = []schemas.TableHint{
 	{Name: "instant", Description: "Execute as an instant query instead of a range query"},
 }
 
+// prometheusCapabilities declares what SQL operations Prometheus can
+// handle natively. The SQL engine uses this to push operations down.
+//
+// AVG is intentionally excluded: Prometheus's "avg by" preserves the
+// time axis (one value per timestamp), so re-averaging those values
+// gives an incorrect result when series cardinality varies across
+// timestamps. The SQL engine handles AVG from raw data instead.
+var prometheusCapabilities = &schemas.DatasourceCapabilities{
+	AggregateFunctions: []schemas.AggregateFunction{
+		schemas.AggregateSum,
+		schemas.AggregateCount,
+		schemas.AggregateMin,
+		schemas.AggregateMax,
+	},
+}
+
 // Schema implements schemas.SchemaHandler.
 // For fullSchema, tables are returned without label columns since that would
 // require a per-metric labels call for every metric. Use Columns() for
@@ -47,7 +63,8 @@ func (p *SchemaProvider) Schema(ctx context.Context, _ *schemas.SchemaRequest) (
 	}
 	return &schemas.SchemaResponse{
 		FullSchema: &schemas.Schema{
-			Tables: tables,
+			Tables:       tables,
+			Capabilities: prometheusCapabilities,
 		},
 	}, nil
 }
@@ -58,7 +75,7 @@ func (p *SchemaProvider) Tables(ctx context.Context, _ *schemas.TablesRequest) (
 	if err != nil {
 		return nil, err
 	}
-	return &schemas.TablesResponse{Tables: names}, nil
+	return &schemas.TablesResponse{Tables: names, Capabilities: prometheusCapabilities}, nil
 }
 
 // Columns implements schemas.ColumnsHandler.

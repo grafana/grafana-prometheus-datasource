@@ -33,7 +33,7 @@ require (
 	github.com/grafana/grafana/apps/scope v0.0.0-20251007093103-792853df9134 // indirect
 	github.com/grafana/grafana/pkg/apimachinery v0.0.0-20251007081214-26e147d01f0a // indirect
 	github.com/grafana/regexp v0.0.0-20240518133315-a468a5bfb3bc // indirect
-	github.com/grafana/schemads v0.0.9 // indirect
+	github.com/grafana/schemads v0.0.11 // indirect
 	github.com/huandu/go-clone v1.7.3 // indirect
 	github.com/huandu/go-sqlbuilder v1.39.1 // indirect
 	github.com/huandu/xstrings v1.4.0 // indirect
