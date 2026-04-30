@@ -6,17 +6,25 @@ import (
 	"time"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
+	schemas "github.com/grafana/schemads"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/promql/parser"
-	schemas "github.com/grafana/schemads"
 
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/models"
 )
 
-// schemadsQuery extends schemas.Query with the tableHintValues field
-// that comes from FOR (...) clauses in SQL.
+// schemadsQuery extends schemas.Query with fields that arrive from the
+// dsabstraction query model but aren't part of the base schemads type.
 type schemadsQuery struct {
 	schemas.Query
+	Aggregation *aggregationHint `json:"aggregation,omitempty"`
+}
+
+// aggregationHint describes an aggregation pushed down from the SQL engine.
+type aggregationHint struct {
+	Function string   `json:"function"` // e.g. "SUM", "AVG", "COUNT"
+	Column   string   `json:"column"`   // e.g. "value"
+	GroupBy  []string `json:"groupBy"`  // e.g. ["job", "timestamp"]
 }
 
 // normalizeGrafanaSQLRequest rewrites schemads tabular queries into native
@@ -66,7 +74,7 @@ func normalizeGrafanaSQLRequest(req *backend.QueryDataRequest) (*backend.QueryDa
 			hints = map[string]string{}
 		}
 
-		expr, err := buildPromQLExpr(query.Table, query.Filters, hints)
+		expr, err := buildPromQLExpr(query.Table, query.Filters, hints, query.Aggregation)
 		if err != nil {
 			backend.Logger.Warn("failed to build PromQL expression from schemads", "error", err)
 			queries = append(queries, q)
@@ -116,9 +124,9 @@ func normalizeGrafanaSQLRequest(req *backend.QueryDataRequest) (*backend.QueryDa
 }
 
 // buildPromQLExpr constructs a PromQL expression from a metric name, schemads
-// filters, and datasource hints. Uses the Prometheus parser for safe AST
-// construction.
-func buildPromQLExpr(metric string, filters []schemas.ColumnFilter, hints map[string]string) (string, error) {
+// filters, datasource hints, and optional aggregation. Uses the Prometheus
+// parser for safe AST construction.
+func buildPromQLExpr(metric string, filters []schemas.ColumnFilter, hints map[string]string, agg *aggregationHint) (string, error) {
 	// Build label matchers from schemads filters.
 	var matchers []*labels.Matcher
 	for _, f := range filters {
@@ -147,7 +155,7 @@ func buildPromQLExpr(metric string, filters []schemas.ColumnFilter, hints map[st
 		if err != nil {
 			return "", fmt.Errorf("invalid rate duration %q: %w", rateDuration, err)
 		}
-		innerExpr, err := parser.ParseExpr(baseExpr)
+		innerExpr, err := parser.NewParser(parser.Options{}).ParseExpr(baseExpr)
 		if err != nil {
 			return "", fmt.Errorf("failed to parse base expression %q: %w", baseExpr, err)
 		}
@@ -160,10 +168,59 @@ func buildPromQLExpr(metric string, filters []schemas.ColumnFilter, hints map[st
 				},
 			},
 		}
-		return call.String(), nil
+		return wrapAggregation(call, agg), nil
+	}
+
+	// Aggregation without RATE hint
+	if agg != nil {
+		parsed, err := parser.NewParser(parser.Options{}).ParseExpr(baseExpr)
+		if err != nil {
+			return baseExpr, nil
+		}
+		return wrapAggregation(parsed, agg), nil
 	}
 
 	return baseExpr, nil
+}
+
+// wrapAggregation wraps a PromQL expression with an aggregation operator
+// based on the pushdown hint from the SQL engine.
+func wrapAggregation(expr parser.Expr, agg *aggregationHint) string {
+	if agg == nil {
+		return expr.String()
+	}
+
+	var aggType parser.ItemType
+	switch agg.Function {
+	case "SUM":
+		aggType = parser.SUM
+	case "AVG":
+		aggType = parser.AVG
+	case "COUNT":
+		aggType = parser.COUNT
+	case "MIN":
+		aggType = parser.MIN
+	case "MAX":
+		aggType = parser.MAX
+	default:
+		return expr.String()
+	}
+
+	// Filter out "timestamp" from GROUP BY — it's the time axis, not a label.
+	// Also filter the aggregation column itself (e.g. "value").
+	var grouping []string
+	for _, g := range agg.GroupBy {
+		if g != "timestamp" && g != agg.Column {
+			grouping = append(grouping, g)
+		}
+	}
+
+	aggExpr := &parser.AggregateExpr{
+		Op:       aggType,
+		Expr:     expr,
+		Grouping: grouping,
+	}
+	return aggExpr.String()
 }
 
 // schemadsFilterToMatcher converts a schemads filter condition to a Prometheus
