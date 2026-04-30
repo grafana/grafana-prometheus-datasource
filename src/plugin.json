@@ -3,7 +3,7 @@
   "name": "Prometheus",
   "id": "prometheus",
   "category": "tsdb",
-  "executable": "gpx_grafana_prometheus_datasource",
+  "executable": "gpx_grafana-prometheus-datasource",
   "routes": [
     {
       "method": "POST",
