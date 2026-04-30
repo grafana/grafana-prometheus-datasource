@@ -9,8 +9,8 @@
 [Prometheus](https://prometheus.io/) is an open-source time series database and
 alerting system. The Prometheus data source plugin lets Grafana query, visualize,
 and alert on metrics stored in Prometheus or any Prometheus-compatible backend
-(for example Grafana Mimir, Cortex, Thanos, VictoriaMetrics, or Amazon Managed
-Service for Prometheus).
+(for example [Grafana Mimir](https://grafana.com/oss/mimir/), [Cortex](https://cortexmetrics.io/), [Thanos](https://thanos.io/) or [Amazon Managed
+Service for Prometheus](https://docs.aws.amazon.com/prometheus/)).
 
 This repository hosts:
 
