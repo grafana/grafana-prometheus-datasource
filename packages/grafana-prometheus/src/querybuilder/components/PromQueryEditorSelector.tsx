@@ -1,6 +1,6 @@
 // Core Grafana history https://github.com/grafana/grafana/blob/v11.0.0-preview/public/app/plugins/datasource/prometheus/querybuilder/components/PromQueryEditorSelector.tsx
 import { isEqual } from 'lodash';
-import { memo, type SyntheticEvent, useCallback, useEffect, useState } from 'react';
+import { memo, type SyntheticEvent, useCallback, useEffect, useRef, useState } from 'react';
 
 import { QueryWithAssistantButton } from '@grafana/assistant';
 import { CoreApp, LoadingState } from '@grafana/data';
@@ -46,6 +46,12 @@ export const PromQueryEditorSelector = memo<Props>((props) => {
   const query = getQueryWithDefaults(props.query, app, defaultEditor);
   // This should be filled in from the defaults by now.
   const editorMode = query.editorMode!;
+
+  // Track whether the query was loaded with an existing expression.
+  // Using useRef so the value is captured once on mount and doesn't change
+  // as the user types. This lets us keep the button visible for new queries
+  // while hiding it when opening a panel that already has a configured query.
+  const startedWithEmptyExpr = useRef(!query.expr);
 
   const showAssistant =
     config.featureToggles.queryWithAssistant &&
@@ -133,7 +139,7 @@ export const PromQueryEditorSelector = memo<Props>((props) => {
             app={app}
           />
         )}
-        {!query.expr && (
+        {startedWithEmptyExpr.current && (
           <Button
             data-testid={selectors.components.QueryBuilder.queryPatterns}
             variant="secondary"
