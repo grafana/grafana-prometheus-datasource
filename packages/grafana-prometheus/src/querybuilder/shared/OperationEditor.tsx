@@ -1,7 +1,7 @@
 // Core Grafana history https://github.com/grafana/grafana/blob/v11.0.0-preview/public/app/plugins/datasource/prometheus/querybuilder/shared/OperationEditor.tsx
 import { css, cx } from '@emotion/css';
 import { Draggable } from '@hello-pangea/dnd';
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import * as React from 'react';
 
 import { type DataSourceApi, type GrafanaTheme2, type TimeRange } from '@grafana/data';
@@ -49,6 +49,10 @@ export function OperationEditor({
   const styles = useStyles2(getStyles);
   const def = queryModeller.getOperationDef(operation.id);
   const shouldFlash = useFlash(flash);
+  // useId is namespaced per editor instance, so labels and inputs in this
+  // editor share an id while sibling OperationLists (e.g. multiple Prometheus
+  // queries on the same panel) get distinct ids and do not collide in the DOM.
+  const operationParamScope = useId();
 
   if (!def) {
     return (
@@ -89,7 +93,7 @@ export function OperationEditor({
       <div className={styles.paramRow} key={`${paramIndex}-1`}>
         {!paramDef.hideName && (
           <div className={styles.paramName}>
-            <label htmlFor={getOperationParamId(`${operation.id}.${index}`, paramIndex)}>{paramDef.name}</label>
+            <label htmlFor={getOperationParamId(operationParamScope, paramIndex)}>{paramDef.name}</label>
             {paramDef.description && (
               <Tooltip placement="top" content={paramDef.description} theme="info">
                 <Icon name="info-circle" size="sm" className={styles.infoIcon} />
@@ -103,7 +107,7 @@ export function OperationEditor({
               paramDef={paramDef}
               value={operation.params[paramIndex]}
               index={paramIndex}
-              operationId={`${operation.id}.${index}`}
+              operationId={operationParamScope}
               query={query}
               datasource={datasource}
               timeRange={timeRange}
