@@ -2,6 +2,8 @@
 import { type SyntaxNode, type TreeCursor } from '@lezer/common';
 import { AggregateExpr, FunctionCallBody } from '@prometheus-io/lezer-promql';
 
+import { escapeLabelValueInRegexSelector } from '../escaping';
+
 import { type QueryBuilderOperation, type QueryBuilderOperationParamValue } from './shared/types';
 
 // Although 0 isn't explicitly provided in the lezer-promql library as the error node ID, it does appear to be the ID of error nodes within lezer.
@@ -141,7 +143,7 @@ export function getAllByType(expr: string, cur: SyntaxNode, type: number): strin
  */
 export const regexifyLabelValuesQueryString = (query: string) => {
   const queryArray = query.split(' ');
-  return queryArray.map((query) => `${query}.*`).join('');
+  return queryArray.map((query) => `${escapeLabelValueInRegexSelector(query)}.*`).join('');
 };
 
 /**

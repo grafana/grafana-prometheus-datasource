@@ -44,6 +44,26 @@ import {
 import { type QueryBuilderLabelFilter, type QueryBuilderOperation } from './shared/types';
 import { type PromVisualQuery, type PromVisualQueryBinary } from './types';
 
+const DOTTED_METRIC_PATTERN = /^([a-zA-Z_:][a-zA-Z0-9_:]*(?:\.[a-zA-Z_:][a-zA-Z0-9_:]*)+)/;
+
+function tryReconstructDottedMetric(expr: string, node: SyntaxNode): { name: string; from: number; to: number } | null {
+  if (node.type.id !== VectorSelector) {
+    return null;
+  }
+
+  const nodeText = expr.slice(node.from, node.to);
+  const match = nodeText.match(DOTTED_METRIC_PATTERN);
+  if (!match) {
+    return null;
+  }
+
+  return {
+    name: match[1],
+    from: node.from,
+    to: node.from + match[1].length,
+  };
+}
+
 /**
  * Parses a PromQL query into a visual query model.
  *
@@ -87,6 +107,7 @@ export function buildVisualQueryFromString(expr: string): Omit<Context, 'replace
 
   // No need to return replaced variables
   delete context.replacements;
+  delete context.reconstructedMetricRange;
 
   return context;
 }
@@ -102,6 +123,7 @@ interface Context {
   query: PromVisualQuery;
   errors: ParsingError[];
   replacements?: Record<string, string>;
+  reconstructedMetricRange?: { from: number; to: number };
 }
 
 /**
@@ -146,6 +168,17 @@ function handleExpression(expr: string, node: SyntaxNode, context: Context) {
     }
 
     case UnquotedLabelMatcher: {
+      const matchOp = node.getChild(MatchOp);
+      if (!matchOp && visQuery.metric === '') {
+        const matcherText = expr.slice(node.from, node.to).trim();
+        const dottedMatch = matcherText.match(DOTTED_METRIC_PATTERN);
+        if (dottedMatch && dottedMatch[1] === matcherText) {
+          visQuery.metric = dottedMatch[1];
+          context.reconstructedMetricRange = { from: node.from, to: node.to };
+          break;
+        }
+      }
+
       // Same as MetricIdentifier should be just one per query.
       visQuery.labels.push(getLabel(expr, node, LabelName));
       const err = node.getChild(ErrorId);
@@ -174,6 +207,13 @@ function handleExpression(expr: string, node: SyntaxNode, context: Context) {
       if (isIntervalVariableError(node)) {
         break;
       }
+      if (
+        context.reconstructedMetricRange &&
+        node.from >= context.reconstructedMetricRange.from &&
+        node.to <= context.reconstructedMetricRange.to
+      ) {
+        break;
+      }
       context.errors.push(makeError(expr, node));
       break;
     }
@@ -183,6 +223,22 @@ function handleExpression(expr: string, node: SyntaxNode, context: Context) {
         // We don't support parenthesis in the query to group expressions.
         // We just report error but go on with the parsing.
         context.errors.push(makeError(expr, node));
+      }
+      if (node.type.id === VectorSelector && visQuery.metric === '') {
+        const dotted = tryReconstructDottedMetric(expr, node);
+        if (dotted) {
+          visQuery.metric = dotted.name;
+          context.reconstructedMetricRange = { from: dotted.from, to: dotted.to };
+
+          let child = node.firstChild;
+          while (child) {
+            if (child.from >= dotted.to) {
+              handleExpression(expr, child, context);
+            }
+            child = child.nextSibling;
+          }
+          break;
+        }
       }
       // Any other nodes we just ignore and go to its children. This should be fine as there are lots of wrapper
       // nodes that can be skipped.
