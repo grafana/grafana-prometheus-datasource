@@ -11,26 +11,27 @@ const config = async (env: Env): Promise<Configuration> => {
 
   return merge(baseConfig, {
     resolve: {
-      // Point at the workspace library's TypeScript source instead of ./dist,
-      // so the plugin doesn't require the library to be prebuilt during
-      // development. The library is transpiled together with the plugin by
-      // the existing swc-loader rule (workspace paths are not under any
-      // node_modules once symlinks are resolved).
+      // Use the workspace library's TypeScript source directly so no prebuilt
+      // dist is needed during development. swc-loader picks it up because
+      // symlinks resolve outside node_modules.
+      //
+      // Force @grafana/i18n and react-i18next to a single canonical path.
+      // Yarn workspaces install both packages twice (root + inner workspace),
+      // giving each copy its own module-scoped tFunc. Only one copy gets
+      // initialized by initPluginTranslations(), causing "t() was called
+      // before i18n was initialized" in components that import the other copy.
       alias: {
         '@grafana/prometheus$': path.resolve(__dirname, 'packages/grafana-prometheus/src/index.ts'),
+        '@grafana/i18n$': path.resolve(__dirname, 'node_modules/@grafana/i18n'),
+        'react-i18next$': path.resolve(__dirname, 'node_modules/react-i18next'),
       },
     },
     plugins: [
-      // Workaround: the scaffolded SWC loader uses the classic JSX transform
-      // (React.createElement), which requires React to be in scope in every JSX file.
-      // ProvidePlugin injects `var React = require('react')` automatically into any
-      // module that references the React global, using Grafana's externalized react instance.
+      // SWC loader uses the classic JSX transform (React.createElement), so React
+      // must be in scope in every JSX file. ProvidePlugin injects it automatically.
       //
-      // TODO: remove this ProvidePlugin once grafana/plugin-tools@951defa lands in a create-plugin release
-      //  (adds jsc.transform.react.runtime='automatic' to the
-      //  scaffolded webpack config) AND this plugin has run `npx @grafana/create-plugin@latest update`.
-      //  After that, JSX uses react/jsx-runtime instead of React.createElement, so React
-      //  no longer needs to be a global.
+      // TODO: remove once grafana/plugin-tools@951defa ships and this plugin runs
+      //  `npx @grafana/create-plugin@latest update` (switches to react/jsx-runtime).
       new webpack.ProvidePlugin({ React: 'react' }),
     ],
   });

@@ -1,6 +1,26 @@
 // Jest setup provided by Grafana scaffolding
 import './.config/jest-setup';
 
+// `@grafana/runtime`'s GrafanaBootConfig constructor logs
+// `console.error("window.grafanaBootData was not set by the time config was initialized")`
+// the first time it's evaluated without a host-injected boot payload. The constructor
+// runs the moment any module imports `@grafana/runtime` (transitively via @grafana/ui,
+// @grafana/plugin-ui, @grafana/assistant, etc.) — including from src/module.ts during
+// `jest.isolateModules` re-imports. Pre-populate the global with the same minimal
+// shape grafana/grafana uses in `public/test/jest-setup.ts` so the constructor takes
+// the happy path and stays quiet.
+//
+// Use `??=` (and the `(globalThis as any)` cast in JS-as-CJS form below) to avoid
+// clobbering anything a future test sets explicitly via Object.defineProperty on
+// window.grafanaBootData.
+if (typeof window !== 'undefined' && !window.grafanaBootData) {
+  window.grafanaBootData = {
+    settings: { featureToggles: {} },
+    user: { locale: 'en-US' },
+    navTree: [],
+  };
+}
+
 // ResizeObserver is not available in jsdom
 global.ResizeObserver = class ResizeObserver {
   observe() {}

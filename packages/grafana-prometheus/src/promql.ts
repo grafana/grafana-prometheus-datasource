@@ -817,6 +817,21 @@ export const getFunctions = () => [
   },
 ];
 
+// Lazy getter: getFunctions() calls t() on every entry, which throws if i18n
+// isn't initialized yet. Deferring to first tokenization avoids the race.
+let _functionRegex: RegExp | undefined;
+const getFunctionRegex = (): RegExp => {
+  if (!_functionRegex) {
+    _functionRegex = new RegExp(
+      `\\b(?:${getFunctions()
+        .map((f) => f.label)
+        .join('|')})(?=\\s*\\()`,
+      'i'
+    );
+  }
+  return _functionRegex;
+};
+
 export const promqlGrammar: Grammar = {
   comment: {
     pattern: /#.*/,
@@ -852,12 +867,9 @@ export const promqlGrammar: Grammar = {
       punctuation: /[{]/,
     },
   },
-  function: new RegExp(
-    `\\b(?:${getFunctions()
-      .map((f) => f.label)
-      .join('|')})(?=\\s*\\()`,
-    'i'
-  ),
+  get function() {
+    return getFunctionRegex();
+  },
   'context-range': [
     {
       pattern: /\[[^\]]*(?=])/, // [1m]
