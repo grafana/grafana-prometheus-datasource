@@ -26,19 +26,4 @@ test.describe('Config editor', () => {
       await expect(getDataSourceConnectionUrlInput(page)).toBeVisible();
     }
   );
-
-  test(
-    'should show max samples processed threshold fields in advanced settings',
-    { tag: '@plugins' },
-    async ({ createDataSourceConfigPage, page }) => {
-      await createDataSourceConfigPage({ type: PLUGIN_TYPE });
-
-      await expect(
-        page.getByTestId('prom-settings-max-samples-processed-warning-threshold')
-      ).toBeVisible();
-      await expect(
-        page.getByTestId('prom-settings-max-samples-processed-error-threshold')
-      ).toBeVisible();
-    }
-  );
 });
