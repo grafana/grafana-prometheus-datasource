@@ -608,12 +608,12 @@ export const PromSettings = (props: Props) => {
             <InlineField
               labelWidth={PROM_CONFIG_LABEL_WIDTH}
               label={t(
-                'grafana-prometheus.configuration.prom-settings.label-max-samples-warning-threshold',
-                'Max samples processed (warning)'
+                'grafana-prometheus.configuration.prom-settings.label-query-warning-threshold',
+                'Query warning threshold'
               )}
               tooltip={
                 <>
-                  <Trans i18nKey="grafana-prometheus.configuration.prom-settings.tooltip-max-samples-warning-threshold">
+                  <Trans i18nKey="grafana-prometheus.configuration.prom-settings.tooltip-query-warning-threshold">
                     When set, Grafana appends this value to Prometheus query requests as the
                     maxSamplesProcessedWarningThreshold URL parameter. Leave empty to omit.
                   </Trans>{' '}
@@ -630,6 +630,10 @@ export const PromSettings = (props: Props) => {
                   spellCheck={false}
                   type="text"
                   inputMode="numeric"
+                  placeholder={t(
+                    'grafana-prometheus.configuration.prom-settings.placeholder-query-warning-threshold',
+                    'Example: 100000000'
+                  )}
                   onChange={(event: { currentTarget: { value: string } }) => {
                     const v = event.currentTarget.value;
                     setMaxSamplesWarningThreshold(v);
@@ -661,12 +665,12 @@ export const PromSettings = (props: Props) => {
             <InlineField
               labelWidth={PROM_CONFIG_LABEL_WIDTH}
               label={t(
-                'grafana-prometheus.configuration.prom-settings.label-max-samples-error-threshold',
-                'Max samples processed (error)'
+                'grafana-prometheus.configuration.prom-settings.label-query-error-threshold',
+                'Query error threshold'
               )}
               tooltip={
                 <>
-                  <Trans i18nKey="grafana-prometheus.configuration.prom-settings.tooltip-max-samples-error-threshold">
+                  <Trans i18nKey="grafana-prometheus.configuration.prom-settings.tooltip-query-error-threshold">
                     When set, Grafana appends this value to Prometheus query requests as the
                     maxSamplesProcessedErrorThreshold URL parameter. Leave empty to omit.
                   </Trans>{' '}
@@ -683,6 +687,10 @@ export const PromSettings = (props: Props) => {
                   spellCheck={false}
                   type="text"
                   inputMode="numeric"
+                  placeholder={t(
+                    'grafana-prometheus.configuration.prom-settings.placeholder-query-error-threshold',
+                    'Example: 200000000'
+                  )}
                   onChange={(event: { currentTarget: { value: string } }) => {
                     const v = event.currentTarget.value;
                     setMaxSamplesErrorThreshold(v);
