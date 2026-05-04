@@ -1,0 +1,5 @@
+{
+  "name": "grafana-prometheus-datasource",
+  "version": "13.1.0",
+  "private": true
+}
