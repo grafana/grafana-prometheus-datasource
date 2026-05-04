@@ -70,5 +70,17 @@ describe('PromSettings', () => {
       render(<PromSettings onOptionsChange={() => {}} options={options} />);
       expect(screen.getByText('Use series endpoint')).toBeInTheDocument();
     });
+
+    it('should show max samples processed threshold fields', () => {
+      const options = defaultProps;
+
+      render(<PromSettings onOptionsChange={() => {}} options={options} />);
+      expect(
+        screen.getByTestId('prom-settings-max-samples-processed-warning-threshold')
+      ).toBeInTheDocument();
+      expect(screen.getByTestId('prom-settings-max-samples-processed-error-threshold')).toBeInTheDocument();
+      expect(screen.getByText('Max samples processed (warning)')).toBeInTheDocument();
+      expect(screen.getByText('Max samples processed (error)')).toBeInTheDocument();
+    });
   });
 });
