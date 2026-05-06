@@ -137,6 +137,7 @@ export const PromQueryBuilderOptions = React.memo<PromQueryBuilderOptionsProps>(
             <EditorField
               label={t('grafana-prometheus.querybuilder.prom-query-builder-options.label-type', 'Type')}
               data-testid={selectors.components.DataSource.Prometheus.queryEditor.type}
+              useFieldset={false}
             >
               <RadioButtonGroup
                 options={queryTypeOptions}
