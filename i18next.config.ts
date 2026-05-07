@@ -3,8 +3,11 @@ import { defineConfig } from 'i18next-cli';
 export default defineConfig({
   locales: ['en-US'], // Only en-US is updated - Crowdin will PR with other languages
   extract: {
-    input: ['src/**/*.{tsx,ts}'],
-    output: 'src/locales/{{language}}/{{namespace}}.json',
+    input: [
+      'src/**/*.{tsx,ts}', // plugin shell (ConfigEditor, HttpSettings, etc.)
+      'packages/grafana-prometheus/src/**/*.{tsx,ts}', // shared package
+    ],
+    output: 'packages/grafana-prometheus/src/locales/{{language}}/{{namespace}}.json',
     defaultNS: 'grafana-prometheus',
     functions: ['t', '*.t'],
     transComponents: ['Trans'],
