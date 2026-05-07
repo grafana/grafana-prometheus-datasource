@@ -19,7 +19,7 @@ function getDataSourceConnectionUrlInput(page: Page): Locator {
 function getDataSourceNameField(page: Page): Locator {
   return page.locator(
     '[data-testid="data-testid Data source settings page name input field"], [aria-label="Data source settings page name input field"]'
-  ).or(page.getByRole('button', { name: 'Edit title' }));
+  ).or(page.getByRole('button', { name: 'Edit title' })).first();
 }
 
 test.describe('Config editor', () => {
