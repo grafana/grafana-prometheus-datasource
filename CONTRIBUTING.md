@@ -73,6 +73,12 @@ Start a local Grafana instance with the plugin pre-loaded:
 docker compose up -d
 ```
 
+For starting with a specific Grafana version
+
+```bash
+GRAFANA_VERSION=13.0.1 docker compose up
+```
+
 Grafana will be available at `http://localhost:3000` (default credentials: `admin` / `admin`).
 
 ## End-to-End Tests
