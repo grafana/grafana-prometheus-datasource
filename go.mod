@@ -142,6 +142,7 @@ require (
 
 replace github.com/grafana/grafana-prometheus-datasource/pkg/promlib => ./pkg/promlib
 
-// TEMP: pin schemads to PR HEAD until grafana/schemads#30 merges and is tagged.
-// Remove this replace and bump the require above to the new tag before merging.
-replace github.com/grafana/schemads => github.com/grafana/schemads v0.1.1-0.20260506133442-188c20484be7
+// TEMP: pin schemads to merged-but-untagged main commit
+// (grafana/schemads#30 squash-merged 2026-05-07). Remove this replace
+// and bump the require above to the new tag once schemads tags.
+replace github.com/grafana/schemads => github.com/grafana/schemads v0.1.1-0.20260507125157-3be9e6c981de
