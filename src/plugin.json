@@ -105,5 +105,5 @@
   "dependencies": {
     "grafanaDependency": ">=12.3.0"
   },
-  "languages": ["en-US", "es-ES"]
+  "languages": ["en-US", "cs-CZ", "de-DE", "es-ES", "fr-FR", "hu-HU", "id-ID", "it-IT", "ja-JP", "ko-KR", "nl-NL", "pl-PL", "pt-BR", "pt-PT", "ru-RU", "sv-SE", "tr-TR", "zh-Hans", "zh-Hant"]
 }
