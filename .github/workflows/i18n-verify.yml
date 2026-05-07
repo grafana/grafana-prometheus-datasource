@@ -1,24 +1,14 @@
-name: Verify i18n
+name: Verify i18n markup has been committed
+
+permissions:
+  contents: read
+
 on:
+  pull_request:
   push:
     branches:
       - main
-  pull_request:
 
 jobs:
   verify-i18n:
-    name: Verify i18n extraction is up to date
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: '.nvmrc'
-          cache: yarn
-      - name: Install dependencies
-        run: yarn install --immutable
-      - name: Run i18n extraction
-        run: yarn i18n-extract
-      - name: Fail if en-US translation file was changed
-        run: git diff --exit-code packages/grafana-prometheus/src/locales/en-US/grafana-prometheus.json
+    uses: grafana/grafana-github-actions/.github/workflows/verify-i18n.yml@main

@@ -1,0 +1,15 @@
+name: Crowdin Download Action
+
+on:
+  workflow_dispatch:
+  # Disabled until existing translations have been bulk-imported into Crowdin.
+  # Pair with Josh Hunt before enabling. Uncomment the schedule below when ready.
+  # schedule:
+  #   - cron: "0 0 * * *"
+
+jobs:
+  download-sources-from-crowdin:
+    uses: grafana/grafana-github-actions/.github/workflows/crowdin-download.yml@main
+    with:
+      crowdin_project_id: 0 # TODO: replace with the project ID from the crowdin-create-project workflow output
+      pr_labels: 'area/i18n,no-changelog'

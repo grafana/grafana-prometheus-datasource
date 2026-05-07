@@ -1,0 +1,15 @@
+name: Crowdin Upload Action
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'packages/grafana-prometheus/src/locales/en-US/grafana-prometheus.json'
+    branches:
+      - main
+
+jobs:
+  upload-sources-to-crowdin:
+    uses: grafana/grafana-github-actions/.github/workflows/crowdin-upload.yml@main
+    with:
+      crowdin_project_id: 0 # TODO: replace with the project ID from the crowdin-create-project workflow output
