@@ -32,7 +32,7 @@ require (
 	github.com/grafana/grafana/apps/scope v0.0.0-20260427171703-d4f46decefcb // indirect
 	github.com/grafana/grafana/pkg/apimachinery v0.0.0-20260118065639-60cb766a97d6 // indirect
 	github.com/grafana/regexp v0.0.0-20250905093917-f7b3be9d1853 // indirect
-	github.com/grafana/schemads v0.1.0 // indirect
+	github.com/grafana/schemads v0.2.0 // indirect
 	github.com/huandu/go-clone v1.7.3 // indirect
 	github.com/huandu/go-sqlbuilder v1.40.2 // indirect
 	github.com/huandu/xstrings v1.4.0 // indirect
@@ -141,8 +141,3 @@ require (
 )
 
 replace github.com/grafana/grafana-prometheus-datasource/pkg/promlib => ./pkg/promlib
-
-// TEMP: pin schemads to merged-but-untagged main commit
-// (grafana/schemads#30 squash-merged 2026-05-07). Remove this replace
-// and bump the require above to the new tag once schemads tags.
-replace github.com/grafana/schemads => github.com/grafana/schemads v0.1.1-0.20260507125157-3be9e6c981de
