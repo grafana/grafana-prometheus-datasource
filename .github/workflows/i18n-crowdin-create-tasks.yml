@@ -11,4 +11,4 @@ jobs:
   create-tasks-in-crowdin:
     uses: grafana/grafana-github-actions/.github/workflows/crowdin-create-tasks.yml@main
     with:
-      crowdin_project_id: 0 # TODO: replace with the project ID from the crowdin-create-project workflow output
+      crowdin_project_id: 54

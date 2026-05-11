@@ -11,5 +11,5 @@ jobs:
   download-sources-from-crowdin:
     uses: grafana/grafana-github-actions/.github/workflows/crowdin-download.yml@main
     with:
-      crowdin_project_id: 0 # TODO: replace with the project ID from the crowdin-create-project workflow output
+      crowdin_project_id: 54
       pr_labels: 'area/i18n,no-changelog'
