@@ -80,19 +80,34 @@ func (p *SchemaProvider) Tables(ctx context.Context, _ *schemas.TablesRequest) (
 
 // Columns implements schemas.ColumnsHandler.
 // For each requested table (metric), it fetches the label names from Prometheus
-// and returns timestamp + value + sorted label columns.
+// and returns timestamp + value + sorted label columns. Per-metric HELP/TYPE/UNIT
+// metadata is fetched alongside and returned via TableMetadata.
 func (p *SchemaProvider) Columns(ctx context.Context, req *schemas.ColumnsRequest) (*schemas.ColumnsResponse, error) {
 	columns := make(map[string][]schemas.Column, len(req.Tables))
+	tableMetadata := make(map[string]schemas.Metadata, len(req.Tables))
 	for _, metric := range req.Tables {
 		labels, err := p.fetchLabelNames(ctx, metric)
 		if err != nil {
 			p.resource.log.Warn("failed to fetch labels for metric", "metric", metric, "error", err)
 			columns[metric] = baseColumns
+		} else {
+			columns[metric] = buildMetricColumns(labels)
+		}
+
+		md, err := p.fetchMetricMetadata(ctx, metric)
+		if err != nil {
+			p.resource.log.Warn("failed to fetch metadata for metric", "metric", metric, "error", err)
 			continue
 		}
-		columns[metric] = buildMetricColumns(labels)
+		if md.Description != "" || md.Unit != "" || len(md.Custom) > 0 {
+			tableMetadata[metric] = md
+		}
 	}
-	return &schemas.ColumnsResponse{Columns: columns}, nil
+	resp := &schemas.ColumnsResponse{Columns: columns}
+	if len(tableMetadata) > 0 {
+		resp.TableMetadata = tableMetadata
+	}
+	return resp, nil
 }
 
 // buildMetricColumns returns timestamp + value + alphabetically sorted label columns.
@@ -160,6 +175,63 @@ func (p *SchemaProvider) fetchPrometheusLabels(ctx context.Context, path string,
 	}
 
 	return result.Data, nil
+}
+
+// prometheusMetadataResponse is the JSON shape returned by /api/v1/metadata.
+// data is metric-name -> array of metadata entries (one per target reporting
+// the metric). When ?metric= is specified, only that metric's entry is
+// returned; we read the first element since metadata is expected to be
+// consistent across targets.
+type prometheusMetadataResponse struct {
+	Status string                                 `json:"status"`
+	Data   map[string][]prometheusMetadataPayload `json:"data"`
+}
+
+type prometheusMetadataPayload struct {
+	Type string `json:"type"`
+	Help string `json:"help"`
+	Unit string `json:"unit"`
+}
+
+// fetchMetricMetadata calls /api/v1/metadata?metric=<name> for one metric and
+// maps HELP/TYPE/UNIT to schemas.Metadata. Returns a zero Metadata if the
+// metric has no metadata in Prometheus (some series lack a registered HELP).
+func (p *SchemaProvider) fetchMetricMetadata(ctx context.Context, metric string) (schemas.Metadata, error) {
+	params := url.Values{}
+	params.Set("metric", metric)
+	path := "api/v1/metadata"
+	reqURL := path + "?" + params.Encode()
+	resp, err := p.resource.promClient.QueryResource(ctx, &backend.CallResourceRequest{
+		Method: http.MethodGet,
+		Path:   path,
+		URL:    reqURL,
+	})
+	if err != nil {
+		return schemas.Metadata{}, fmt.Errorf("failed to fetch metadata (metric=%q): %w", metric, err)
+	}
+	defer resp.Body.Close()
+
+	var result prometheusMetadataResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return schemas.Metadata{}, fmt.Errorf("failed to decode metadata response (metric=%q): %w", metric, err)
+	}
+	if result.Status != "success" {
+		return schemas.Metadata{}, fmt.Errorf("prometheus returned status %q (metric=%q)", result.Status, metric)
+	}
+
+	entries, ok := result.Data[metric]
+	if !ok || len(entries) == 0 {
+		return schemas.Metadata{}, nil
+	}
+	first := entries[0]
+	md := schemas.Metadata{
+		Description: first.Help,
+		Unit:        first.Unit,
+	}
+	if first.Type != "" {
+		md.Custom = map[string]any{"prom.type": first.Type}
+	}
+	return md, nil
 }
 
 // fetchMetricTables returns schema Tables with only the base columns.
