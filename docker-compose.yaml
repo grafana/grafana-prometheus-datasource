@@ -8,6 +8,8 @@ services:
       GF_FEATURE_TOGGLES_splashScreen: 'false'
       # Override the base value now that the plugin ID is 'prometheus'.
       GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: prometheus
+      # Enable localization for plugins.
+      GF_FEATURE_TOGGLES_localizationForPlugins: 'true'
     configs:
       # Run the externalized plugin in place of the core Prometheus plugin.
       # Without as_external=true, DuplicatePluginIDValidation (pkg/services/pluginsintegration/pipeline/steps.go)

@@ -1,4 +1,5 @@
 import { defineConfig } from 'eslint/config';
+import grafanaI18nPlugin from '@grafana/i18n/eslint-plugin';
 import baseConfig from './.config/eslint.config.mjs';
 
 export default defineConfig([
@@ -42,6 +43,15 @@ export default defineConfig([
   {
     rules: {
       'react/react-in-jsx-scope': 'off',
+    },
+  },
+  {
+    name: 'grafana/i18n-rules',
+    plugins: { '@grafana/i18n': grafanaI18nPlugin },
+    rules: {
+      // Warn on hardcoded user-visible strings in JSX — escalate to 'error' once string coverage is complete
+      '@grafana/i18n/no-untranslated-strings': ['warn', { calleesToIgnore: ['^css$', 'use[A-Z].*'] }],
+      '@grafana/i18n/no-translation-top-level': 'error',
     },
   },
 ]);
