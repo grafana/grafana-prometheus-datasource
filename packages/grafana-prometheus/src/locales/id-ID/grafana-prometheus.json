@@ -71,7 +71,7 @@
         "aria-label-query-type": "Jenis kueri",
         "aria-label-series-query": "Kueri Data Seri",
         "label-classic-query": "Kueri Klasik",
-        "label-label": "Label",
+        "label-label": "",
         "label-metric-regex": "Ekspresi reguler metrik",
         "label-query": "Kueri",
         "label-query-type": "Jenis kueri",
@@ -112,7 +112,7 @@
       "alerting-settings-overhaul": {
         "label-allow-as-recording-rules-target": "Izinkan sebagai target aturan perekaman",
         "label-manage-alerts-via-alerting-ui": "Kelola peringatan melalui UI Peringatan",
-        "title-alerting": "Alerting",
+        "title-alerting": "",
         "tooltip-allow-as-recording-rules-target": "Izinkan sumber data ini dipilih sebagai target untuk menulis aturan perekaman.",
         "tooltip-manage-alerts-via-alerting-ui": "Kelola aturan peringatan untuk sumber data ini. Untuk mengelola sumber daya alerting lainnya, tambahkan sumber data Alertmanager."
       },
@@ -135,11 +135,11 @@
         "label-internal-link": "Tautan internal",
         "label-label-name": "Nama label",
         "label-remove-exemplar-link": "Hapus tautan contoh",
-        "label-url": "URL",
+        "label-url": "",
         "label-url-label": "Label URL",
         "placeholder-go-to-examplecom": "Buka example.com",
-        "placeholder-httpsexamplecomvalueraw": "https://example.com/${__value.raw}",
-        "placeholder-trace-id": "traceID",
+        "placeholder-httpsexamplecomvalueraw": "",
+        "placeholder-trace-id": "",
         "title-remove-exemplar-link": "Hapus tautan contoh",
         "tooltip-data-source": "Sumber data yang akan dinavigasi oleh contoh.",
         "tooltip-internal-link": "Aktifkan opsi ini jika Anda memiliki tautan internal. Saat diaktifkan, ini akan menampilkan selektor sumber data. Pilih penyimpanan data pelacakan backend untuk data contoh Anda.",
@@ -208,7 +208,7 @@
         "description-verbose": "Semua nama dan nilai label",
         "label-auto": "Otomatis",
         "label-custom": "Kustom",
-        "label-verbose": "Verbose"
+        "label-verbose": ""
       }
     },
     "promql": {
@@ -315,7 +315,7 @@
       },
       "get-collapsed-info": {
         "exemplars": "Contoh: {{value}}",
-        "format": "Format: {{value}}",
+        "format": "",
         "legend": "Legenda: {{value}}",
         "step": "Langkah: {{value}}",
         "type": "Tipe: {{value}}"
@@ -334,7 +334,7 @@
         "description-unknown": "Metrik ini telah diberi tipe yang tidak diketahui dalam metadata.",
         "label-counter": "Penghitung",
         "label-gauge": "Alat ukur",
-        "label-histogram": "Histogram",
+        "label-histogram": "",
         "label-native-histogram": "Histogram asli",
         "label-no-type": "Tanpa tipe",
         "label-summary": "Ringkasan",
@@ -379,7 +379,7 @@
           "ignoring": "Mengabaikan",
           "on": "Aktif"
         },
-        "operator": "Operator",
+        "operator": "",
         "tooltip-remove-match": "Hapus kecocokan",
         "vector-matches": "Kecocokan vektor"
       },
@@ -424,7 +424,7 @@
           "label-time-series": "Deret waktu"
         },
         "label-exemplars": "Contoh",
-        "label-format": "Format",
+        "label-format": "",
         "label-min-step": "Langkah minimum",
         "label-resolution": "Resolusi",
         "label-type": "Jenis",

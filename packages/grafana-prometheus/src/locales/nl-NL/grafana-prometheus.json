@@ -71,9 +71,9 @@
         "aria-label-query-type": "Query-type",
         "aria-label-series-query": "Reeksquery",
         "label-classic-query": "Klassieke query",
-        "label-label": "Label",
+        "label-label": "",
         "label-metric-regex": "Metrische regex",
-        "label-query": "Query",
+        "label-query": "",
         "label-query-type": "Query-type",
         "label-series-query": "Reeksquery",
         "placeholder-classic-query": "Klassieke query",
@@ -112,7 +112,7 @@
       "alerting-settings-overhaul": {
         "label-allow-as-recording-rules-target": "Toestaan als doel van opnameregels",
         "label-manage-alerts-via-alerting-ui": "Waarschuwingen beheren via waarschuwingsinterface",
-        "title-alerting": "Alerting",
+        "title-alerting": "",
         "tooltip-allow-as-recording-rules-target": "Sta toe dat deze gegevensbron wordt geselecteerd als doel voor het schrijven van opnameregels.",
         "tooltip-manage-alerts-via-alerting-ui": "Waarschuwingsregels voor deze gegevensbron beheren. Om andere waarschuwingsbronnen te beheren, voeg je een Alertmanager-gegevensbron toe."
       },
@@ -135,11 +135,11 @@
         "label-internal-link": "Interne link",
         "label-label-name": "Labelnaam",
         "label-remove-exemplar-link": "Voorbeeldlink verwijderen",
-        "label-url": "URL",
+        "label-url": "",
         "label-url-label": "Label-URL",
         "placeholder-go-to-examplecom": "Ga naar voorbeeld.com",
-        "placeholder-httpsexamplecomvalueraw": "https://example.com/${__value.raw}",
-        "placeholder-trace-id": "traceID",
+        "placeholder-httpsexamplecomvalueraw": "",
+        "placeholder-trace-id": "",
         "title-remove-exemplar-link": "Voorbeeldlink verwijderen",
         "tooltip-data-source": "De gegevensbron waarnaar het voorbeeld gaat navigeren.",
         "tooltip-internal-link": "Schakel deze optie in als je een interne link hebt. Wanneer ingeschakeld, wordt de gegevensbronselector weergegeven. Selecteer de backend-tracing-gegevensopslag voor je voorbeeldgegevens.",
@@ -159,7 +159,7 @@
         "aria-label-select-http-method": "HTTP-methode selecteren",
         "editor-options": {
           "label-builder": "Bouwer",
-          "label-code": "Code"
+          "label-code": ""
         },
         "label-cache-level": "Cacheniveau",
         "label-custom-query-parameters": "Aangepaste query-parameters",
@@ -318,7 +318,7 @@
         "format": "Formaat: {{value}}",
         "legend": "Legenda: {{value}}",
         "step": "Stap: {{value}}",
-        "type": "Type: {{value}}"
+        "type": ""
       },
       "get-placeholders": {
         "browse": "Metriek zoeken op naam",
@@ -334,8 +334,8 @@
         "description-unknown": "Deze statistieken hebben het type onbekend gekregen in de metagegevens.",
         "label-counter": "Teller",
         "label-gauge": "Meter",
-        "label-histogram": "Histogram",
-        "label-native-histogram": "Native histogram",
+        "label-histogram": "",
+        "label-native-histogram": "",
         "label-no-type": "Geen type",
         "label-summary": "Samenvatting",
         "label-unknown": "Onbekend"
@@ -379,7 +379,7 @@
           "ignoring": "Negeren",
           "on": "Aan"
         },
-        "operator": "Operator",
+        "operator": "",
         "tooltip-remove-match": "Overeenkomst verwijderen",
         "vector-matches": "Vectorovereenkomsten"
       },
@@ -427,7 +427,7 @@
         "label-format": "Formaat",
         "label-min-step": "Min. stap",
         "label-resolution": "Resolutie",
-        "label-type": "Type",
+        "label-type": "",
         "placeholder-auto": "automatisch",
         "title-options": "Opties",
         "tooltip-min-step": "Een extra ondergrens voor de stapparameter van de Prometheus-query en voor de variabelen <2>{{interval}}</2> en <4>{{rateInterval}}</4>."
@@ -447,12 +447,12 @@
         "tooltip-legend": "Reeksnaam overschrijven of sjabloon. Bijv. {{templateExample}} wordt vervangen door labelwaarde voor {{labelName}}."
       },
       "query-builder-hints": {
-        "hint-details": "hint: {{hintDetails}}"
+        "hint-details": ""
       },
       "query-editor-mode-toggle": {
         "editor-modes": {
           "label-builder": "Bouwer",
-          "label-code": "Code"
+          "label-code": ""
         }
       },
       "query-pattern": {
@@ -485,7 +485,7 @@
         "message-expand-search": "Er zijn geen statistieken gevonden. Probeer je zoekopdracht en filters uit te breiden.",
         "message-no-metrics-found": "Er zijn geen statistieken gevonden in de gegevensbron.",
         "name": "Naam",
-        "type": "Type"
+        "type": ""
       }
     }
   }

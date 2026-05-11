@@ -7,9 +7,9 @@
         "label-min-step": "Minsta steg",
         "label-series-value-as-timestamp": "Serievärde som tidsstämpel",
         "label-tags": "Taggar",
-        "label-text": "Text",
+        "label-text": "",
         "label-title": "Titel",
-        "placeholder-auto": "auto",
+        "placeholder-auto": "",
         "tooltip-either-pattern-example-instance-replaced-label": "Använd antingen namnet eller ett mönster. Till exempel ersätts {{labelTemplate}} med etikettvärdet för etiketten {{labelName}}.",
         "tooltip-min-step": "En ytterligare nedre gräns för stegparametern för Prometheus-frågan och för variablerna <2>{{intervalVar}}</2> och <4>{{rateIntervalVar}}</4>.",
         "tooltip-timestamp-milliseconds-series-value-seconds-multiply": "Tidsstämpelns enhet är millisekunder. Om enheten för serievärdet är sekunder, multiplicera dess intervallvektor med 1 000."
@@ -135,11 +135,11 @@
         "label-internal-link": "Intern länk",
         "label-label-name": "Etikettnamn",
         "label-remove-exemplar-link": "Ta bort exempel på länk",
-        "label-url": "URL",
+        "label-url": "",
         "label-url-label": "URL-etikett",
         "placeholder-go-to-examplecom": "Gå till example.com",
-        "placeholder-httpsexamplecomvalueraw": "https://example.com/${__value.raw}",
-        "placeholder-trace-id": "traceID",
+        "placeholder-httpsexamplecomvalueraw": "",
+        "placeholder-trace-id": "",
         "title-remove-exemplar-link": "Ta bort exempel på länk",
         "tooltip-data-source": "Datakällan som exemplet kommer att navigera till.",
         "tooltip-internal-link": "Aktivera det här alternativet om du har en intern länk. När det är aktiverat visar detta datakällans väljare. Välj backend-spårningsdatalagret för dina exempeldata.",
@@ -158,7 +158,7 @@
         "aria-label-prometheus-type": "Prometheus-typ",
         "aria-label-select-http-method": "Välj HTTP-metod",
         "editor-options": {
-          "label-builder": "Builder",
+          "label-builder": "",
           "label-code": "Kod"
         },
         "label-cache-level": "Cache-nivå",
@@ -168,7 +168,7 @@
         "label-disable-recording-rules-beta": "Inaktivera inspelningsregler (beta)",
         "label-http-method": "HTTP-metod",
         "label-incremental-querying-beta": "Inkrementell fråga (beta)",
-        "label-prom-type-version": "{{promType}} version",
+        "label-prom-type-version": "",
         "label-prometheus-type": "Prometheus-typ",
         "label-query-overlap-window": "Fönster för frågeöverlappning",
         "label-query-timeout": "Timeout för fråga",
@@ -179,7 +179,7 @@
         "placeholder-example-maxsourceresolutionmtimeout": "Exempel: {{example}}",
         "title-interval-behaviour": "Intervallbeteende",
         "title-other": "Annat",
-        "title-performance": "Performance",
+        "title-performance": "",
         "title-query-editor": "Frågeredigerare",
         "tooltip-cache-level": "Anger webbläsarens cachelagringsnivå för redigeringsfrågor. Högre cacheinställningar rekommenderas för datakällor med hög kardinalitet.",
         "tooltip-custom-query-parameters": "Lägg till anpassade parametrar i Prometheus fråge-URL. Till exempel {{example1}}, {{example2}}, {{example3}} eller {{example4}}. Flera parametrar ska sammanfogas med {{concatenationChar}}.",
@@ -206,7 +206,7 @@
         "description-auto": "Inkluderar endast unika etiketter",
         "description-custom": "Tillhandahåll en namnmall",
         "description-verbose": "Alla etikettnamn och värden",
-        "label-auto": "Auto",
+        "label-auto": "",
         "label-custom": "Anpassad",
         "label-verbose": "Detaljerad"
       }
@@ -315,7 +315,7 @@
       },
       "get-collapsed-info": {
         "exemplars": "Exempel: {{value}}",
-        "format": "Format: {{value}}",
+        "format": "",
         "legend": "Förklaring: {{value}}",
         "step": "Steg: {{value}}",
         "type": "Typ: {{value}}"
@@ -334,7 +334,7 @@
         "description-unknown": "Dessa mätvärden har fått typen okänd i metadata.",
         "label-counter": "Räknare",
         "label-gauge": "Mätare",
-        "label-histogram": "Histogram",
+        "label-histogram": "",
         "label-native-histogram": "Inbyggt histogram",
         "label-no-type": "Ingen typ",
         "label-summary": "Sammanfattning",
@@ -424,11 +424,11 @@
           "label-time-series": "Tidsserier"
         },
         "label-exemplars": "Exemplar",
-        "label-format": "Format",
+        "label-format": "",
         "label-min-step": "Minsta steg",
         "label-resolution": "Lösning",
         "label-type": "Typ",
-        "placeholder-auto": "auto",
+        "placeholder-auto": "",
         "title-options": "Alternativ",
         "tooltip-min-step": "En ytterligare nedre gräns för stegparametern för Prometheus-frågan och för variablerna <2>{{interval}}</2> och <4>{{rateInterval}}</4>."
       },
@@ -451,7 +451,7 @@
       },
       "query-editor-mode-toggle": {
         "editor-modes": {
-          "label-builder": "Builder",
+          "label-builder": "",
           "label-code": "Kod"
         }
       },

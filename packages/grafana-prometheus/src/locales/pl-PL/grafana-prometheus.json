@@ -135,10 +135,10 @@
         "label-internal-link": "Link wewnętrzny",
         "label-label-name": "Nazwa etykiety",
         "label-remove-exemplar-link": "Usuń przykładowy link",
-        "label-url": "URL",
+        "label-url": "",
         "label-url-label": "Etykieta adresu URL",
         "placeholder-go-to-examplecom": "Przejdź do strony example.com",
-        "placeholder-httpsexamplecomvalueraw": "https://example.com/${__value.raw}",
+        "placeholder-httpsexamplecomvalueraw": "",
         "placeholder-trace-id": "Identyfikator śledzenia",
         "title-remove-exemplar-link": "Usuń przykładowy link",
         "tooltip-data-source": "Źródło danych, do którego będzie prowadzić przykład.",
@@ -315,7 +315,7 @@
       },
       "get-collapsed-info": {
         "exemplars": "Przykłady: {{value}}",
-        "format": "Format: {{value}}",
+        "format": "",
         "legend": "Legenda: {{value}}",
         "step": "Krok: {{value}}",
         "type": "Typ: {{value}}"
@@ -334,7 +334,7 @@
         "description-unknown": "Te metryki mają przypisany typ nieznany w metadanych.",
         "label-counter": "Licznik",
         "label-gauge": "Wskaźnik",
-        "label-histogram": "Histogram",
+        "label-histogram": "",
         "label-native-histogram": "Histogram natywny",
         "label-no-type": "Bez typu",
         "label-summary": "Podsumowanie",
@@ -379,7 +379,7 @@
           "ignoring": "Ignorowanie",
           "on": "Wł."
         },
-        "operator": "Operator",
+        "operator": "",
         "tooltip-remove-match": "Usuń dopasowanie",
         "vector-matches": "Dopasowania wektorów"
       },
@@ -424,7 +424,7 @@
           "label-time-series": "Szereg czasowy"
         },
         "label-exemplars": "Przykłady",
-        "label-format": "Format",
+        "label-format": "",
         "label-min-step": "Min. krok",
         "label-resolution": "Rozwiązanie",
         "label-type": "Typ",

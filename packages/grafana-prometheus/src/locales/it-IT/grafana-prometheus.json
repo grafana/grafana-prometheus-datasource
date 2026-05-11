@@ -73,7 +73,7 @@
         "label-classic-query": "Query classica",
         "label-label": "Etichetta",
         "label-metric-regex": "Espressione regolare metrica",
-        "label-query": "Query",
+        "label-query": "",
         "label-query-type": "Tipo di query",
         "label-series-query": "Query della serie",
         "placeholder-classic-query": "Query classica",
@@ -135,11 +135,11 @@
         "label-internal-link": "Link interno",
         "label-label-name": "Nome etichetta",
         "label-remove-exemplar-link": "Rimuovi link di esempio",
-        "label-url": "URL",
+        "label-url": "",
         "label-url-label": "Etichetta URL",
         "placeholder-go-to-examplecom": "Vai a example.com",
-        "placeholder-httpsexamplecomvalueraw": "https://example.com/${__value.raw}",
-        "placeholder-trace-id": "traceID",
+        "placeholder-httpsexamplecomvalueraw": "",
+        "placeholder-trace-id": "",
         "title-remove-exemplar-link": "Rimuovi link di esempio",
         "tooltip-data-source": "L'origine dati a cui l'esempio si collegherà.",
         "tooltip-internal-link": "Abilita questa opzione se disponi di un link interno. Quando è abilitata, questa opzione mostra il selettore dell'origine dati. Seleziona l'archivio dati di tracciamento di backend per i dati dell'esempio.",
@@ -158,7 +158,7 @@
         "aria-label-prometheus-type": "Tipo Prometheus",
         "aria-label-select-http-method": "Seleziona il metodo HTTP",
         "editor-options": {
-          "label-builder": "Builder",
+          "label-builder": "",
           "label-code": "Codice"
         },
         "label-cache-level": "Livello cache",
@@ -179,7 +179,7 @@
         "placeholder-example-maxsourceresolutionmtimeout": "Esempio: {{example}}",
         "title-interval-behaviour": "Comportamento intervallo",
         "title-other": "Altro",
-        "title-performance": "Performance",
+        "title-performance": "",
         "title-query-editor": "Editor query",
         "tooltip-cache-level": "Imposta il livello di memorizzazione nella cache del browser per le query dell'editor. Si consigliano impostazioni della cache più elevate per origini dati ad alta cardinalità.",
         "tooltip-custom-query-parameters": "Aggiungi parametri personalizzati all'URL della query Prometheus. Ad esempio {{example1}}, {{example2}}, {{example3}} o {{example4}}. Più parametri devono essere concatenati insieme a {{concatenationChar}}.",
@@ -451,7 +451,7 @@
       },
       "query-editor-mode-toggle": {
         "editor-modes": {
-          "label-builder": "Builder",
+          "label-builder": "",
           "label-code": "Codice"
         }
       },

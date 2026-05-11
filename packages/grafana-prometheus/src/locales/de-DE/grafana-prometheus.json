@@ -6,8 +6,8 @@
         "aria-label-lower-limit-parameter": "Untergrenze für den Schrittparameter festlegen",
         "label-min-step": "Min. Schritt",
         "label-series-value-as-timestamp": "Reihenwert als Zeitstempel",
-        "label-tags": "Tags",
-        "label-text": "Text",
+        "label-tags": "",
+        "label-text": "",
         "label-title": "Titel",
         "placeholder-auto": "Auto",
         "tooltip-either-pattern-example-instance-replaced-label": "Verwenden Sie entweder den Namen oder ein Muster. Ein Beispiel: {{labelTemplate}} wird durch den Label-Wert für das Label {{labelName}} ersetzt.",
@@ -26,7 +26,7 @@
             "query-range": "Abfrage über einen bestimmten Zeitraum ausführen"
           },
           "label": {
-            "instant": "Instant",
+            "instant": "",
             "range": "Bereich"
           }
         }
@@ -45,7 +45,7 @@
         "series-limit": "Reihengrenze"
       },
       "prom-cheat-sheet": {
-        "prom-ql-cheat-sheet": "PromQL Cheat Sheet"
+        "prom-ql-cheat-sheet": ""
       },
       "prom-exemplar-field": {
         "exemplars": "Exemplare",
@@ -71,7 +71,7 @@
         "aria-label-query-type": "Abfragetyp",
         "aria-label-series-query": "Reihenabfrage",
         "label-classic-query": "Klassische Abfrage",
-        "label-label": "Label",
+        "label-label": "",
         "label-metric-regex": "Metrik-RegEx",
         "label-query": "Abfrage",
         "label-query-type": "Abfragetyp",
@@ -135,11 +135,11 @@
         "label-internal-link": "Interner Link",
         "label-label-name": "Label-Name",
         "label-remove-exemplar-link": "Exemplar-Link entfernen",
-        "label-url": "URL",
+        "label-url": "",
         "label-url-label": "URL-Label",
         "placeholder-go-to-examplecom": "Zu example.com",
-        "placeholder-httpsexamplecomvalueraw": "https://example.com/${__value.raw}",
-        "placeholder-trace-id": "traceID",
+        "placeholder-httpsexamplecomvalueraw": "",
+        "placeholder-trace-id": "",
         "title-remove-exemplar-link": "Exemplar-Link entfernen",
         "tooltip-data-source": "Die Datenquelle, zu der das Exemplar navigiert.",
         "tooltip-internal-link": "Aktivieren Sie diese Option, wenn Sie einen internen Link haben. Wenn dies aktiviert ist, wird der Datenquellen-Selektor angezeigt. Wählen Sie den Backend-Tracing-Datenspeicher für Ihre Exemplar-Daten aus.",
@@ -158,8 +158,8 @@
         "aria-label-prometheus-type": "Prometheus-Typ",
         "aria-label-select-http-method": "HTTP-Methode auswählen",
         "editor-options": {
-          "label-builder": "Builder",
-          "label-code": "Code"
+          "label-builder": "",
+          "label-code": ""
         },
         "label-cache-level": "Cache-Level",
         "label-custom-query-parameters": "Benutzerdefinierte Abfrageparameter",
@@ -206,7 +206,7 @@
         "description-auto": "Enthält nur eindeutige Labels",
         "description-custom": "Namensvorlage bereitstellen",
         "description-verbose": "Alle Label-Namen und -Werte",
-        "label-auto": "Auto",
+        "label-auto": "",
         "label-custom": "Benutzerdefiniert",
         "label-verbose": "Ausführlich"
       }
@@ -315,7 +315,7 @@
       },
       "get-collapsed-info": {
         "exemplars": "Exemplare: {{value}}",
-        "format": "Format: {{value}}",
+        "format": "",
         "legend": "Legende: {{value}}",
         "step": "Schritt: {{value}}",
         "type": "Typ: {{value}}"
@@ -419,12 +419,12 @@
         "aria-label-select-resolution": "Auflösung auswählen",
         "aria-label-type": "Typ-Radiobutton-Gruppe",
         "format-options": {
-          "label-heatmap": "Heatmap",
+          "label-heatmap": "",
           "label-table": "Tabelle",
           "label-time-series": "Zeitreihen"
         },
         "label-exemplars": "Exemplare",
-        "label-format": "Format",
+        "label-format": "",
         "label-min-step": "Min. Schritt",
         "label-resolution": "Auflösung",
         "label-type": "Typ",
@@ -451,8 +451,8 @@
       },
       "query-editor-mode-toggle": {
         "editor-modes": {
-          "label-builder": "Builder",
-          "label-code": "Code"
+          "label-builder": "",
+          "label-code": ""
         }
       },
       "query-pattern": {
@@ -484,7 +484,7 @@
         "message-expand-label-filters": "Es wurden keine Metriken gefunden. Versuchen Sie, Ihre Label-Filter zu erweitern.",
         "message-expand-search": "Es wurden keine Metriken gefunden. Versuchen Sie, Ihre Suche und Ihre Filter zu erweitern.",
         "message-no-metrics-found": "Es wurden keine Metriken in der Datenquelle gefunden.",
-        "name": "Name",
+        "name": "",
         "type": "Typ"
       }
     }

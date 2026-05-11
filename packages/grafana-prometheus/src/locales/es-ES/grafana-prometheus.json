@@ -9,7 +9,7 @@
         "label-tags": "Etiquetas",
         "label-text": "Texto",
         "label-title": "Título",
-        "placeholder-auto": "auto",
+        "placeholder-auto": "",
         "tooltip-either-pattern-example-instance-replaced-label": "Utiliza el nombre o un patrón. Por ejemplo, {{labelTemplate}} se reemplaza con el valor de etiqueta para la etiqueta {{labelName}}.",
         "tooltip-min-step": "Un límite inferior adicional para el parámetro de paso de la consulta de Prometheus y para las variables <2>{{intervalVar}}</2> y <4>{{rateIntervalVar}}</4>.",
         "tooltip-timestamp-milliseconds-series-value-seconds-multiply": "La unidad de la marca de tiempo es milisegundos. Si la unidad del valor de la serie es segundos, multiplica su vector de rango por 1000."
@@ -90,7 +90,7 @@
         "tooltip-series-query": "Introduzca una métrica con etiquetas, solo una métrica o solo etiquetas, es decir, {{example1}}, {{example2}} o {{example3}}. Devuelve una lista de series temporales asociadas con los datos introducidos."
       },
       "selector-actions": {
-        "aria-label-selector": "selector",
+        "aria-label-selector": "",
         "aria-label-selector-clear-button": "Botón de borrado del selector",
         "aria-label-use-selector-as-metrics-button": "Utilizar el selector como botón de métricas",
         "aria-label-use-selector-for-query-button": "Utilizar el selector para el botón de consulta",
@@ -120,7 +120,7 @@
         "browser-access-mode-error": "El modo de acceso a través del navegador en la fuente de datos de Prometheus ya no está disponible. Cambia al modo de acceso al servidor.",
         "description-advanced-settings": "Los ajustes adicionales son ajustes opcionales que se pueden configurar para tener un mayor control sobre tu fuente de datos.",
         "title-advanced-settings": "Ajustes avanzados",
-        "title-error": "Error"
+        "title-error": ""
       },
       "data-source-http-settings-overhaul": {
         "tooltip-browser-access-mode": "Tu método de acceso es <1>Navegador</1>, esto significa que la URL debe ser accesible desde el navegador.",
@@ -135,11 +135,11 @@
         "label-internal-link": "Enlace interno",
         "label-label-name": "Nombre de la etiqueta",
         "label-remove-exemplar-link": "Eliminar enlace de ejemplo",
-        "label-url": "URL",
+        "label-url": "",
         "label-url-label": "Etiqueta de URL",
         "placeholder-go-to-examplecom": "Ir a ejemplo.com",
         "placeholder-httpsexamplecomvalueraw": "https://ejemplo.com/${__value.raw}",
-        "placeholder-trace-id": "traceID",
+        "placeholder-trace-id": "",
         "title-remove-exemplar-link": "Eliminar enlace de ejemplo",
         "tooltip-data-source": "La fuente de datos a la que se dirigirá el ejemplo.",
         "tooltip-internal-link": "Habilita esta opción si tiene un enlace interno. Cuando está habilitado, indica el selector de fuente de datos. Selecciona el almacén de datos de trazas de backend para tus datos de ejemplo.",
@@ -428,7 +428,7 @@
         "label-min-step": "Paso mínimo",
         "label-resolution": "Resolución",
         "label-type": "Tipo",
-        "placeholder-auto": "auto",
+        "placeholder-auto": "",
         "title-options": "Opciones",
         "tooltip-min-step": "Un límite inferior adicional para el parámetro de paso de la consulta de Prometheus y para las variables <2>{{interval}}</2> y <4>{{rateInterval}}</4>."
       },
@@ -476,7 +476,7 @@
         "title-kick-start-your-query": "Inicie su consulta"
       },
       "raw-query": {
-        "aria-label-selector": "selector"
+        "aria-label-selector": ""
       },
       "results-table": {
         "content-descriptive-type": "Al crear un {{descriptiveType}}, Prometheus expone varias series con el contador de tipos. ",

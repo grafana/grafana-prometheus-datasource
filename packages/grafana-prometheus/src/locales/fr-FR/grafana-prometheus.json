@@ -9,7 +9,7 @@
         "label-tags": "Balises",
         "label-text": "Texte",
         "label-title": "Titre",
-        "placeholder-auto": "auto",
+        "placeholder-auto": "",
         "tooltip-either-pattern-example-instance-replaced-label": "Utilisez le nom ou un modèle. Par exemple, {{labelTemplate}} est remplacé par la valeur de l’étiquette pour l’étiquette {{labelName}}.",
         "tooltip-min-step": "Une limite inférieure supplémentaire pour le paramètre d’étape de la requête Prometheus et pour les variables <2>{{intervalVar}}</2> et <4>{{rateIntervalVar}}</4>.",
         "tooltip-timestamp-milliseconds-series-value-seconds-multiply": "L’unité de l’horodatage est la milliseconde. Si l’unité de la valeur de la série est en secondes, multipliez son vecteur de plage par 1 000."
@@ -135,11 +135,11 @@
         "label-internal-link": "Lien interne",
         "label-label-name": "Nom de l’étiquette",
         "label-remove-exemplar-link": "Supprimer le lien d’exemple",
-        "label-url": "URL",
+        "label-url": "",
         "label-url-label": "Étiquette pour l’URL",
         "placeholder-go-to-examplecom": "Accéder à example.com",
-        "placeholder-httpsexamplecomvalueraw": "https://example.com/${__value.raw}",
-        "placeholder-trace-id": "traceID",
+        "placeholder-httpsexamplecomvalueraw": "",
+        "placeholder-trace-id": "",
         "title-remove-exemplar-link": "Supprimer le lien d’exemple",
         "tooltip-data-source": "La source de données vers laquelle l’exemple va naviguer.",
         "tooltip-internal-link": "Activez cette option si vous avez un lien interne. Lorsque cette option est activée, le sélecteur de source de données est affiché. Sélectionnez le magasin de données de traçage backend pour vos données d’exemple.",
@@ -158,8 +158,8 @@
         "aria-label-prometheus-type": "Type Prometheus",
         "aria-label-select-http-method": "Sélectionner la méthode HTTP",
         "editor-options": {
-          "label-builder": "Builder",
-          "label-code": "Code"
+          "label-builder": "",
+          "label-code": ""
         },
         "label-cache-level": "Niveau du cache",
         "label-custom-query-parameters": "Paramètres de requête personnalisés",
@@ -179,7 +179,7 @@
         "placeholder-example-maxsourceresolutionmtimeout": "Exemple : {{example}}",
         "title-interval-behaviour": "Comportement de l’intervalle",
         "title-other": "Autre",
-        "title-performance": "Performance",
+        "title-performance": "",
         "title-query-editor": "Éditeur de requêtes",
         "tooltip-cache-level": "Définit le niveau de mise en cache du navigateur pour les requêtes de l’éditeur. Des paramètres de cache plus élevés sont recommandés pour les sources de données à cardinalité élevée.",
         "tooltip-custom-query-parameters": "Ajoutez des paramètres personnalisés à l’URL de la requête Prometheus. Par exemple {{example1}}, {{example2}}, {{example3}}, ou {{example4}}. Plusieurs paramètres doivent être concaténés avec {{concatenationChar}}.",
@@ -206,7 +206,7 @@
         "description-auto": "Inclut uniquement les étiquettes uniques",
         "description-custom": "Fournir un modèle de nommage",
         "description-verbose": "Tous les noms et valeurs d’étiquettes",
-        "label-auto": "Auto",
+        "label-auto": "",
         "label-custom": "Personnalisée",
         "label-verbose": "Verbeux"
       }
@@ -424,12 +424,12 @@
           "label-time-series": "Série chronologique"
         },
         "label-exemplars": "Exemples",
-        "label-format": "Format",
+        "label-format": "",
         "label-min-step": "Étape minimum",
         "label-resolution": "Résolution",
-        "label-type": "Type",
-        "placeholder-auto": "auto",
-        "title-options": "Options",
+        "label-type": "",
+        "placeholder-auto": "",
+        "title-options": "",
         "tooltip-min-step": "Une limite inférieure supplémentaire pour le paramètre d’étape de la requête Prometheus et pour les variables <2>{{interval}}</2> et <4>{{rateInterval}}</4>."
       },
       "prom-query-editor-selector": {
@@ -451,8 +451,8 @@
       },
       "query-editor-mode-toggle": {
         "editor-modes": {
-          "label-builder": "Builder",
-          "label-code": "Code"
+          "label-builder": "",
+          "label-code": ""
         }
       },
       "query-pattern": {
@@ -480,12 +480,12 @@
       },
       "results-table": {
         "content-descriptive-type": "Lors de la création d’un(e) {{descriptiveType}}, Prometheus expose plusieurs séries avec le compteur de type. ",
-        "description": "Description",
+        "description": "",
         "message-expand-label-filters": "Aucune métrique trouvée. Essayez d’élargir vos filtres d’étiquettes.",
         "message-expand-search": "Aucune métrique trouvée. Essayez d’élargir votre recherche et vos filtres.",
         "message-no-metrics-found": "Aucune métrique trouvée dans la source de données.",
         "name": "Nom",
-        "type": "Type"
+        "type": ""
       }
     }
   }
