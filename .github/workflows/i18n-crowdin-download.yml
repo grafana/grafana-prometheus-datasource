@@ -2,10 +2,8 @@ name: Crowdin Download Action
 
 on:
   workflow_dispatch:
-  # Disabled until existing translations have been bulk-imported into Crowdin.
-  # Pair with Josh Hunt before enabling. Uncomment the schedule below when ready.
-  # schedule:
-  #   - cron: "0 0 * * *"
+  schedule:
+    - cron: "0 0 * * *"
 
 jobs:
   download-sources-from-crowdin:
