@@ -13,15 +13,24 @@ function getDataSourceConnectionUrlInput(page: Page): Locator {
   );
 }
 
+// Grafana removed the BasicSettings form (name input) from the datasource config page
+// (https://github.com/grafana/grafana/pull/123965). The name is now shown as an h1
+// heading with an inline "Edit title" button. This helper matches both shapes.
+function getDataSourceNameField(page: Page): Locator {
+  return page.locator(
+    '[data-testid="data-testid Data source settings page name input field"], [aria-label="Data source settings page name input field"]'
+  ).or(page.getByRole('button', { name: 'Edit title' })).first();
+}
+
 test.describe('Config editor', () => {
   test(
     'smoke: should render config editor',
     { tag: '@plugins' },
-    async ({ createDataSourceConfigPage, page, selectors }) => {
-      const configPage = await createDataSourceConfigPage({ type: PLUGIN_TYPE });
+    async ({ createDataSourceConfigPage, page }) => {
+      await createDataSourceConfigPage({ type: PLUGIN_TYPE });
 
       await expect(page.getByText(/Before you can use the Prometheus data source/)).toBeVisible();
-      await expect(configPage.getByGrafanaSelector(selectors.pages.DataSource.name)).toBeVisible();
+      await expect(getDataSourceNameField(page)).toBeVisible();
       await expect(page.getByRole('heading', { name: 'Connection', exact: true })).toBeVisible();
       await expect(getDataSourceConnectionUrlInput(page)).toBeVisible();
     }

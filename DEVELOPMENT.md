@@ -31,6 +31,12 @@ Start Grafana with the plugin:
 docker compose up -d
 ```
 
+For starting with a specific Grafana version
+
+```bash
+GRAFANA_VERSION=13.0.1 docker compose up
+```
+
 Grafana will be available at `http://localhost:3000`.
 
 ## Testing
