@@ -7,7 +7,7 @@ import { type PrometheusDatasource } from './datasource';
 import { getRangeSnapInterval, processHistogramMetrics, removeQuotesIfExist } from './language_utils';
 import { buildVisualQueryFromString } from './querybuilder/parsing';
 import { PrometheusCacheLevel } from './types';
-import { escapeForUtf8Support, utf8Support } from './utf8_support';
+import { utf8Support } from './utf8_support';
 
 type PrometheusSeriesResponse = Array<{ [key: string]: string }>;
 type PrometheusLabelsResponse = string[];
@@ -170,14 +170,14 @@ export class LabelsApiClient extends BaseResourceClient implements ResourceApiCl
     const effectiveLimit = this.getEffectiveLimit(limit);
     const searchParams = { limit: effectiveLimit, ...timeParams, ...(match ? { 'match[]': match } : {}) };
     const interpolatedName = this.datasource.interpolateString(labelKey);
-    const interpolatedAndEscapedName = escapeForUtf8Support(removeQuotesIfExist(interpolatedName));
-    const effectiveMatch = `${match ?? ''}-${interpolatedAndEscapedName}`;
+    const cleanName = removeQuotesIfExist(interpolatedName);
+    const effectiveMatch = `${match ?? ''}-${cleanName}`;
     const maybeCachedValues = this._cache.getLabelValues(timeRange, effectiveMatch, effectiveLimit);
     if (maybeCachedValues) {
       return maybeCachedValues;
     }
 
-    const url = `/api/v1/label/${interpolatedAndEscapedName}/values`;
+    const url = `/api/v1/label/${cleanName}/values`;
     const value = await this.requestLabels(url, searchParams, getDefaultCacheHeaders(this.datasource.cacheLevel));
     this._cache.setLabelValues(timeRange, effectiveMatch, effectiveLimit, value ?? []);
     return value ?? [];

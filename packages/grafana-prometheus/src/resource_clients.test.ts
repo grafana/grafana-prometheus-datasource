@@ -117,14 +117,31 @@ describe('LabelsApiClient', () => {
       );
     });
 
-    it('should handle UTF-8 label names', async () => {
+    it('should use raw dotted label names in the label values URL path', async () => {
       mockRequest.mockResolvedValueOnce(['value1', 'value2']);
       mockInterpolateString.mockImplementationOnce((str) => 'http.status:sum');
 
       await client.queryLabelValues(mockTimeRange, '"http.status:sum"');
 
       expect(mockRequest).toHaveBeenCalledWith(
-        '/api/v1/label/U__http_2e_status:sum/values',
+        '/api/v1/label/http.status:sum/values',
+        {
+          start: expect.any(String),
+          end: expect.any(String),
+          limit: 40000,
+        },
+        defaultCacheHeaders
+      );
+    });
+
+    it('should interpolate dotted label names before building the label values URL path', async () => {
+      mockRequest.mockResolvedValueOnce(['app', 'sidecar']);
+      mockInterpolateString.mockImplementationOnce(() => 'k8s.container.name');
+
+      await client.queryLabelValues(mockTimeRange, '$label');
+
+      expect(mockRequest).toHaveBeenCalledWith(
+        '/api/v1/label/k8s.container.name/values',
         {
           start: expect.any(String),
           end: expect.any(String),
@@ -490,6 +507,42 @@ describe('SeriesApiClient', () => {
         '/api/v1/series',
         expect.objectContaining({
           'match[]': '{__name__="metric.name",instance="test",job!=""}',
+        }),
+        expect.any(Object)
+      );
+    });
+
+    it('should create a proper matcher when the given match is a raw dotted metric name only', async () => {
+      mockRequest.mockResolvedValue([
+        { __name__: 'metric.one', job: 'grafana' },
+        { __name__: 'metric.one', job: 'prometheus' },
+      ]);
+
+      await client.queryLabelValues(mockTimeRange, 'job', 'metric.one');
+
+      expect(mockRequest).toHaveBeenCalledTimes(1);
+      expect(mockRequest).toHaveBeenCalledWith(
+        '/api/v1/series',
+        expect.objectContaining({
+          'match[]': '{__name__="metric.one",job!=""}',
+        }),
+        expect.any(Object)
+      );
+    });
+
+    it('should create a proper matcher when the given match is a raw dotted metric query', async () => {
+      mockRequest.mockResolvedValue([
+        { __name__: 'metric.one', job: 'grafana' },
+        { __name__: 'metric.one', job: 'prometheus' },
+      ]);
+
+      await client.queryLabelValues(mockTimeRange, 'job', 'metric.one{instance="test"}');
+
+      expect(mockRequest).toHaveBeenCalledTimes(1);
+      expect(mockRequest).toHaveBeenCalledWith(
+        '/api/v1/series',
+        expect.objectContaining({
+          'match[]': '{__name__="metric.one",instance="test",job!=""}',
         }),
         expect.any(Object)
       );

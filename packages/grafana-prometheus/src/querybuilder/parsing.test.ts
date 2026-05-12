@@ -126,6 +126,55 @@ describe('buildVisualQueryFromString', () => {
         errors: [],
       });
     });
+
+    it('reconstructs raw dotted metric names', () => {
+      expect(buildVisualQueryFromString('http.server.request.duration')).toEqual(
+        noErrors({
+          labels: [],
+          metric: 'http.server.request.duration',
+          operations: [],
+        })
+      );
+    });
+
+    it('reconstructs raw dotted metric names with labels', () => {
+      expect(buildVisualQueryFromString('http.server.request.duration{job="api-server"}')).toEqual(
+        noErrors({
+          labels: [
+            {
+              label: 'job',
+              op: '=',
+              value: 'api-server',
+            },
+          ],
+          metric: 'http.server.request.duration',
+          operations: [],
+        })
+      );
+    });
+
+    it('reconstructs raw dotted metric names in range functions', () => {
+      expect(
+        buildVisualQueryFromString('rate(http.server.request.duration{job="api-server"}[$__rate_interval])')
+      ).toEqual(
+        noErrors({
+          labels: [
+            {
+              label: 'job',
+              op: '=',
+              value: 'api-server',
+            },
+          ],
+          metric: 'http.server.request.duration',
+          operations: [
+            {
+              id: 'rate',
+              params: ['$__rate_interval'],
+            },
+          ],
+        })
+      );
+    });
   });
 
   it('creates no errors for empty query', () => {
