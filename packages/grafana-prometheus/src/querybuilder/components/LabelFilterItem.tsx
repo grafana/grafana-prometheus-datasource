@@ -36,6 +36,7 @@ export function LabelFilterItem({
   getLabelValuesAutofillSuggestions,
   debounceDuration,
 }: LabelFilterItemProps) {
+  const operators = getOperatorOptions();
   const [state, setState] = useState<{
     labelNames?: SelectableValue[];
     labelValues?: SelectableValue[];
@@ -50,7 +51,7 @@ export function LabelFilterItem({
   const [allLabels, setAllLabels] = useState<SelectableValue[]>([]);
 
   const isMultiSelect = (operator = item.op) => {
-    return operators.find((op) => op.label === operator)?.isMultiValue;
+    return operators.find((op) => op.value === operator)?.isMultiValue;
   };
 
   const getSelectOptionsFromString = (item?: string): string[] => {
@@ -132,11 +133,17 @@ export function LabelFilterItem({
 
         {/* Operator select i.e.   = =~ != !~   */}
         <Select
+          aria-label={t(
+            'grafana-prometheus.querybuilder.label-filter-item.aria-label-operator',
+            'Label filter operator'
+          )}
           data-testid={selectors.components.QueryBuilder.matchOperatorSelect}
           className="query-segment-operator"
-          value={toOption(item.op ?? defaultOp)}
+          value={item.op ?? defaultOp}
           options={operators}
           width="auto"
+          getOptionLabel={getOperatorAccessibleLabel}
+          formatOptionLabel={(operator) => operator.label ?? ''}
           onChange={(change) => {
             if (change.value != null) {
               onChange({
@@ -215,9 +222,39 @@ export function LabelFilterItem({
   );
 }
 
-const operators = [
-  { label: '=', value: '=', isMultiValue: false },
-  { label: '!=', value: '!=', isMultiValue: false },
-  { label: '=~', value: '=~', isMultiValue: true },
-  { label: '!~', value: '!~', isMultiValue: true },
+type OperatorOption = SelectableValue<string> & { isMultiValue: boolean };
+
+const getOperatorOptions = (): OperatorOption[] => [
+  {
+    label: '=',
+    ariaLabel: t('grafana-prometheus.querybuilder.label-filter-item.operator-equals', 'Equals'),
+    title: t('grafana-prometheus.querybuilder.label-filter-item.operator-equals', 'Equals'),
+    value: '=',
+    isMultiValue: false,
+  },
+  {
+    label: '!=',
+    ariaLabel: t('grafana-prometheus.querybuilder.label-filter-item.operator-not-equals', 'Not equals'),
+    title: t('grafana-prometheus.querybuilder.label-filter-item.operator-not-equals', 'Not equals'),
+    value: '!=',
+    isMultiValue: false,
+  },
+  {
+    label: '=~',
+    ariaLabel: t('grafana-prometheus.querybuilder.label-filter-item.operator-regex-match', 'Regex match'),
+    title: t('grafana-prometheus.querybuilder.label-filter-item.operator-regex-match', 'Regex match'),
+    value: '=~',
+    isMultiValue: true,
+  },
+  {
+    label: '!~',
+    ariaLabel: t('grafana-prometheus.querybuilder.label-filter-item.operator-not-regex-match', 'Not regex match'),
+    title: t('grafana-prometheus.querybuilder.label-filter-item.operator-not-regex-match', 'Not regex match'),
+    value: '!~',
+    isMultiValue: true,
+  },
 ];
+
+const getOperatorAccessibleLabel = (operator: SelectableValue<string>) => {
+  return operator.ariaLabel ?? operator.label ?? String(operator.value ?? '');
+};
