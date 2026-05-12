@@ -346,7 +346,12 @@
         }
       },
       "label-filter-item": {
+        "aria-label-operator": "Label filter operator",
         "aria-label-remove": "Remove {{name}}",
+        "operator-equals": "Equals",
+        "operator-not-equals": "Not equals",
+        "operator-not-regex-match": "Not regex match",
+        "operator-regex-match": "Regex match",
         "placeholder-select-label": "Select label",
         "placeholder-select-value": "Select value"
       },
