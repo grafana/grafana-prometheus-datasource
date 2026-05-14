@@ -10,6 +10,8 @@ import (
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	schemas "github.com/grafana/schemads"
+
+	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/utils"
 )
 
 // SchemaProvider implements schemads SchemaHandler, TablesHandler, and ColumnsHandler
@@ -165,8 +167,13 @@ func (p *SchemaProvider) fetchPrometheusLabels(ctx context.Context, path string,
 	}
 	defer resp.Body.Close()
 
+	body, err := utils.Decode(resp.Header.Get("Content-Encoding"), resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read labels response (description=%q): %w", description, err)
+	}
+
 	var result prometheusLabelsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, fmt.Errorf("failed to decode labels response (description=%q): %w", description, err)
 	}
 
@@ -211,8 +218,13 @@ func (p *SchemaProvider) fetchMetricMetadata(ctx context.Context, metric string)
 	}
 	defer resp.Body.Close()
 
+	body, err := utils.Decode(resp.Header.Get("Content-Encoding"), resp.Body)
+	if err != nil {
+		return schemas.Metadata{}, fmt.Errorf("failed to read metadata response (metric=%q): %w", metric, err)
+	}
+
 	var result prometheusMetadataResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.Unmarshal(body, &result); err != nil {
 		return schemas.Metadata{}, fmt.Errorf("failed to decode metadata response (metric=%q): %w", metric, err)
 	}
 	if result.Status != "success" {
@@ -244,8 +256,8 @@ func (p *SchemaProvider) fetchMetricTables(ctx context.Context) ([]schemas.Table
 	tables := make([]schemas.Table, len(names))
 	for i, name := range names {
 		tables[i] = schemas.Table{
-			Name:    name,
-			Columns: baseColumns,
+			Name:       name,
+			Columns:    baseColumns,
 			TableHints: prometheusTableHints,
 		}
 	}
