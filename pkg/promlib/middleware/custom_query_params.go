@@ -14,8 +14,8 @@ const (
 	customQueryParametersMiddlewareName = "prom-custom-query-parameters"
 	customQueryParametersKey            = "customQueryParameters"
 	grafanaDataKey                      = "grafanaData"
-	warningThresholdKey                 = "maxSamplesProcessedWarningThreshold"
-	errorThresholdKey                   = "maxSamplesProcessedErrorThreshold"
+	warningThresholdKey           		= "max_samples_processed_warning_threshold"
+	errorThresholdKey              		= "max_samples_processed_error_threshold"
 )
 
 func CustomQueryParameters(logger log.Logger) sdkhttpclient.Middleware {

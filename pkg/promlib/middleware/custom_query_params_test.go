@@ -13,8 +13,8 @@ import (
 
 func TestCustomQueryParametersMiddleware(t *testing.T) {
 	require.Equal(t, "customQueryParameters", customQueryParametersKey)
-	require.Equal(t, "maxSamplesProcessedWarningThreshold", warningThresholdKey)
-	require.Equal(t, "maxSamplesProcessedErrorThreshold", errorThresholdKey)
+	require.Equal(t, "max_samples_processed_warning_threshold", warningThresholdKey)
+	require.Equal(t, "max_samples_processed_error_threshold", errorThresholdKey)
 
 	finalRoundTripper := httpclient.RoundTripperFunc(func(req *http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: http.StatusOK}, nil
@@ -203,8 +203,8 @@ func TestCustomQueryParametersMiddleware(t *testing.T) {
 			CustomOptions: map[string]any{
 				grafanaDataKey: map[string]any{
 					customQueryParametersKey: "custom=value",
-					warningThresholdKey:        float64(0),
-					errorThresholdKey:          float64(0),
+					warningThresholdKey: float64(0),
+					errorThresholdKey:   float64(0),
 				},
 			},
 		}, finalRoundTripper)
@@ -232,7 +232,7 @@ func TestCustomQueryParametersMiddleware(t *testing.T) {
 			CustomOptions: map[string]any{
 				grafanaDataKey: map[string]any{
 					customQueryParametersKey: "timeout=30s",
-					warningThresholdKey:      float64(42),
+					warningThresholdKey: float64(42),
 				},
 			},
 		}, finalRoundTripper)
@@ -252,4 +252,5 @@ func TestCustomQueryParametersMiddleware(t *testing.T) {
 		require.Equal(t, "42", q.Get(warningThresholdKey))
 		require.Empty(t, q.Get(errorThresholdKey))
 	})
+
 }
