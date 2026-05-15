@@ -83,6 +83,7 @@
       "name": "Grafana Labs",
       "url": "https://grafana.com"
     },
+    "keywords": ["grafana", "datasource", "prometheus", "timeseries", "metrics", "monitoring", "alerting", "promql"],
     "logos": {
       "small": "img/prometheus_logo.svg",
       "large": "img/prometheus_logo.svg"
@@ -105,5 +106,25 @@
   "dependencies": {
     "grafanaDependency": ">=12.3.0"
   },
-  "languages": ["en-US", "cs-CZ", "de-DE", "es-ES", "fr-FR", "hu-HU", "id-ID", "it-IT", "ja-JP", "ko-KR", "nl-NL", "pl-PL", "pt-BR", "pt-PT", "ru-RU", "sv-SE", "tr-TR", "zh-Hans", "zh-Hant"]
+  "languages": [
+    "en-US",
+    "cs-CZ",
+    "de-DE",
+    "es-ES",
+    "fr-FR",
+    "hu-HU",
+    "id-ID",
+    "it-IT",
+    "ja-JP",
+    "ko-KR",
+    "nl-NL",
+    "pl-PL",
+    "pt-BR",
+    "pt-PT",
+    "ru-RU",
+    "sv-SE",
+    "tr-TR",
+    "zh-Hans",
+    "zh-Hant"
+  ]
 }
