@@ -8,9 +8,6 @@ module.exports = {
   // Jest configuration provided by Grafana scaffolding
   ...require('./.config/jest.config'),
 
-  // Ignore assistant worktrees to avoid duplicate package-name collisions in Haste map.
-  modulePathIgnorePatterns: ['<rootDir>/.claude/worktrees/'],
-
   // Resolve @grafana/prometheus to its TypeScript source so tests don't require
   // a pre-built dist (which may not exist in CI before the package is compiled).
   moduleNameMapper: {
