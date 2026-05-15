@@ -1,7 +1,6 @@
 package resource
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -68,10 +67,7 @@ func (r *Resource) Execute(ctx context.Context, req *backend.CallResourceRequest
 		}
 	}()
 
-	var buf bytes.Buffer
-	// Should be more efficient than ReadAll. See https://github.com/prometheus/client_golang/pull/976
-	_, err = buf.ReadFrom(resp.Body)
-	body := buf.Bytes()
+	body, err := utils.Decode(resp.Header.Get("Content-Encoding"), resp.Body)
 	if err != nil {
 		return nil, err
 	}
