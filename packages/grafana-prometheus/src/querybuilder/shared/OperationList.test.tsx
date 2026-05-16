@@ -49,6 +49,54 @@ describe('OperationList', () => {
     });
   });
 
+  it('associates each param label with its input so screen readers announce it', () => {
+    // Regression for https://github.com/grafana/grafana/issues/66347 — the <label>
+    // used a useId-derived id while the editors used operation.id, so every param
+    // label was an orphan and Prometheus query builder fields had no accessible name.
+    setup();
+    // Rate has a Range param — the label "Range" must be linked to its combo box input.
+    expect(screen.getByLabelText('Range').tagName).toBe('INPUT');
+  });
+
+  it('gives each instance of a duplicated operation a distinct input id', () => {
+    // Each OperationEditor uses its own useId() value as the param-id prefix,
+    // so two `rate` operations don't produce duplicate ids (which would
+    // confuse screen readers and collide in the DOM).
+    setup({
+      metric: 'random_metric',
+      labels: [{ label: 'instance', op: '=', value: 'localhost:9090' }],
+      operations: [
+        { id: 'rate', params: ['auto'] },
+        { id: 'rate', params: ['$__rate_interval'] },
+      ],
+    });
+    const rangeInputs = screen.getAllByLabelText('Range');
+    expect(rangeInputs).toHaveLength(2);
+    expect(rangeInputs[0].id).not.toBe(rangeInputs[1].id);
+  });
+
+  it('keeps ids unique across multiple OperationLists rendered on the same page', () => {
+    // Multiple Prometheus queries on a single Grafana panel each render their
+    // own OperationList; if both contain `rate` at index 0 the param ids must
+    // still be distinct, otherwise the second list's <label htmlFor> binds to
+    // the first list's input and screen readers announce the wrong field.
+    const props = makeProps();
+    const query: PromVisualQuery = {
+      metric: 'random_metric',
+      labels: [{ label: 'instance', op: '=', value: 'localhost:9090' }],
+      operations: [{ id: 'rate', params: ['auto'] }],
+    };
+    render(
+      <>
+        <OperationList {...props} query={query} />
+        <OperationList {...props} query={query} />
+      </>
+    );
+    const rangeInputs = screen.getAllByLabelText('Range');
+    expect(rangeInputs).toHaveLength(2);
+    expect(new Set(rangeInputs.map((input) => input.id)).size).toBe(2);
+  });
+
   it('adds an operation', async () => {
     const { onChange } = setup();
     await addOperationInQueryBuilder('Aggregations', 'Min');
@@ -64,9 +112,9 @@ describe('OperationList', () => {
   });
 });
 
-function setup(query: PromVisualQuery = defaultQuery) {
+function makeProps() {
   const languageProvider = new EmptyLanguageProviderMock() as unknown as PrometheusLanguageProviderInterface;
-  const props = {
+  return {
     datasource: new PrometheusDatasource(
       {
         url: '',
@@ -81,7 +129,10 @@ function setup(query: PromVisualQuery = defaultQuery) {
     queryModeller: promQueryModeller,
     timeRange: getMockTimeRange(),
   };
+}
 
+function setup(query: PromVisualQuery = defaultQuery) {
+  const props = makeProps();
   render(<OperationList {...props} query={query} />);
   return props;
 }
