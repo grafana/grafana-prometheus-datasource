@@ -15,6 +15,7 @@ import {
   QuotedLabelName,
   MatchingModifierClause,
   MatchOp,
+  MatrixSelector,
   NumberDurationLiteral,
   On,
   ParenExpr,
@@ -251,12 +252,16 @@ function handleFunction(expr: string, node: SyntaxNode, context: Context) {
   //   the query model.
   // - it is easier to handle template variables this way as template variable is an error for the parser
   if (rangeFunctions.includes(funcName) || funcName.endsWith('_over_time')) {
-    let match = getString(expr, node).match(/\[(.+)\]/);
-    if (match?.[1]) {
-      interval = match[1];
-      // We were replaced the builtin variables to prevent errors
-      // Here we return those back
-      params.push(returnBuiltInVariable(match[1]));
+    // Walk the syntax tree to find the range duration instead of using regex,
+    // since greedy /\[(.+)\]/ incorrectly matches '[' characters inside label values
+    // e.g. rate(metric{label=~"value[0-9]"}[5m]) would capture '0-9]"}[5m' instead of '5m'
+    const selectorNode = body?.getChild(MatrixSelector);
+    if (selectorNode) {
+      const durationNode = selectorNode.getChild(NumberDurationLiteral);
+      if (durationNode) {
+        interval = getString(expr, durationNode);
+        params.push(returnBuiltInVariable(interval));
+      }
     }
   }
 
