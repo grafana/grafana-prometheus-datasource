@@ -132,6 +132,7 @@ export function LabelFilterItem({
 
         {/* Operator select i.e.   = =~ != !~   */}
         <Select
+          aria-label={t('grafana-prometheus.querybuilder.label-filter-item.aria-label-operator', 'Label filter operator')}
           data-testid={selectors.components.QueryBuilder.matchOperatorSelect}
           className="query-segment-operator"
           value={toOption(item.op ?? defaultOp)}
@@ -216,8 +217,8 @@ export function LabelFilterItem({
 }
 
 const operators = [
-  { label: '=', value: '=', isMultiValue: false },
-  { label: '!=', value: '!=', isMultiValue: false },
-  { label: '=~', value: '=~', isMultiValue: true },
-  { label: '!~', value: '!~', isMultiValue: true },
+  { label: '=', value: '=', isMultiValue: false, description: 'Equals' },
+  { label: '!=', value: '!=', isMultiValue: false, description: 'Not equals' },
+  { label: '=~', value: '=~', isMultiValue: true, description: 'Regex match' },
+  { label: '!~', value: '!~', isMultiValue: true, description: 'Not regex match' },
 ];
