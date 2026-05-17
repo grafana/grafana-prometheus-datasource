@@ -70,5 +70,38 @@ describe('PromSettings', () => {
       render(<PromSettings onOptionsChange={() => {}} options={options} />);
       expect(screen.getByText('Use series endpoint')).toBeInTheDocument();
     });
+
+    it('should hide max samples processed threshold fields by default', () => {
+      const options = defaultProps;
+
+      render(<PromSettings onOptionsChange={() => {}} options={options} />);
+      expect(screen.queryByTestId('prom-settings-max-samples-processed-warning-threshold')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('prom-settings-max-samples-processed-error-threshold')).not.toBeInTheDocument();
+      expect(screen.queryByText('Query warning threshold')).not.toBeInTheDocument();
+      expect(screen.queryByText('Query error threshold')).not.toBeInTheDocument();
+    });
+
+    it('should show max samples processed threshold fields when AMP opt-in prop is enabled', () => {
+      const options = defaultProps;
+
+      render(<PromSettings onOptionsChange={() => {}} options={options} showAmpQueryThresholds />);
+      expect(
+        screen.getByTestId('prom-settings-max-samples-processed-warning-threshold')
+      ).toBeInTheDocument();
+      expect(screen.getByTestId('prom-settings-max-samples-processed-error-threshold')).toBeInTheDocument();
+      expect(screen.getByText('Query warning threshold')).toBeInTheDocument();
+      expect(screen.getByText('Query error threshold')).toBeInTheDocument();
+    });
+
+    it('should initialize thresholds from snake_case keys', () => {
+      const options = createDefaultConfigOptions();
+      options.jsonData.max_samples_processed_warning_threshold = 123;
+      options.jsonData.max_samples_processed_error_threshold = 456;
+
+      render(<PromSettings onOptionsChange={() => {}} options={options} showAmpQueryThresholds />);
+
+      expect(screen.getByTestId('prom-settings-max-samples-processed-warning-threshold')).toHaveValue('123');
+      expect(screen.getByTestId('prom-settings-max-samples-processed-error-threshold')).toHaveValue('456');
+    });
   });
 });

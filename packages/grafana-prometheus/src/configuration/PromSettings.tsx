@@ -17,10 +17,12 @@ import {
   DEFAULT_SERIES_LIMIT,
   DURATION_REGEX,
   durationError,
+  errorThresholdError,
   MULTIPLE_DURATION_REGEX,
   NON_NEGATIVE_INTEGER_REGEX,
   PROM_CONFIG_LABEL_WIDTH,
   seriesLimitError,
+  warningThresholdError,
 } from '../constants';
 import { QueryEditorMode } from '../querybuilder/shared/types';
 import { defaultPrometheusQueryOverlapWindow } from '../querycache/QueryCache';
@@ -35,6 +37,8 @@ type Props = Pick<DataSourcePluginOptionsEditorProps<PromOptions>, 'options' | '
   hidePrometheusTypeVersion?: boolean;
   /** Hide the Exemplars settings section */
   hideExemplars?: boolean;
+  /** Show Amazon Managed Service for Prometheus query-threshold fields */
+  showAmpQueryThresholds?: boolean;
 };
 
 const httpOptions = [
@@ -77,7 +81,7 @@ const getOptionsWithDefaults = (options: DataSourceSettings<PromOptions>) => {
 export const PromSettings = (props: Props) => {
   const theme = useTheme2();
   const styles = overhaulStyles(theme);
-  const { onOptionsChange, hidePrometheusTypeVersion, hideExemplars } = props;
+  const { onOptionsChange, hidePrometheusTypeVersion, hideExemplars, showAmpQueryThresholds } = props;
 
   const editorOptions = [
     {
@@ -99,6 +103,14 @@ export const PromSettings = (props: Props) => {
 
   const [seriesLimit, setSeriesLimit] = useState<string>(
     optionsWithDefaults.jsonData.seriesLimit?.toString() || `${DEFAULT_SERIES_LIMIT}`
+  );
+
+  const [maxSamplesWarningThreshold, setMaxSamplesWarningThreshold] = useState<string>(
+    optionsWithDefaults.jsonData['max_samples_processed_warning_threshold']?.toString() ?? ''
+  );
+
+  const [maxSamplesErrorThreshold, setMaxSamplesErrorThreshold] = useState<string>(
+    optionsWithDefaults.jsonData['max_samples_processed_error_threshold']?.toString() ?? ''
   );
 
   return (
@@ -595,6 +607,124 @@ export const PromSettings = (props: Props) => {
                 {validateInput(seriesLimit, NON_NEGATIVE_INTEGER_REGEX, seriesLimitError)}
               </>
             </InlineField>
+            {showAmpQueryThresholds && (
+              <>
+                <InlineField
+                  labelWidth={PROM_CONFIG_LABEL_WIDTH}
+                  label={t(
+                    'grafana-prometheus.configuration.prom-settings.label-query-warning-threshold',
+                    'Query warning threshold'
+                  )}
+                  tooltip={
+                    <>
+                      <Trans i18nKey="grafana-prometheus.configuration.prom-settings.tooltip-query-warning-threshold">
+                        When set, Grafana appends this value to Prometheus query requests as the
+                        max_samples_processed_warning_threshold URL parameter. Leave empty to omit.
+                      </Trans>{' '}
+                      {docsTip()}
+                    </>
+                  }
+                  interactive={true}
+                  disabled={optionsWithDefaults.readOnly}
+                >
+                  <>
+                    <Input
+                      className="width-20"
+                      value={maxSamplesWarningThreshold}
+                      spellCheck={false}
+                      type="text"
+                      inputMode="numeric"
+                      placeholder={t(
+                        'grafana-prometheus.configuration.prom-settings.placeholder-query-warning-threshold',
+                        'Example: 100000000'
+                      )}
+                      onChange={(event: { currentTarget: { value: string } }) => {
+                        const v = event.currentTarget.value;
+                        const parsedValue = v.trim() === '' ? undefined : parseInt(v, 10);
+                        setMaxSamplesWarningThreshold(v);
+                        onOptionsChange({
+                          ...optionsWithDefaults,
+                          jsonData: {
+                            ...optionsWithDefaults.jsonData,
+                            max_samples_processed_warning_threshold: parsedValue,
+                          },
+                        });
+                      }}
+                      onBlur={(e) =>
+                        validateInput(
+                          e.currentTarget.value,
+                          NON_NEGATIVE_INTEGER_REGEX,
+                          warningThresholdError
+                        )
+                      }
+                      data-testid="prom-settings-max-samples-processed-warning-threshold"
+                    />
+                    {validateInput(
+                      maxSamplesWarningThreshold,
+                      NON_NEGATIVE_INTEGER_REGEX,
+                      warningThresholdError
+                    )}
+                  </>
+                </InlineField>
+                <InlineField
+                  labelWidth={PROM_CONFIG_LABEL_WIDTH}
+                  label={t(
+                    'grafana-prometheus.configuration.prom-settings.label-query-error-threshold',
+                    'Query error threshold'
+                  )}
+                  tooltip={
+                    <>
+                      <Trans i18nKey="grafana-prometheus.configuration.prom-settings.tooltip-query-error-threshold">
+                        When set, Grafana appends this value to Prometheus query requests as the
+                        max_samples_processed_error_threshold URL parameter. Leave empty to omit.
+                      </Trans>{' '}
+                      {docsTip()}
+                    </>
+                  }
+                  interactive={true}
+                  disabled={optionsWithDefaults.readOnly}
+                >
+                  <>
+                    <Input
+                      className="width-20"
+                      value={maxSamplesErrorThreshold}
+                      spellCheck={false}
+                      type="text"
+                      inputMode="numeric"
+                      placeholder={t(
+                        'grafana-prometheus.configuration.prom-settings.placeholder-query-error-threshold',
+                        'Example: 200000000'
+                      )}
+                      onChange={(event: { currentTarget: { value: string } }) => {
+                        const v = event.currentTarget.value;
+                        const parsedValue = v.trim() === '' ? undefined : parseInt(v, 10);
+                        setMaxSamplesErrorThreshold(v);
+                        onOptionsChange({
+                          ...optionsWithDefaults,
+                          jsonData: {
+                            ...optionsWithDefaults.jsonData,
+                            max_samples_processed_error_threshold: parsedValue,
+                          },
+                        });
+                      }}
+                      onBlur={(e) =>
+                        validateInput(
+                          e.currentTarget.value,
+                          NON_NEGATIVE_INTEGER_REGEX,
+                          errorThresholdError
+                        )
+                      }
+                      data-testid="prom-settings-max-samples-processed-error-threshold"
+                    />
+                    {validateInput(
+                      maxSamplesErrorThreshold,
+                      NON_NEGATIVE_INTEGER_REGEX,
+                      errorThresholdError
+                    )}
+                  </>
+                </InlineField>
+              </>
+            )}
             <InlineField
               labelWidth={PROM_CONFIG_LABEL_WIDTH}
               label={t(

@@ -50,6 +50,8 @@ export interface PromOptions extends DataSourceJsonData {
   oauthPassThru?: boolean;
   seriesEndpoint?: boolean;
   seriesLimit?: number;
+  'max_samples_processed_warning_threshold'?: number;
+  'max_samples_processed_error_threshold'?: number;
 }
 
 export type ExemplarTraceIdDestination = {
