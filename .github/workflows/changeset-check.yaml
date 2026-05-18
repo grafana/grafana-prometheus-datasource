@@ -56,3 +56,21 @@ jobs:
           fi
           echo "Found changeset file(s):"
           echo "$added_files"
+
+      - name: Verify promlib changesets are patch-only
+        if: steps.skip-bot.outputs.skip != 'true' && steps.skip-label.outputs.skip != 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          added_files=$(git diff --name-only --diff-filter=A "$BASE_SHA" "$HEAD_SHA" -- '.changeset/*.md' \
+            ':(exclude).changeset/README.md')
+          for file in $added_files; do
+            if grep -qiE '"[^"]*promlib[^"]*":[[:space:]]*(minor|major)' "$file"; then
+              echo "::error::Changeset file '$file' contains a non-patch bump for promlib. Only 'patch' is allowed."
+              exit 1
+            fi
+          done
+          echo "All promlib changeset entries are patch-only (or no promlib entries found)."

@@ -21,11 +21,15 @@ const STUBS = {
     stubDir: path.join('packages', 'grafana-prometheus-datasource'),
     targetDir: '.',
     syncVersion: true,
+    deleteStubChangelog: false,
   },
   [PROMLIB]: {
     stubDir: path.join('packages', 'promlib'),
     targetDir: path.join('pkg', 'promlib'),
     syncVersion: false,
+    // pkg/promlib is the canonical location; remove the stub copy so the
+    // changelog only exists in one place.
+    deleteStubChangelog: true,
   },
 };
 
