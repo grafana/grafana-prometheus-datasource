@@ -103,5 +103,26 @@ describe('PromSettings', () => {
       expect(screen.getByTestId('prom-settings-max-samples-processed-warning-threshold')).toHaveValue('123');
       expect(screen.getByTestId('prom-settings-max-samples-processed-error-threshold')).toHaveValue('456');
     });
+
+    it('should show threshold conflict warning when matching keys are set in custom query parameters', () => {
+      const options = createDefaultConfigOptions();
+      options.jsonData.customQueryParameters =
+        'max_samples_processed_warning_threshold=5&max_samples_processed_error_threshold=7';
+      options.jsonData.max_samples_processed_warning_threshold = 123;
+      options.jsonData.max_samples_processed_error_threshold = 456;
+
+      render(<PromSettings onOptionsChange={() => {}} options={options} showAmpQueryThresholds />);
+
+      expect(screen.getByText('Query threshold already set in custom query parameters')).toBeInTheDocument();
+    });
+
+    it('should not show threshold conflict warning without threshold input values', () => {
+      const options = createDefaultConfigOptions();
+      options.jsonData.customQueryParameters = 'max_samples_processed_warning_threshold=5';
+
+      render(<PromSettings onOptionsChange={() => {}} options={options} showAmpQueryThresholds />);
+
+      expect(screen.queryByText('Query threshold already set in custom query parameters')).not.toBeInTheDocument();
+    });
   });
 });

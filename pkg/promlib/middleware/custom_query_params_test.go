@@ -203,8 +203,8 @@ func TestCustomQueryParametersMiddleware(t *testing.T) {
 			CustomOptions: map[string]any{
 				grafanaDataKey: map[string]any{
 					customQueryParametersKey: "custom=value",
-					warningThresholdKey: float64(0),
-					errorThresholdKey:   float64(0),
+					warningThresholdKey:      float64(0),
+					errorThresholdKey:        float64(0),
 				},
 			},
 		}, finalRoundTripper)
@@ -232,7 +232,7 @@ func TestCustomQueryParametersMiddleware(t *testing.T) {
 			CustomOptions: map[string]any{
 				grafanaDataKey: map[string]any{
 					customQueryParametersKey: "timeout=30s",
-					warningThresholdKey: float64(42),
+					warningThresholdKey:      float64(42),
 				},
 			},
 		}, finalRoundTripper)
@@ -251,6 +251,33 @@ func TestCustomQueryParametersMiddleware(t *testing.T) {
 		require.Equal(t, "30s", q.Get("timeout"))
 		require.Equal(t, "42", q.Get(warningThresholdKey))
 		require.Empty(t, q.Get(errorThresholdKey))
+	})
+
+	t.Run("With explicit threshold params in custom query parameters should prefer explicit values", func(t *testing.T) {
+		mw := CustomQueryParameters(backend.NewLoggerWith("logger", "test"))
+		rt := mw.CreateMiddleware(httpclient.Options{
+			CustomOptions: map[string]any{
+				grafanaDataKey: map[string]any{
+					customQueryParametersKey: "max_samples_processed_warning_threshold=9&max_samples_processed_error_threshold=17",
+					warningThresholdKey:      float64(42),
+					errorThresholdKey:        float64(88),
+				},
+			},
+		}, finalRoundTripper)
+		require.NotNil(t, rt)
+
+		req, err := http.NewRequest(http.MethodGet, "http://test.com/query", nil)
+		require.NoError(t, err)
+		res, err := rt.RoundTrip(req)
+		require.NoError(t, err)
+		require.NotNil(t, res)
+		if res.Body != nil {
+			require.NoError(t, res.Body.Close())
+		}
+
+		q := req.URL.Query()
+		require.Equal(t, "9", q.Get(warningThresholdKey))
+		require.Equal(t, "17", q.Get(errorThresholdKey))
 	})
 
 }

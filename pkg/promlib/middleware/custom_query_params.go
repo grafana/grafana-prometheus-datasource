@@ -14,8 +14,8 @@ const (
 	customQueryParametersMiddlewareName = "prom-custom-query-parameters"
 	customQueryParametersKey            = "customQueryParameters"
 	grafanaDataKey                      = "grafanaData"
-	warningThresholdKey           		= "max_samples_processed_warning_threshold"
-	errorThresholdKey              		= "max_samples_processed_error_threshold"
+	warningThresholdKey                 = "max_samples_processed_warning_threshold"
+	errorThresholdKey                   = "max_samples_processed_error_threshold"
 )
 
 func CustomQueryParameters(logger log.Logger) sdkhttpclient.Middleware {
@@ -52,10 +52,11 @@ func CustomQueryParameters(logger log.Logger) sdkhttpclient.Middleware {
 			values = parsed
 		}
 
-		if warnVal > 0 {
+		// Respect explicitly configured custom query parameters over threshold fields.
+		if warnVal > 0 && !values.Has(warningThresholdKey) {
 			values.Set(warningThresholdKey, strconv.FormatFloat(warnVal, 'f', -1, 64))
 		}
-		if errVal > 0 {
+		if errVal > 0 && !values.Has(errorThresholdKey) {
 			values.Set(errorThresholdKey, strconv.FormatFloat(errVal, 'f', -1, 64))
 		}
 
