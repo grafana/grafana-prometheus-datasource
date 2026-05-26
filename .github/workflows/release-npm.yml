@@ -23,8 +23,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           ACTOR: ${{ github.actor }}
+          REPO: ${{ github.repository }}
         run: |
-          PERMISSION=$(gh api "repos/${{ github.repository }}/collaborators/${ACTOR}/permission" --jq '.permission')
+          PERMISSION=$(gh api "repos/${REPO}/collaborators/${ACTOR}/permission" --jq '.permission')
           if [[ "$PERMISSION" != "admin" ]]; then
             echo "::error::Only repository admins can run this workflow. Your permission level: ${PERMISSION}"
             exit 1
@@ -53,11 +54,11 @@ jobs:
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version-file: '.nvmrc'
-          cache: 'yarn'
+          package-manager-cache: false # Disable cache!
 
       # Trusted Publishing is only available in npm v11.5.1 and later
       - name: Update npm
-        run: npm install -g npm@^11.5.1
+        run: npm install -g npm@11.15.0
 
       - name: Configure npm registry
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
@@ -85,7 +86,9 @@ jobs:
       - name: Publish to NPM
         if: inputs.dry-run != true
         working-directory: packages/grafana-prometheus
-        run: npm publish --access public --tag ${{ steps.npm_tag.outputs.tag }}
+        env:
+          NPM_TAG: ${{ steps.npm_tag.outputs.tag }}
+        run: npm publish --access public --tag "$NPM_TAG"
 
       - name: Dry run summary
         if: inputs.dry-run == true
