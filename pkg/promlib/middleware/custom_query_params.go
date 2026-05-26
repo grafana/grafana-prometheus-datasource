@@ -54,11 +54,11 @@ func CustomQueryParameters(logger log.Logger) sdkhttpclient.Middleware {
 			values = parsed
 		}
 
-		// Respect explicitly configured custom query parameters over threshold fields.
-		if warnVal > 0 && !values.Has(warningThresholdKey) {
+		// Threshold fields are explicit settings and override matching custom query parameters.
+		if warnVal > 0 {
 			values.Set(warningThresholdKey, strconv.FormatFloat(warnVal, 'f', -1, 64))
 		}
-		if errVal > 0 && !values.Has(errorThresholdKey) {
+		if errVal > 0 {
 			values.Set(errorThresholdKey, strconv.FormatFloat(errVal, 'f', -1, 64))
 		}
 

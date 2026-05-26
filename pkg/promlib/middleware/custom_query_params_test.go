@@ -255,7 +255,7 @@ func TestCustomQueryParametersMiddleware(t *testing.T) {
 		require.Empty(t, q.Get(errorThresholdKey))
 	})
 
-	t.Run("With explicit threshold params in custom query parameters should prefer explicit values", func(t *testing.T) {
+	t.Run("With explicit threshold fields and matching custom query parameters should prefer threshold fields", func(t *testing.T) {
 		mw := CustomQueryParameters(backend.NewLoggerWith("logger", "test"))
 		rt := mw.CreateMiddleware(httpclient.Options{
 			CustomOptions: map[string]any{
@@ -278,8 +278,8 @@ func TestCustomQueryParametersMiddleware(t *testing.T) {
 		}
 
 		q := req.URL.Query()
-		require.Equal(t, "9", q.Get(warningThresholdKey))
-		require.Equal(t, "17", q.Get(errorThresholdKey))
+		require.Equal(t, "42", q.Get(warningThresholdKey))
+		require.Equal(t, "88", q.Get(errorThresholdKey))
 	})
 
 }

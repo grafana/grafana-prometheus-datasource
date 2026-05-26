@@ -628,7 +628,7 @@ export const PromSettings = (props: Props) => {
                   >
                     <Trans i18nKey="grafana-prometheus.configuration.prom-settings.text-query-threshold-overridden-warning">
                       Remove duplicate threshold keys from custom query parameters or clear the threshold inputs here.
-                      The explicit custom query parameter values take precedence.
+                      The threshold field values take precedence.
                     </Trans>
                   </Alert>
                 )}
@@ -678,19 +678,11 @@ export const PromSettings = (props: Props) => {
                         });
                       }}
                       onBlur={(e) =>
-                        validateInput(
-                          e.currentTarget.value,
-                          NON_NEGATIVE_INTEGER_REGEX,
-                          warningThresholdError
-                        )
+                        validateInput(e.currentTarget.value, NON_NEGATIVE_INTEGER_REGEX, warningThresholdError)
                       }
                       data-testid="prom-settings-max-samples-processed-warning-threshold"
                     />
-                    {validateInput(
-                      maxSamplesWarningThreshold,
-                      NON_NEGATIVE_INTEGER_REGEX,
-                      warningThresholdError
-                    )}
+                    {validateInput(maxSamplesWarningThreshold, NON_NEGATIVE_INTEGER_REGEX, warningThresholdError)}
                   </>
                 </InlineField>
                 <InlineField
@@ -739,19 +731,11 @@ export const PromSettings = (props: Props) => {
                         });
                       }}
                       onBlur={(e) =>
-                        validateInput(
-                          e.currentTarget.value,
-                          NON_NEGATIVE_INTEGER_REGEX,
-                          errorThresholdError
-                        )
+                        validateInput(e.currentTarget.value, NON_NEGATIVE_INTEGER_REGEX, errorThresholdError)
                       }
                       data-testid="prom-settings-max-samples-processed-error-threshold"
                     />
-                    {validateInput(
-                      maxSamplesErrorThreshold,
-                      NON_NEGATIVE_INTEGER_REGEX,
-                      errorThresholdError
-                    )}
+                    {validateInput(maxSamplesErrorThreshold, NON_NEGATIVE_INTEGER_REGEX, errorThresholdError)}
                   </>
                 </InlineField>
               </>
@@ -820,15 +804,15 @@ export const getValueFromEventItem = (eventItem: SyntheticEvent<HTMLInputElement
 
 const onChangeHandler =
   (key: keyof PromOptions, options: Props['options'], onOptionsChange: Props['onOptionsChange']) =>
-    (eventItem: SyntheticEvent<HTMLInputElement> | SelectableValue<string>) => {
-      onOptionsChange({
-        ...options,
-        jsonData: {
-          ...options.jsonData,
-          [key]: getValueFromEventItem(eventItem),
-        },
-      });
-    };
+  (eventItem: SyntheticEvent<HTMLInputElement> | SelectableValue<string>) => {
+    onOptionsChange({
+      ...options,
+      jsonData: {
+        ...options.jsonData,
+        [key]: getValueFromEventItem(eventItem),
+      },
+    });
+  };
 
 function getCustomQueryThresholdParams(customQueryParameters?: string): URLSearchParams {
   if (!customQueryParameters?.trim()) {
