@@ -15,7 +15,7 @@
     "lint:fix": "eslint --cache --fix . && prettier --write --list-different . && yarn workspace @grafana/prometheus lint:fix",
     "e2e": "playwright test",
     "server": "docker compose up --build",
-    "sign": "yarn dlx @grafana/sign-plugin@latest",
+    "sign": "yarn dlx @grafana/sign-plugin@3.2.2",
     "changeset": "node scripts/add-changeset.js",
     "changeset:version": "node scripts/version-changeset.js",
     "i18n-extract": "i18next-cli extract --sync-primary"
@@ -61,7 +61,6 @@
     "replace-in-file-webpack-plugin": "1.0.6",
     "sass": "1.99.0",
     "sass-loader": "16.0.7",
-    "semver": "7.7.4",
     "style-loader": "4.0.0",
     "swc-loader": "0.2.7",
     "terser-webpack-plugin": "5.4.0",
