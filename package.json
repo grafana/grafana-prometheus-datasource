@@ -4,7 +4,7 @@
   "workspaces": [
     "packages/*"
   ],
-  "packageManager": "yarn@4.14.1",
+  "packageManager": "yarn@4.15.0",
   "scripts": {
     "build": "webpack -c ./webpack.config.ts --env production",
     "dev": "webpack -w -c ./webpack.config.ts --env development",
@@ -15,7 +15,7 @@
     "lint:fix": "eslint --cache --fix . && prettier --write --list-different . && yarn workspace @grafana/prometheus lint:fix",
     "e2e": "playwright test",
     "server": "docker compose up --build",
-    "sign": "npx --yes @grafana/sign-plugin@latest",
+    "sign": "yarn dlx @grafana/sign-plugin@latest",
     "changeset": "node scripts/add-changeset.js",
     "changeset:version": "node scripts/version-changeset.js",
     "i18n-extract": "i18next-cli extract --sync-primary"
@@ -79,7 +79,7 @@
     "@types/react-dom": "18.3.7"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=24.5.0"
   },
   "dependencies": {
     "@emotion/css": "11.10.6",
