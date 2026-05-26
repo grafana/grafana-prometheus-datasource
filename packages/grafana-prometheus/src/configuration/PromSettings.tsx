@@ -37,8 +37,8 @@ type Props = Pick<DataSourcePluginOptionsEditorProps<PromOptions>, 'options' | '
   hidePrometheusTypeVersion?: boolean;
   /** Hide the Exemplars settings section */
   hideExemplars?: boolean;
-  /** Show Amazon Managed Service for Prometheus query-threshold fields */
-  showAmpQueryThresholds?: boolean;
+  /** Show fields to configure query samples processed thresholds */
+  showQuerySamplesProcessedThresholdFields?: boolean;
 };
 
 const httpOptions = [
@@ -84,7 +84,7 @@ const getOptionsWithDefaults = (options: DataSourceSettings<PromOptions>) => {
 export const PromSettings = (props: Props) => {
   const theme = useTheme2();
   const styles = overhaulStyles(theme);
-  const { onOptionsChange, hidePrometheusTypeVersion, hideExemplars, showAmpQueryThresholds } = props;
+  const { onOptionsChange, hidePrometheusTypeVersion, hideExemplars, showQuerySamplesProcessedThresholdFields } = props;
 
   const editorOptions = [
     {
@@ -616,7 +616,7 @@ export const PromSettings = (props: Props) => {
                 {validateInput(seriesLimit, NON_NEGATIVE_INTEGER_REGEX, seriesLimitError)}
               </>
             </InlineField>
-            {showAmpQueryThresholds && (
+            {showQuerySamplesProcessedThresholdFields && (
               <>
                 {(hasWarningThresholdConflict || hasErrorThresholdConflict) && (
                   <Alert
@@ -655,6 +655,10 @@ export const PromSettings = (props: Props) => {
                       className="width-20"
                       value={maxSamplesWarningThreshold}
                       spellCheck={false}
+                      aria-label={t(
+                        'grafana-prometheus.configuration.prom-settings.aria-label-query-warning-threshold',
+                        'Query warning threshold'
+                      )}
                       type="text"
                       inputMode="numeric"
                       placeholder={t(
@@ -713,6 +717,10 @@ export const PromSettings = (props: Props) => {
                       value={maxSamplesErrorThreshold}
                       spellCheck={false}
                       type="text"
+                      aria-label={t(
+                        'grafana-prometheus.configuration.prom-settings.aria-label-query-error-threshold',
+                        'Query error threshold'
+                      )}
                       inputMode="numeric"
                       placeholder={t(
                         'grafana-prometheus.configuration.prom-settings.placeholder-query-error-threshold',
