@@ -16,6 +16,8 @@ const (
 	grafanaDataKey                      = "grafanaData"
 	warningThresholdKey                 = "max_samples_processed_warning_threshold"
 	errorThresholdKey                   = "max_samples_processed_error_threshold"
+	maxSamplesProcessedWarningThresholdKey = "maxSamplesProcessedWarningThreshold"
+	maxSamplesProcessedErrorThresholdKey   = "maxSamplesProcessedErrorThreshold"
 )
 
 func CustomQueryParameters(logger log.Logger) sdkhttpclient.Middleware {
@@ -35,8 +37,8 @@ func CustomQueryParameters(logger log.Logger) sdkhttpclient.Middleware {
 			customQueryParams = v
 		}
 
-		warnVal, _ := data[warningThresholdKey].(float64)
-		errVal, _ := data[errorThresholdKey].(float64)
+		warnVal, _ := data[maxSamplesProcessedWarningThresholdKey].(float64)
+		errVal, _ := data[maxSamplesProcessedErrorThresholdKey].(float64)
 
 		if customQueryParams == "" && warnVal == 0 && errVal == 0 {
 			return next

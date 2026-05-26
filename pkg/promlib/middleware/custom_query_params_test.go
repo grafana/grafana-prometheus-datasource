@@ -15,6 +15,8 @@ func TestCustomQueryParametersMiddleware(t *testing.T) {
 	require.Equal(t, "customQueryParameters", customQueryParametersKey)
 	require.Equal(t, "max_samples_processed_warning_threshold", warningThresholdKey)
 	require.Equal(t, "max_samples_processed_error_threshold", errorThresholdKey)
+	require.Equal(t, "maxSamplesProcessedWarningThreshold", maxSamplesProcessedWarningThresholdKey)
+	require.Equal(t, "maxSamplesProcessedErrorThreshold", maxSamplesProcessedErrorThresholdKey)
 
 	finalRoundTripper := httpclient.RoundTripperFunc(func(req *http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: http.StatusOK}, nil
@@ -175,8 +177,8 @@ func TestCustomQueryParametersMiddleware(t *testing.T) {
 		rt := mw.CreateMiddleware(httpclient.Options{
 			CustomOptions: map[string]any{
 				grafanaDataKey: map[string]any{
-					warningThresholdKey: float64(500),
-					errorThresholdKey:   float64(1000),
+					maxSamplesProcessedWarningThresholdKey: float64(500),
+					maxSamplesProcessedErrorThresholdKey:   float64(1000),
 				},
 			},
 		}, finalRoundTripper)
@@ -202,9 +204,9 @@ func TestCustomQueryParametersMiddleware(t *testing.T) {
 		rt := mw.CreateMiddleware(httpclient.Options{
 			CustomOptions: map[string]any{
 				grafanaDataKey: map[string]any{
-					customQueryParametersKey: "custom=value",
-					warningThresholdKey:      float64(0),
-					errorThresholdKey:        float64(0),
+					customQueryParametersKey:               "custom=value",
+					maxSamplesProcessedWarningThresholdKey: float64(0),
+					maxSamplesProcessedErrorThresholdKey:   float64(0),
 				},
 			},
 		}, finalRoundTripper)
@@ -231,8 +233,8 @@ func TestCustomQueryParametersMiddleware(t *testing.T) {
 		rt := mw.CreateMiddleware(httpclient.Options{
 			CustomOptions: map[string]any{
 				grafanaDataKey: map[string]any{
-					customQueryParametersKey: "timeout=30s",
-					warningThresholdKey:      float64(42),
+					customQueryParametersKey:               "timeout=30s",
+					maxSamplesProcessedWarningThresholdKey: float64(42),
 				},
 			},
 		}, finalRoundTripper)
@@ -258,9 +260,9 @@ func TestCustomQueryParametersMiddleware(t *testing.T) {
 		rt := mw.CreateMiddleware(httpclient.Options{
 			CustomOptions: map[string]any{
 				grafanaDataKey: map[string]any{
-					customQueryParametersKey: "max_samples_processed_warning_threshold=9&max_samples_processed_error_threshold=17",
-					warningThresholdKey:      float64(42),
-					errorThresholdKey:        float64(88),
+					customQueryParametersKey:               "max_samples_processed_warning_threshold=9&max_samples_processed_error_threshold=17",
+					maxSamplesProcessedWarningThresholdKey: float64(42),
+					maxSamplesProcessedErrorThresholdKey:   float64(88),
 				},
 			},
 		}, finalRoundTripper)

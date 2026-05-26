@@ -109,11 +109,11 @@ export const PromSettings = (props: Props) => {
   );
 
   const [maxSamplesWarningThreshold, setMaxSamplesWarningThreshold] = useState<string>(
-    optionsWithDefaults.jsonData['max_samples_processed_warning_threshold']?.toString() ?? ''
+    optionsWithDefaults.jsonData.maxSamplesProcessedWarningThreshold?.toString() ?? ''
   );
 
   const [maxSamplesErrorThreshold, setMaxSamplesErrorThreshold] = useState<string>(
-    optionsWithDefaults.jsonData['max_samples_processed_error_threshold']?.toString() ?? ''
+    optionsWithDefaults.jsonData.maxSamplesProcessedErrorThreshold?.toString() ?? ''
   );
 
   const customQueryThresholdParams = getCustomQueryThresholdParams(optionsWithDefaults.jsonData.customQueryParameters);
@@ -669,7 +669,7 @@ export const PromSettings = (props: Props) => {
                           ...optionsWithDefaults,
                           jsonData: {
                             ...optionsWithDefaults.jsonData,
-                            max_samples_processed_warning_threshold: parsedValue,
+                            maxSamplesProcessedWarningThreshold: parsedValue,
                           },
                         });
                       }}
@@ -726,7 +726,7 @@ export const PromSettings = (props: Props) => {
                           ...optionsWithDefaults,
                           jsonData: {
                             ...optionsWithDefaults.jsonData,
-                            max_samples_processed_error_threshold: parsedValue,
+                            maxSamplesProcessedErrorThreshold: parsedValue,
                           },
                         });
                       }}

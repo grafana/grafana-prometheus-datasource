@@ -93,10 +93,10 @@ describe('PromSettings', () => {
       expect(screen.getByText('Query error threshold')).toBeInTheDocument();
     });
 
-    it('should initialize thresholds from snake_case keys', () => {
+    it('should initialize thresholds from camelCase jsonData keys', () => {
       const options = createDefaultConfigOptions();
-      options.jsonData.max_samples_processed_warning_threshold = 123;
-      options.jsonData.max_samples_processed_error_threshold = 456;
+      options.jsonData.maxSamplesProcessedWarningThreshold = 123;
+      options.jsonData.maxSamplesProcessedErrorThreshold = 456;
 
       render(<PromSettings onOptionsChange={() => {}} options={options} showAmpQueryThresholds />);
 
@@ -108,8 +108,8 @@ describe('PromSettings', () => {
       const options = createDefaultConfigOptions();
       options.jsonData.customQueryParameters =
         'max_samples_processed_warning_threshold=5&max_samples_processed_error_threshold=7';
-      options.jsonData.max_samples_processed_warning_threshold = 123;
-      options.jsonData.max_samples_processed_error_threshold = 456;
+      options.jsonData.maxSamplesProcessedWarningThreshold = 123;
+      options.jsonData.maxSamplesProcessedErrorThreshold = 456;
 
       render(<PromSettings onOptionsChange={() => {}} options={options} showAmpQueryThresholds />);
 
