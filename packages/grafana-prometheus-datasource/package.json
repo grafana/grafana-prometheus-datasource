@@ -2,5 +2,8 @@
   "name": "grafana-prometheus-datasource",
   "version": "13.1.1",
   "packageManager": "yarn@4.15.0",
-  "private": true
+  "private": true,
+  "engines": {
+    "node": ">=24"
+  }
 }
