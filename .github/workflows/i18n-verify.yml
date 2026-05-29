@@ -1,8 +1,5 @@
 name: Verify i18n markup has been committed
 
-permissions:
-  contents: read
-
 on:
   pull_request:
   push:
@@ -11,4 +8,6 @@ on:
 
 jobs:
   verify-i18n:
+    permissions:
+      contents: read
     uses: grafana/grafana-github-actions/.github/workflows/verify-i18n.yml@main

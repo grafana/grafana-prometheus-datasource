@@ -1,14 +1,13 @@
 name: Changeset check
 
-permissions:
-  contents: read
-
 on:
   pull_request:
     types: [opened, synchronize, reopened, labeled, unlabeled]
 
 jobs:
   check-changeset:
+    permissions:
+      contents: read
     name: Verify changeset
     runs-on: ubuntu-latest
     steps:
