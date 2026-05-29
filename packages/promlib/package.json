@@ -2,5 +2,8 @@
   "name": "promlib",
   "version": "0.0.12",
   "packageManager": "yarn@4.15.0",
-  "private": true
+  "private": true,
+  "engines": {
+    "node": ">=24"
+  }
 }
