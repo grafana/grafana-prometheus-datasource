@@ -153,15 +153,7 @@
             "expr"
           ],
           "type": "object"
-        },
-        "examples": [
-          {
-            "name": "simple health check",
-            "saveModel": {
-              "expr": "1+1"
-            }
-          }
-        ]
+        }
       }
     }
   ]
