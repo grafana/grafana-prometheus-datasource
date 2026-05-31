@@ -1,5 +1,6 @@
 import { regexifyLabelValuesQueryString } from '../parsingUtils';
 import { type QueryBuilderLabelFilter } from '../shared/types';
+import { utf8Support } from './../../utf8_support';
 
 const formatPrometheusLabelFiltersToString = (
   queryString: string,
@@ -12,7 +13,7 @@ const formatPrometheusLabelFiltersToString = (
 
 export const formatPrometheusLabelFilters = (labelsFilters: QueryBuilderLabelFilter[]): string[] => {
   return labelsFilters.map((label) => {
-    return `,${label.label}="${label.value}"`;
+    return `,${utf8Support(label.label)}="${label.value}"`;
   });
 };
 
