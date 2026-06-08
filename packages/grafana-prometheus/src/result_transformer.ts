@@ -385,9 +385,19 @@ function mergeHeatmapFrames(frames: DataFrame[]): DataFrame[] {
     };
   });
 
+  const firstValueField = frames[0].fields.find((field) => field.type === FieldType.number);
+  const { le, __name__, ...nonLeLabels } = firstValueField?.labels ?? {};
+  const nonLeEntries = Object.entries(nonLeLabels);
+  let frameName: string | undefined = frames[0].name;
+  if (nonLeEntries.length > 0) {
+    const labelStr = nonLeEntries.map(([k, v]) => `${k}="${v}"`).join(', ');
+    frameName = __name__ ? `${__name__}{${labelStr}}` : `{${labelStr}}`;
+  }
+
   return [
     {
       ...frames[0],
+      name: frameName,
       meta: {
         ...frames[0].meta,
         type: DataFrameType.HeatmapRows,
