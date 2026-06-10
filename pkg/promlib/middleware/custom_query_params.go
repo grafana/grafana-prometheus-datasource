@@ -3,6 +3,7 @@ package middleware
 import (
 	"net/http"
 	"net/url"
+	"strconv"
 
 	sdkhttpclient "github.com/grafana/grafana-plugin-sdk-go/backend/httpclient"
 
@@ -13,6 +14,10 @@ const (
 	customQueryParametersMiddlewareName = "prom-custom-query-parameters"
 	customQueryParametersKey            = "customQueryParameters"
 	grafanaDataKey                      = "grafanaData"
+	warningThresholdKey                 = "max_samples_processed_warning_threshold"
+	errorThresholdKey                   = "max_samples_processed_error_threshold"
+	maxSamplesProcessedWarningThresholdKey = "maxSamplesProcessedWarningThreshold"
+	maxSamplesProcessedErrorThresholdKey   = "maxSamplesProcessedErrorThreshold"
 )
 
 func CustomQueryParameters(logger log.Logger) sdkhttpclient.Middleware {
@@ -26,20 +31,35 @@ func CustomQueryParameters(logger log.Logger) sdkhttpclient.Middleware {
 		if !ok {
 			return next
 		}
-		customQueryParamsVal, exists := data[customQueryParametersKey]
-		if !exists {
+
+		customQueryParams := ""
+		if v, ok := data[customQueryParametersKey].(string); ok {
+			customQueryParams = v
+		}
+
+		warnVal, _ := data[maxSamplesProcessedWarningThresholdKey].(float64)
+		errVal, _ := data[maxSamplesProcessedErrorThresholdKey].(float64)
+
+		if customQueryParams == "" && warnVal == 0 && errVal == 0 {
 			return next
 		}
 
-		customQueryParams, ok := customQueryParamsVal.(string)
-		if !ok || customQueryParams == "" {
-			return next
+		values := url.Values{}
+		if customQueryParams != "" {
+			parsed, err := url.ParseQuery(customQueryParams)
+			if err != nil {
+				logger.Error("Failed to parse custom query parameters, skipping middleware", "error", err)
+				return next
+			}
+			values = parsed
 		}
 
-		values, err := url.ParseQuery(customQueryParams)
-		if err != nil {
-			logger.Error("Failed to parse custom query parameters, skipping middleware", "error", err)
-			return next
+		// Threshold fields are explicit settings and override matching custom query parameters.
+		if warnVal > 0 {
+			values.Set(warningThresholdKey, strconv.FormatFloat(warnVal, 'f', -1, 64))
+		}
+		if errVal > 0 {
+			values.Set(errorThresholdKey, strconv.FormatFloat(errVal, 'f', -1, 64))
 		}
 
 		return sdkhttpclient.RoundTripperFunc(func(req *http.Request) (*http.Response, error) {

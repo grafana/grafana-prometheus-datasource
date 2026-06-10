@@ -70,5 +70,53 @@ describe('PromSettings', () => {
       render(<PromSettings onOptionsChange={() => {}} options={options} />);
       expect(screen.getByText('Use series endpoint')).toBeInTheDocument();
     });
+
+    it('should hide query samples processed threshold fields by default', () => {
+      const options = defaultProps;
+
+      render(<PromSettings onOptionsChange={() => {}} options={options} />);
+      expect(screen.queryByLabelText('Query warning threshold')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Query error threshold')).not.toBeInTheDocument();
+    });
+
+    it('should show query samples processed threshold fields when showQuerySamplesProcessedThresholdFields prop is enabled', () => {
+      const options = defaultProps;
+
+      render(<PromSettings onOptionsChange={() => {}} options={options} showQuerySamplesProcessedThresholdFields />);
+      expect(screen.getByLabelText('Query warning threshold')).toBeInTheDocument();
+      expect(screen.getByLabelText('Query error threshold')).toBeInTheDocument();
+    });
+
+    it('should initialize query samples processed threshold fields from options', () => {
+      const options = createDefaultConfigOptions();
+      options.jsonData.maxSamplesProcessedWarningThreshold = 123;
+      options.jsonData.maxSamplesProcessedErrorThreshold = 456;
+
+      render(<PromSettings onOptionsChange={() => {}} options={options} showQuerySamplesProcessedThresholdFields />);
+
+      expect(screen.getByLabelText('Query warning threshold')).toHaveValue('123');
+      expect(screen.getByLabelText('Query error threshold')).toHaveValue('456');
+    });
+
+    it('should show query samples processed threshold conflict warning when matching keys are set in custom query parameters', () => {
+      const options = createDefaultConfigOptions();
+      options.jsonData.customQueryParameters =
+        'max_samples_processed_warning_threshold=5&max_samples_processed_error_threshold=7';
+      options.jsonData.maxSamplesProcessedWarningThreshold = 123;
+      options.jsonData.maxSamplesProcessedErrorThreshold = 456;
+
+      render(<PromSettings onOptionsChange={() => {}} options={options} showQuerySamplesProcessedThresholdFields />);
+
+      expect(screen.getByText('Query threshold already set in custom query parameters')).toBeInTheDocument();
+    });
+
+    it('should not show query samples processed threshold conflict warning when it is set as a custom query parameter and not set explicitly', () => {
+      const options = createDefaultConfigOptions();
+      options.jsonData.customQueryParameters = 'max_samples_processed_warning_threshold=5';
+
+      render(<PromSettings onOptionsChange={() => {}} options={options} showQuerySamplesProcessedThresholdFields />);
+
+      expect(screen.queryByText('Query threshold already set in custom query parameters')).not.toBeInTheDocument();
+    });
   });
 });
