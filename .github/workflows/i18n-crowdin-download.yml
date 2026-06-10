@@ -3,7 +3,7 @@ name: Crowdin Download Action
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 0 * * *"
+    - cron: '0 0 * * *'
 
 jobs:
   download-sources-from-crowdin:
@@ -25,14 +25,14 @@ jobs:
         id: vault-secrets
         uses: grafana/shared-workflows/actions/get-vault-secrets@main
         with:
-            # Vault secret paths:
-            # - ci/repo/grafana/grafana-prometheus-datasource/grafana-frontend-crowdin-token
-            repo_secrets: |
-                CROWDIN_TOKEN=grafana-frontend-crowdin-token:access_token
+          # Vault secret paths:
+          # - ci/repo/grafana/grafana-prometheus-datasource/grafana-frontend-crowdin-token
+          repo_secrets: |
+            CROWDIN_TOKEN=grafana-frontend-crowdin-token:access_token
       - name: Download from Crowdin
         uses: grafana/grafana-github-actions/crowdin-download@main
         with:
-          crowdin_token: ${{ env.CROWDIN_TOKEN }}
+          crowdin_token: ${{ fromJSON(steps.vault-secrets.outputs.secrets).CROWDIN_TOKEN }}
           crowdin_project_id: 54
           pr_labels: 'area/i18n, no-changelog'
           github_repo_token: ${{ steps.get-github-app-token.outputs.token }}
