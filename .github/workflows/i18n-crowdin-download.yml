@@ -7,7 +7,6 @@ on:
 
 jobs:
   download-sources-from-crowdin:
-    if: github.repository == 'grafana/grafana-prometheus-datasource'
     runs-on: ubuntu-x64
     permissions:
       contents: read
@@ -19,14 +18,9 @@ jobs:
           persist-credentials: false
       - name: Get GitHub App token
         id: get-github-app-token
-        uses: grafana/shared-workflows/actions/create-github-app-token@46f48da11e78ebdba7a8747ae456b11062fac83e # create-github-app-token/v0.3.1
-        with:
-          github_app: grafana-oss-big-tent
-      - name: Get GitHub App token
-        id: get-github-approver-token
         uses: grafana/shared-workflows/actions/create-github-app-token@259ba21cb3ff07724f331e26d926d655d24b317b # create-github-app-token/v0.2.3
         with:
-          github_app: grafana-oss-big-tent
+          github_app: grafana-pr-automation
       - name: 'Get vault secrets'
         id: vault-secrets
         uses: grafana/shared-workflows/actions/get-vault-secrets@main
@@ -42,5 +36,3 @@ jobs:
           crowdin_project_id: 54
           pr_labels: 'area/i18n, no-changelog'
           github_repo_token: ${{ steps.get-github-app-token.outputs.token }}
-          github_pr_approver_token: ${{ steps.get-github-approver-token.outputs.token }}
-          en_paths: packages/grafana-prometheus/src/locales/en-US/grafana-prometheus.json

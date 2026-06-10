@@ -10,7 +10,6 @@ on:
 
 jobs:
   upload-sources-to-crowdin:
-    if: github.repository == 'grafana/grafana-prometheus-datasource'
     runs-on: ubuntu-x64
     permissions:
       contents: read

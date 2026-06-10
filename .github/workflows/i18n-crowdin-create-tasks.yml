@@ -2,7 +2,6 @@ name: Crowdin automatic task management
 
 on:
   workflow_dispatch:
-  # once a month on the first day of the month at midnight
   schedule:
     - cron: '0 0 1 * *'
 
@@ -18,11 +17,11 @@ jobs:
         uses: grafana/shared-workflows/actions/get-vault-secrets@main
         with:
           # Vault secret paths:
-          # - ci/repo/grafana/grafana/grafana-frontend-crowdin-token
+          # - ci/repo/grafana/grafana-prometheus-datasource/grafana-frontend-crowdin-token
           repo_secrets: |
             CROWDIN_TOKEN=grafana-frontend-crowdin-token:access_token
       - name: Create tasks in Crowdin
         uses: grafana/grafana-github-actions/crowdin-create-tasks@main
         with:
           crowdin_token: ${{ fromJSON(steps.vault-secrets.outputs.secrets).CROWDIN_TOKEN }}
-          crowdin_project_id: 5
+          crowdin_project_id: 54
