@@ -74,7 +74,9 @@ The workflow will build the library and print a summary of what _would_ be publi
 
    > **Note:** Changesets are added in feature PRs via `yarn changeset`. Make sure every feature PR that should appear in the release includes one — without pending changesets there is nothing to version.
 
-3. **Bump the version** in `packages/grafana-prometheus/package.json` and merge to `main`.
+   > **Note:** If a PR intentionally needs no changelog entry, add the `no-changelog` label to it so the changeset CI check passes.
+
+3. **Verify the bumped version** in `packages/grafana-prometheus/package.json` — no manual bump is needed when `changeset:version` succeeds.
    The npm dist-tag is derived automatically from the version string:
 
    | Version        | npm tag  |
