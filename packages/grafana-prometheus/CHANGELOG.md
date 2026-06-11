@@ -1,5 +1,9 @@
 # Changelog
 
+## 13.1.5
+
+🐛 Add max samples processed warning/error thresholds to the data source advanced settings, appended as query parameters on outbound Prometheus requests.
+
 ## 13.1.4
 
 🐛 Fix Type query option misalignment in the query editor options panel on Grafana 13.1.0+
