@@ -44,6 +44,9 @@ const metricNamesSearch = {
 // labelName will be shown as selected. So user would know what to type next
 const snippetMarker = '${1:}';
 
+// Maximum number of recent queries surfaced as history completions.
+const MAX_HISTORY_COMPLETIONS = 10;
+
 interface MetricFilterOptions {
   metricNames: string[];
   inputText: string;
@@ -132,7 +135,7 @@ function getAllHistoryCompletions(dataProvider: DataProvider): Completion[] {
   // NOTE: the typescript types are wrong. historyItem.query.expr can be undefined
   const allHistory = dataProvider.getHistory();
   // FIXME: find a better history-limit
-  return allHistory.slice(0, 10).map((expr) => ({
+  return allHistory.slice(0, MAX_HISTORY_COMPLETIONS).map((expr) => ({
     type: 'HISTORY',
     label: expr,
     insertText: expr,
