@@ -86,4 +86,53 @@ sum by (job) (
       ],
     });
   });
+
+  describe('interpolated queries (query !== interpolatedQuery)', () => {
+    test('traces interpolated errors back to the original query positions', () => {
+      // The original query holds a $variable; the interpolated version substitutes a
+      // real metric of a different length. Both are missing the closing brace, so the
+      // error text matches and the boundary must be reported against the ORIGINAL query
+      // (column 8, after "$metric") rather than the interpolated one (column 3, after "up").
+      const query = '$metric{job="grafana"';
+      const interpolatedQuery = 'up{job="grafana"';
+
+      expect(validateQuery(query, interpolatedQuery, [query], parser)).toEqual({
+        errors: [{ startLineNumber: 1, startColumn: 8, endLineNumber: 1, endColumn: 22, issue: '{job="grafana"' }],
+        warnings: [],
+      });
+    });
+
+    test('returns no errors when no interpolated error text matches the original query', () => {
+      // The interpolated error text ("{job=") has no counterpart in the original query,
+      // so the trace-back filter yields nothing and the error is dropped.
+      const query = 'rate($interval)';
+      const interpolatedQuery = 'rate(1m){job=';
+
+      expect(validateQuery(query, interpolatedQuery, [query], parser).errors).toEqual([]);
+    });
+
+    test('traces interpolated subquery warnings back to the original query', () => {
+      // The subquery sits before the $variable, so its node.from is identical in both
+      // strings and the warning trace-back (matched by node.from) resolves to it.
+      const query = 'rate(http_requests_total[5m:5m]) + $value';
+      const interpolatedQuery = 'rate(http_requests_total[5m:5m]) + 1';
+
+      expect(validateQuery(query, interpolatedQuery, [query], parser)).toEqual({
+        errors: [],
+        warnings: [
+          { issue: warningTypes.SubqueryExpr, startColumn: 6, endColumn: 32, startLineNumber: 1, endLineNumber: 1 },
+        ],
+      });
+    });
+  });
+
+  test('drops boundaries whose node falls outside the provided multi-line query lines', () => {
+    // A genuinely invalid single-line query, but the caller supplies queryLines that do not
+    // cover the error node's offset. findIssueBoundary walks the (multi-line) lines, never
+    // finds one containing the node, and returns null, which is then filtered out.
+    const query = 'metric_name_with_open_brace{';
+    const mismatchedLines = ['a', 'b'];
+
+    expect(validateQuery(query, query, mismatchedLines, parser).errors).toEqual([]);
+  });
 });
