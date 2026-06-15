@@ -71,12 +71,7 @@ const createMockPosition = (column: number, lineNumber = 1): monacoTypes.Positio
   }) as monacoTypes.Position;
 
 const createMockDataProvider = (): DataProvider => {
-  return {
-    monacoSettings: {
-      setInputInRange: jest.fn(),
-      suggestionsIncomplete: false,
-    },
-  } as unknown as DataProvider;
+  return {} as unknown as DataProvider;
 };
 
 const createMockTimeRange = (): TimeRange => ({
@@ -98,7 +93,7 @@ describe('monaco-completion-provider', () => {
     // Reset mocks
     jest.clearAllMocks();
     mockGetCompletions.mockResolvedValue([]);
-    mockGetSituation.mockReturnValue({ type: 'METRIC_NAME' });
+    mockGetSituation.mockReturnValue({ type: 'EMPTY' });
 
     // Mock window.getSelection
     Object.defineProperty(window, 'getSelection', {
@@ -166,7 +161,7 @@ describe('monaco-completion-provider', () => {
       await (provider.provideCompletionItems as Function)(model, position);
 
       expect(mockGetCompletions).toHaveBeenCalledWith(
-        { type: 'METRIC_NAME' },
+        { type: 'EMPTY' },
         dataProvider,
         timeRange,
         'grafana',
@@ -184,7 +179,7 @@ describe('monaco-completion-provider', () => {
       await (provider.provideCompletionItems as Function)(model, position);
 
       expect(mockGetCompletions).toHaveBeenCalledWith(
-        { type: 'METRIC_NAME' },
+        { type: 'EMPTY' },
         dataProvider,
         timeRange,
         'go',
@@ -267,7 +262,7 @@ describe('monaco-completion-provider', () => {
       await (provider.provideCompletionItems as Function)(model, position);
 
       expect(mockGetCompletions).toHaveBeenCalledWith(
-        { type: 'METRIC_NAME' },
+        { type: 'EMPTY' },
         dataProvider,
         timeRange,
         'te',
@@ -290,7 +285,7 @@ describe('monaco-completion-provider', () => {
         await (provider.provideCompletionItems as Function)(model, position);
 
         expect(mockGetCompletions).toHaveBeenCalledWith(
-          { type: 'METRIC_NAME' },
+          { type: 'EMPTY' },
           dataProvider,
           timeRange,
           undefined, // No word at position after trigger char
@@ -337,17 +332,4 @@ describe('monaco-completion-provider', () => {
     });
   });
 
-  describe('data provider integration', () => {
-    it('should set input range on data provider', async () => {
-      const mockWord = { word: 'test', startColumn: 1, endColumn: 5 };
-      const model = createMockModel('test', mockWord);
-      const position = createMockPosition(5);
-
-      const { provider } = getCompletionProvider(monaco, dataProvider, timeRange);
-
-      await (provider.provideCompletionItems as Function)(model, position);
-
-      expect(dataProvider.monacoSettings.setInputInRange).toHaveBeenCalled();
-    });
-  });
 });

@@ -6,24 +6,6 @@ import { removeQuotesIfExist } from '../../../language_utils';
 import { type PromQuery } from '../../../types';
 import { escapeForUtf8Support, isValidLegacyName } from '../../../utf8_support';
 
-export const CODE_MODE_SUGGESTIONS_INCOMPLETE_EVENT = 'codeModeSuggestionsIncomplete';
-
-type SuggestionsIncompleteEvent = CustomEvent<{
-  limit: number;
-  datasourceUid: string;
-}>;
-
-export function isSuggestionsIncompleteEvent(e: Event): e is SuggestionsIncompleteEvent {
-  return (
-    e.type === CODE_MODE_SUGGESTIONS_INCOMPLETE_EVENT &&
-    'detail' in e &&
-    typeof e.detail === 'object' &&
-    e.detail !== null &&
-    'limit' in e.detail &&
-    'datasourceUid' in e.detail
-  );
-}
-
 interface Metric {
   name: string;
   help: string;
@@ -42,18 +24,10 @@ export class DataProvider {
 
   readonly queryLabelKeys: typeof this.languageProvider.queryLabelKeys;
   readonly queryLabelValues: typeof this.languageProvider.queryLabelValues;
-  /**
-   * The text that's been typed so far within the current {@link Monaco.Range | Range}.
-   *
-   * @remarks
-   * This is useful with fuzzy searching items to provide as Monaco autocomplete suggestions.
-   */
-  private inputInRange: string;
 
   constructor(params: DataProviderParams) {
     this.languageProvider = params.languageProvider;
     this.historyProvider = params.historyProvider;
-    this.inputInRange = '';
 
     this.queryLabelKeys = this.languageProvider.queryLabelKeys.bind(this.languageProvider);
     this.queryLabelValues = this.languageProvider.queryLabelValues.bind(this.languageProvider);
@@ -96,10 +70,6 @@ export class DataProvider {
     return this.historyProvider.map((h) => h.query.expr).filter(Boolean);
   }
 
-  getAllMetricNames(): string[] {
-    return this.languageProvider.retrieveMetrics();
-  }
-
   metricNamesToMetrics(metricNames: string[]): Metric[] {
     const metricsMetadata = this.languageProvider.retrieveMetricsMetadata();
     const result: Metric[] = metricNames.map((m) => {
@@ -113,16 +83,5 @@ export class DataProvider {
     });
 
     return result;
-  }
-
-  private setInputInRange(textInput: string): void {
-    this.inputInRange = textInput;
-  }
-
-  get monacoSettings() {
-    return {
-      inputInRange: this.inputInRange,
-      setInputInRange: this.setInputInRange.bind(this),
-    };
   }
 }
