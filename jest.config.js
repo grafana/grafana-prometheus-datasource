@@ -51,7 +51,20 @@ const pluginProject = {
   transformIgnorePatterns: [nodeModulesToTransform([...grafanaESModules, 'monaco-promql'])],
 };
 
-// Project 2: the repo-management scripts (node env, no DOM setup).
+// Project 2: the @grafana/prometheus library source under packages/grafana-prometheus.
+// Reuses the plugin project's swc + jsdom + module mappers; only the discovered paths differ.
+// Without this, the package's own unit tests are never run from the repo root. The package's
+// own jest.config.js reuses this project (looked up by displayName) to avoid config drift.
+const libraryProject = {
+  ...pluginProject,
+  displayName: 'library',
+  testMatch: [
+    '<rootDir>/packages/grafana-prometheus/src/**/__tests__/**/*.{js,jsx,ts,tsx}',
+    '<rootDir>/packages/grafana-prometheus/src/**/*.{spec,test,jest}.{js,jsx,ts,tsx}',
+  ],
+};
+
+// Project 3: the repo-management scripts (node env, no DOM setup).
 const scriptsProject = {
   displayName: 'scripts',
   rootDir: __dirname,
@@ -61,5 +74,5 @@ const scriptsProject = {
 };
 
 module.exports = {
-  projects: [pluginProject, scriptsProject],
+  projects: [pluginProject, libraryProject, scriptsProject],
 };
