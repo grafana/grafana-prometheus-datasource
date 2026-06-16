@@ -17,6 +17,10 @@ import { getCompletionProvider, getSuggestOptions } from './monaco-completion-pr
 import { placeHolderScopedVars, validateQuery } from './monaco-completion-provider/validation';
 import { language, languageConfiguration } from './promql';
 
+// How long (ms) the manual-trigger flag stays set after a Ctrl/Cmd+Space, so the
+// completion provider can distinguish an explicit request from typing-driven triggers.
+const MANUAL_TRIGGER_RESET_MS = 300;
+
 const options: monacoTypes.editor.IStandaloneEditorConstructionOptions = {
   codeLens: false,
   contextmenu: false,
@@ -200,7 +204,7 @@ const MonacoQueryField = (props: Props) => {
                 editor.trigger('keyboard', 'editor.action.triggerSuggest', {});
                 setTimeout(() => {
                   completionState.isManualTriggerRequested = false;
-                }, 300);
+                }, MANUAL_TRIGGER_RESET_MS);
               }
             }
           };
