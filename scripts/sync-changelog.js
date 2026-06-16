@@ -21,7 +21,7 @@ const STUBS = {
     stubDir: path.join('packages', 'grafana-prometheus-datasource'),
     targetDir: '.',
     syncVersion: true,
-    deleteStubChangelog: false,
+    deleteStubChangelog: true,
   },
   [PROMLIB]: {
     stubDir: path.join('packages', 'promlib'),
@@ -32,6 +32,26 @@ const STUBS = {
     deleteStubChangelog: true,
   },
 };
+
+// Merges a stub changelog (new version only) into an existing target changelog
+// (full history). New version sections from the stub are prepended after the
+// title header so history is never lost.
+function mergeChangelogs(stubContent, existingContent) {
+  const stubVersionIdx = stubContent.indexOf('\n## ');
+  if (stubVersionIdx < 0) {
+    return existingContent;
+  }
+  const newVersionBlock = stubContent.slice(stubVersionIdx + 1).trimEnd();
+
+  const existingVersionIdx = existingContent.indexOf('\n## ');
+  if (existingVersionIdx < 0) {
+    return stubContent;
+  }
+  const header = existingContent.slice(0, existingVersionIdx + 1);
+  const existingBlock = existingContent.slice(existingVersionIdx + 1).trimEnd();
+
+  return header + newVersionBlock + '\n\n' + existingBlock + '\n';
+}
 
 function syncChangelog(repoRoot, pkg = DATASOURCE) {
   const cfg = STUBS[pkg];
@@ -47,7 +67,16 @@ function syncChangelog(repoRoot, pkg = DATASOURCE) {
 
   if (fs.existsSync(stubChangelog)) {
     fs.mkdirSync(targetDir, { recursive: true });
-    fs.copyFileSync(stubChangelog, targetChangelog);
+    const stubContent = fs.readFileSync(stubChangelog, 'utf8');
+    if (fs.existsSync(targetChangelog)) {
+      const existing = fs.readFileSync(targetChangelog, 'utf8');
+      fs.writeFileSync(targetChangelog, mergeChangelogs(stubContent, existing));
+    } else {
+      fs.writeFileSync(targetChangelog, stubContent);
+    }
+    if (cfg.deleteStubChangelog) {
+      fs.rmSync(stubChangelog);
+    }
   }
 
   if (cfg.syncVersion) {
@@ -69,4 +98,4 @@ if (require.main === module) {
   syncChangelog(path.join(__dirname, '..'), arg);
 }
 
-module.exports = { syncChangelog, DATASOURCE, PROMLIB, STUBS };
+module.exports = { syncChangelog, mergeChangelogs, DATASOURCE, PROMLIB, STUBS };
