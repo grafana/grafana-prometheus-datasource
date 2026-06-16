@@ -200,7 +200,7 @@ describe('version-changeset / flattenChangelog', () => {
     return file;
   }
 
-  it('removes Major/Minor/Patch sub-headings and collapses blank lines between entries', () => {
+  it('removes Major/Minor/Patch sub-headings and separates entries with blank lines', () => {
     const file = writeChangelog(
       [
         '# @grafana/prometheus',
@@ -226,7 +226,18 @@ describe('version-changeset / flattenChangelog', () => {
 
     expect(changed).toBe(true);
     expect(fs.readFileSync(file, 'utf8')).toBe(
-      ['# @grafana/prometheus', '', '## 14.0.0', '', '🎉 Breaking change', '🚀 Add util', '🐛 Fix panel', ''].join('\n')
+      [
+        '# @grafana/prometheus',
+        '',
+        '## 14.0.0',
+        '',
+        '🎉 Breaking change',
+        '',
+        '🚀 Add util',
+        '',
+        '🐛 Fix panel',
+        '',
+      ].join('\n')
     );
   });
 
@@ -257,9 +268,56 @@ describe('version-changeset / flattenChangelog', () => {
     flattenChangelog(file);
 
     expect(fs.readFileSync(file, 'utf8')).toBe(
-      ['# @grafana/prometheus', '', '## 14.0.0', '', '🎉 Break', '🐛 Fix A', '', '## 13.2.0', '', '🚀 Util', ''].join(
-        '\n'
-      )
+      [
+        '# @grafana/prometheus',
+        '',
+        '## 14.0.0',
+        '',
+        '🎉 Break',
+        '',
+        '🐛 Fix A',
+        '',
+        '## 13.2.0',
+        '',
+        '🚀 Util',
+        '',
+      ].join('\n')
+    );
+  });
+
+  it('separates each entry with a blank line so markdown renders them on separate lines', () => {
+    const file = writeChangelog(
+      [
+        '# grafana-prometheus-datasource',
+        '',
+        '## 13.1.1',
+        '',
+        '### Patch Changes',
+        '',
+        '🐛 Fix A',
+        '',
+        '🐛 Fix B',
+        '',
+        '🐛 Fix C',
+        '',
+      ].join('\n')
+    );
+
+    flattenChangelog(file);
+
+    expect(fs.readFileSync(file, 'utf8')).toBe(
+      [
+        '# grafana-prometheus-datasource',
+        '',
+        '## 13.1.1',
+        '',
+        '🐛 Fix A',
+        '',
+        '🐛 Fix B',
+        '',
+        '🐛 Fix C',
+        '',
+      ].join('\n')
     );
   });
 
@@ -270,7 +328,9 @@ describe('version-changeset / flattenChangelog', () => {
       '## 14.0.0',
       '',
       '🎉 Breaking change',
+      '',
       '🚀 Add util',
+      '',
       '🐛 Fix panel',
       '',
     ].join('\n');

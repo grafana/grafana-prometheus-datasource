@@ -211,6 +211,7 @@ function flattenChangelog(changelogPath) {
       if (line.trim() === '') {
         continue;
       }
+      pushBlankSeparator();
       out.push(line);
       continue;
     }
