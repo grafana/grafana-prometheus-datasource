@@ -84,7 +84,47 @@ describe('sync-changelog', () => {
     expect(readJson(path.join(root, 'package.json')).version).toBe('13.1.0');
   });
 
+  it('removes the stub CHANGELOG.md after mirroring to the workspace root', () => {
+    fs.writeFileSync(path.join(root, STUB_REL, 'CHANGELOG.md'), '# stub\n\n## 13.1.1\n\nentry\n');
+
+    syncChangelog(root);
+
+    expect(fs.existsSync(path.join(root, STUB_REL, 'CHANGELOG.md'))).toBe(false);
+  });
+
+  it('removes the promlib stub CHANGELOG.md after mirroring to pkg/promlib', () => {
+    fs.writeFileSync(path.join(root, PROMLIB_STUB_REL, 'CHANGELOG.md'), '# promlib\n\n## 0.0.11\n\nentry\n');
+
+    syncChangelog(root, 'promlib');
+
+    expect(fs.existsSync(path.join(root, PROMLIB_STUB_REL, 'CHANGELOG.md'))).toBe(false);
+  });
+
   it('throws on an unknown stub target', () => {
     expect(() => syncChangelog(root, 'mystery')).toThrow(/Unknown stub package/);
+  });
+
+  it('preserves existing root changelog history when the stub only has the new version', () => {
+    // Root already has release history from the previous version
+    fs.writeFileSync(
+      path.join(root, 'CHANGELOG.md'),
+      '# grafana-prometheus-datasource\n\n## 13.1.1\n\n🐛 old fix one\n🐛 old fix two\n'
+    );
+    // changeset version generates a stub that contains ONLY the new version entry
+    fs.writeFileSync(
+      path.join(root, STUB_REL, 'CHANGELOG.md'),
+      '# grafana-prometheus-datasource\n\n## 13.1.2\n\n🐛 new fix\n'
+    );
+
+    syncChangelog(root);
+
+    const rootChangelog = fs.readFileSync(path.join(root, 'CHANGELOG.md'), 'utf8');
+    // Both versions must be present
+    expect(rootChangelog).toContain('## 13.1.2');
+    expect(rootChangelog).toContain('🐛 new fix');
+    expect(rootChangelog).toContain('## 13.1.1');
+    expect(rootChangelog).toContain('🐛 old fix one');
+    // New version must appear before old version
+    expect(rootChangelog.indexOf('## 13.1.2')).toBeLessThan(rootChangelog.indexOf('## 13.1.1'));
   });
 });
