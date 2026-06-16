@@ -22,6 +22,6 @@
 
 export class NeverCaseError extends Error {
   constructor(value: never) {
-    super('should never happen');
+    super(`should never happen, got unexpected value: ${JSON.stringify(value)}`);
   }
 }

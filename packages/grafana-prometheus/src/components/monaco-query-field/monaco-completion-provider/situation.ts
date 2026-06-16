@@ -596,7 +596,7 @@ export function getSituation(text: string, pos: number): Situation | null {
     ids.push(cur.type.id);
   }
 
-  for (let resolver of RESOLVERS) {
+  for (const resolver of RESOLVERS) {
     // i do not use a foreach because i want to stop as soon
     // as i find something
     if (isPathMatch(resolver.path, ids)) {
