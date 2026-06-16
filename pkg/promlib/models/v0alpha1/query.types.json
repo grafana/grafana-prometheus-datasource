@@ -2,14 +2,14 @@
   "kind": "QueryTypeDefinitionList",
   "apiVersion": "datasource.grafana.app/v0alpha1",
   "metadata": {
-    "resourceVersion": "1711372744903"
+    "resourceVersion": "1781625650455"
   },
   "items": [
     {
       "metadata": {
         "name": "default",
-        "resourceVersion": "1759831574256",
-        "creationTimestamp": "2024-03-25T13:19:04Z"
+        "resourceVersion": "1781625650455",
+        "creationTimestamp": "2026-06-16T16:00:50Z"
       },
       "spec": {
         "schema": {
@@ -153,15 +153,7 @@
             "expr"
           ],
           "type": "object"
-        },
-        "examples": [
-          {
-            "name": "simple health check",
-            "saveModel": {
-              "expr": "1+1"
-            }
-          }
-        ]
+        }
       }
     }
   ]

@@ -600,7 +600,6 @@ func setup() (*testContext, error) {
 type fakeHttpClientProvider struct {
 	httpclient.Provider
 	opts        httpclient.Options
-	req         *http.Request
 	rangeRes    *http.Response
 	exemplarRes *http.Response
 }
@@ -656,7 +655,6 @@ func (p *fakeHttpClientProvider) setResponse(rangeRes *http.Response, exemplarRe
 }
 
 func (p *fakeHttpClientProvider) RoundTrip(req *http.Request) (*http.Response, error) {
-	p.req = req
 	switch req.URL.Path {
 	case "/api/v1/query_range", "/api/v1/query":
 		return p.rangeRes, nil

@@ -1,0 +1,11 @@
+{
+  "examples": [
+    {
+      "name": "simple health check",
+      "queryType": "default",
+      "saveModel": {
+        "expr": "1+1"
+      }
+    }
+  ]
+}

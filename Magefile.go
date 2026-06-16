@@ -6,6 +6,7 @@ package main
 import (
 	build "github.com/grafana/grafana-plugin-sdk-go/build"
 	"github.com/magefile/mage/mg"
+	"github.com/magefile/mage/sh"
 )
 
 // Default configures the default target.
@@ -32,13 +33,23 @@ func WindowsARM64() error {
 // Test() wraps the plugin SDK's Test to make it accessible since we're
 // no longer using mage:import
 func Test() error {
-	return build.Test()
+	if err := build.Test(); err != nil {
+		return err
+	}
+	// pkg/promlib has its own go.mod, so ./pkg/... in the root module stops at the module
+	// boundary and never reaches it. Run its tests explicitly as a separate module.
+	return sh.RunV("go", "test", "-C", "./pkg/promlib", "./...")
 }
 
 // TestRace() wraps the plugin SDK's Test to make it accessible since we're
 // no longer using mage:import
 func TestRace() error {
-	return build.TestRace()
+	if err := build.TestRace(); err != nil {
+		return err
+	}
+	// pkg/promlib has its own go.mod, so ./pkg/... in the root module stops at the module
+	// boundary and never reaches it. Run its tests explicitly as a separate module.
+	return sh.RunV("go", "test", "-C", "./pkg/promlib", "-race", "./...")
 }
 
 func Debugger() error {
