@@ -1,5 +1,10 @@
 # grafana-prometheus-datasource
 
+## 13.1.2
+
+🐛 Bump go version to v1.26.4
+🐛 Harden security of dependencies
+
 ## 13.1.1
 
 🐛 Enable scheduled task creation in Crowdin workflow
