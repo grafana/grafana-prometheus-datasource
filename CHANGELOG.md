@@ -1,5 +1,9 @@
 # grafana-prometheus-datasource
 
+## Unreleased
+
+🐛 Fix `TestQueryTypeDefinitions` build failure caused by stale schemabuilder API calls
+
 ## 13.1.1
 
 🐛 Enable scheduled task creation in Crowdin workflow

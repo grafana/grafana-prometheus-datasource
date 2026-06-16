@@ -506,10 +506,10 @@ func AlignTimeRange(t time.Time, step time.Duration, offset int64) time.Time {
 	return time.Unix(0, int64(math.Floor((float64(t.UnixNano())+offsetNano)/stepNano)*stepNano-offsetNano)).UTC()
 }
 
-//go:embed query.types.json
+//go:embed v0alpha1/query.types.json
 var f embed.FS
 
 // QueryTypeDefinitionListJSON returns the query type definitions
 func QueryTypeDefinitionListJSON() (json.RawMessage, error) {
-	return f.ReadFile("query.types.json")
+	return f.ReadFile("v0alpha1/query.types.json")
 }

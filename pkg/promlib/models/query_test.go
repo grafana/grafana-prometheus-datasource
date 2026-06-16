@@ -1491,8 +1491,8 @@ func TestQueryTypeDefinitions(t *testing.T) {
 			},
 		})
 	require.NoError(t, err)
-	err = builder.AddQueries(
-		schemabuilder.QueryTypeInfo{
+	err = builder.AddQueries([]schemabuilder.QueryTypeInfo{
+		{
 			Name:   "default",
 			GoType: reflect.TypeOf(&models.PrometheusQueryProperties{}),
 			Examples: []sdkapi.QueryExample{
@@ -1506,8 +1506,8 @@ func TestQueryTypeDefinitions(t *testing.T) {
 				},
 			},
 		},
-	)
+	})
 
 	require.NoError(t, err)
-	builder.UpdateQueryDefinition(t, "./")
+	builder.UpdateProviderFiles(t, "v0alpha1", "./")
 }
