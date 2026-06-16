@@ -49,7 +49,7 @@ func TestRace() error {
 	}
 	// pkg/promlib has its own go.mod, so ./pkg/... in the root module stops at the module
 	// boundary and never reaches it. Run its tests explicitly as a separate module.
-	return sh.RunV("go", "test", "-race", "-C", "./pkg/promlib", "./...")
+	return sh.RunV("go", "test", "-C", "./pkg/promlib", "-race", "./...")
 }
 
 func Debugger() error {
