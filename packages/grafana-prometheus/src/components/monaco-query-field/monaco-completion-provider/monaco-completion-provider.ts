@@ -110,9 +110,6 @@ export function getCompletionProvider(
           })
         : monaco.Range.fromPositions(position);
 
-    // Set input range for data provider
-    dataProvider.monacoSettings.setInputInRange(model.getValueInRange(range));
-
     // Get adjusted position for cursor/selection handling
     const adjustedPosition = getAdjustedPosition(position);
     const offset = model.getOffsetAt(adjustedPosition);

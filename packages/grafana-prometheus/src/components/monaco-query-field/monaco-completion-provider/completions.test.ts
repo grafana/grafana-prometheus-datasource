@@ -1,10 +1,9 @@
 import { config } from '@grafana/runtime';
 
-import { DEFAULT_COMPLETION_LIMIT } from '../../../constants';
 import { getFunctions } from '../../../promql';
 import { getMockTimeRange } from '../../../test/mocks/datasource';
 
-import { filterMetricNames, getCompletions } from './completions';
+import { getCompletions } from './completions';
 import { DataProvider, type DataProviderParams } from './data_provider';
 import type { Situation } from './situation';
 
@@ -20,12 +19,6 @@ const dataProviderSettings = {
   historyProvider: history.map((expr, idx) => ({ query: { expr, refId: 'some-ref' }, ts: idx })),
 } as unknown as DataProviderParams;
 let dataProvider = new DataProvider(dataProviderSettings);
-const metrics = {
-  beyondLimit: Array.from(Array(DEFAULT_COMPLETION_LIMIT + 1), (_, i) => `metric_name_${i}`),
-  get atLimit() {
-    return this.beyondLimit.slice(0, DEFAULT_COMPLETION_LIMIT - 1);
-  },
-};
 
 beforeEach(() => {
   dataProvider = new DataProvider(dataProviderSettings);
@@ -35,215 +28,66 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
-describe('filterMetricNames', () => {
-  const sampleMetrics = [
-    'http_requests_total',
-    'http_requests_failed',
-    'node_cpu_seconds_total',
-    'node_memory_usage_bytes',
-    'very_long_metric_name_with_many_underscores_and_detailed_description',
-    'metric_name_1_with_extra_terms_included',
-  ];
-
-  describe('empty input', () => {
-    it('should return all metrics up to limit when input is empty', () => {
-      const result = filterMetricNames({
-        metricNames: sampleMetrics,
-        inputText: '',
-        limit: 3,
-      });
-      expect(result).toEqual(sampleMetrics.slice(0, 3));
-    });
-
-    it('should return all metrics when input is whitespace', () => {
-      const result = filterMetricNames({
-        metricNames: sampleMetrics,
-        inputText: '   ',
-        limit: 3,
-      });
-      expect(result).toEqual(sampleMetrics.slice(0, 3));
-    });
-  });
-
-  describe('simple searches (≤ 4 terms)', () => {
-    it('should match exact strings', () => {
-      const result = filterMetricNames({
-        metricNames: sampleMetrics,
-        inputText: 'http_requests_total',
-        limit: 10,
-      });
-      expect(result).toContainEqual('http_requests_total');
-    });
-
-    it('should match with single character errors', () => {
-      // substitution
-      let result = filterMetricNames({
-        metricNames: sampleMetrics,
-        inputText: 'http_requezts_total', // 's' replaced with 'z'
-        limit: 10,
-      });
-      expect(result).toContainEqual('http_requests_total');
-
-      // ransposition
-      result = filterMetricNames({
-        metricNames: sampleMetrics,
-        inputText: 'http_reqeust_total', // 'ue' swapped
-        limit: 10,
-      });
-      expect(result).toContainEqual('http_requests_total');
-
-      // deletion
-      result = filterMetricNames({
-        metricNames: sampleMetrics,
-        inputText: 'http_reqests_total', // missing 'u'
-        limit: 10,
-      });
-      expect(result).toContainEqual('http_requests_total');
-
-      // insertion
-      result = filterMetricNames({
-        metricNames: sampleMetrics,
-        inputText: 'http_reqquests_total', // extra 'q'
-        limit: 10,
-      });
-      expect(result).toContainEqual('http_requests_total');
-    });
-
-    it('should match partial strings', () => {
-      const result = filterMetricNames({
-        metricNames: sampleMetrics,
-        inputText: 'requests', // partial match
-        limit: 10,
-      });
-      expect(result).toContainEqual('http_requests_total');
-      expect(result).toContainEqual('http_requests_failed');
-    });
-
-    it('should not match with multiple errors', () => {
-      const result = filterMetricNames({
-        metricNames: sampleMetrics,
-        inputText: 'htp_reqests_total', // two errors: missing 't' and missing 'u'
-        limit: 10,
-      });
-      expect(result).not.toContainEqual('http_requests_total');
-    });
-  });
-
-  describe('complex searches (> 4 terms)', () => {
-    it('should use substring matching for each term', () => {
-      const result = filterMetricNames({
-        metricNames: sampleMetrics,
-        inputText: 'metric name 1 with extra terms',
-        limit: 10,
-      });
-      expect(result).toContainEqual('metric_name_1_with_extra_terms_included');
-    });
-
-    it('should return empty array when no metrics match all terms', () => {
-      const result = filterMetricNames({
-        metricNames: sampleMetrics,
-        inputText: 'metric name 1 with nonexistent terms',
-        limit: 10,
-      });
-      expect(result).toHaveLength(0);
-    });
-
-    it('should stop searching after limit is reached', () => {
-      const manyMetrics = Array.from({ length: 10 }, (_, i) => `metric_name_${i}_with_terms`);
-
-      const result = filterMetricNames({
-        metricNames: manyMetrics,
-        inputText: 'metric name with terms other words', // > 4 terms
-        limit: 3,
-      });
-
-      expect(result.length).toBeLessThanOrEqual(3);
-    });
-  });
-});
-
 type MetricNameSituation = Extract<Situation['type'], 'AT_ROOT' | 'EMPTY' | 'IN_FUNCTION'>;
 const metricNameCompletionSituations = ['AT_ROOT', 'IN_FUNCTION', 'EMPTY'] as MetricNameSituation[];
 
-function getSuggestionCountForSituation(situationType: MetricNameSituation, metricsCount: number): number {
-  const limitedMetricNamesCount = metricsCount < DEFAULT_COMPLETION_LIMIT ? metricsCount : DEFAULT_COMPLETION_LIMIT;
-  let suggestionsCount = limitedMetricNamesCount + getFunctions().length;
-
-  if (situationType === 'EMPTY') {
-    suggestionsCount += history.length;
-  }
-
-  return suggestionsCount;
-}
-
 describe.each(metricNameCompletionSituations)('metric name completions in situation %s', (situationType) => {
   const timeRange = getMockTimeRange();
+  const sampleMetricNames = ['metric_a', 'metric_b', 'metric_c'];
+  const situation: Situation = { type: situationType };
 
-  it('should return completions for all metric names when the number of metric names is at or below the limit', async () => {
-    jest.spyOn(dataProvider, 'queryMetricNames').mockResolvedValue(metrics.atLimit);
-    const expectedCompletionsCount = getSuggestionCountForSituation(situationType, metrics.atLimit.length);
-    const situation: Situation = {
-      type: situationType,
-    };
+  // Metric-name filtering is performed server-side via DataProvider.queryMetricNames, so these
+  // tests assert the completion list that getCompletions assembles around the returned names
+  // (ordering, counts, search-term forwarding) rather than any client-side fuzzy matching.
 
-    // No text input
-    dataProvider.monacoSettings.setInputInRange('');
-    let completions = await getCompletions(situation, dataProvider, timeRange);
-    expect(completions).toHaveLength(expectedCompletionsCount);
+  it('returns history (EMPTY only), functions and metric names in order on a full trigger', async () => {
+    jest.spyOn(dataProvider, 'queryMetricNames').mockResolvedValue(sampleMetricNames);
 
-    // With text input (use fuzzy search)
-    dataProvider.monacoSettings.setInputInRange('name_1');
-    completions = await getCompletions(situation, dataProvider, timeRange);
-    expect(completions?.length).toBeLessThanOrEqual(expectedCompletionsCount);
-  });
+    const completions = await getCompletions(situation, dataProvider, timeRange, undefined, 'full');
 
-  it('should limit completions for metric names when the number exceeds the limit', async () => {
-    const situation: Situation = {
-      type: situationType,
-    };
-    const expectedCompletionsCount = getSuggestionCountForSituation(situationType, metrics.beyondLimit.length);
-    jest.spyOn(dataProvider, 'getAllMetricNames').mockReturnValue(metrics.beyondLimit);
+    const functionsCount = getFunctions().length;
+    const historyCount = situationType === 'EMPTY' ? history.length : 0;
+    expect(completions).toHaveLength(historyCount + functionsCount + sampleMetricNames.length);
 
-    // Complex query
-    dataProvider.monacoSettings.setInputInRange('metric name one two three four five');
-    let completions = await getCompletions(situation, dataProvider, timeRange);
-    expect(completions.length).toBeLessThanOrEqual(expectedCompletionsCount);
-
-    // Simple query with fuzzy match
-    dataProvider.monacoSettings.setInputInRange('metric_name_');
-    completions = await getCompletions(situation, dataProvider, timeRange);
-    expect(completions.length).toBeLessThanOrEqual(expectedCompletionsCount);
-  });
-
-  it('should handle complex queries efficiently', async () => {
-    const situation: Situation = {
-      type: situationType,
-    };
-
-    const testMetrics = ['metric_name_1', 'metric_name_2', 'metric_name_1_with_extra_terms', 'unrelated_metric'];
-    jest.spyOn(dataProvider, 'queryMetricNames').mockResolvedValue(testMetrics);
-
-    // Test with a complex query (> 4 terms)
-    dataProvider.monacoSettings.setInputInRange('metric name 1 with extra terms more');
-    const completions = await getCompletions(situation, dataProvider, timeRange);
-
+    // Metric names are appended last and preserve the order returned by the data provider.
     const metricCompletions = completions.filter((c) => c.type === 'METRIC_NAME');
-    expect(metricCompletions.some((c) => c.label === 'metric_name_1_with_extra_terms')).toBe(true);
+    expect(metricCompletions.map((c) => c.label)).toEqual(sampleMetricNames);
+
+    if (situationType === 'EMPTY') {
+      expect(completions.slice(0, history.length).every((c) => c.type === 'HISTORY')).toBe(true);
+    }
   });
 
-  it('should handle multiple term queries efficiently', async () => {
-    const situation: Situation = {
-      type: situationType,
-    };
+  it('forwards the search term to the data provider', async () => {
+    const spy = jest.spyOn(dataProvider, 'queryMetricNames').mockResolvedValue([]);
 
-    jest.spyOn(dataProvider, 'getAllMetricNames').mockReturnValue(metrics.beyondLimit);
+    await getCompletions(situation, dataProvider, timeRange, 'node_cpu', 'full');
 
-    // Test with multiple terms
-    dataProvider.monacoSettings.setInputInRange('metric name 1 2 3 4 5');
-    const completions = await getCompletions(situation, dataProvider, timeRange);
+    expect(spy).toHaveBeenCalledWith(timeRange, 'node_cpu');
+  });
 
-    const expectedCompletionsCount = getSuggestionCountForSituation(situationType, metrics.beyondLimit.length);
-    expect(completions.length).toBeLessThanOrEqual(expectedCompletionsCount);
+  it('returns only functions and never queries metric names on a partial trigger', async () => {
+    const spy = jest.spyOn(dataProvider, 'queryMetricNames').mockResolvedValue(sampleMetricNames);
+
+    const completions = await getCompletions(situation, dataProvider, timeRange, 'metric', 'partial');
+
+    expect(completions.every((c) => c.type === 'FUNCTION')).toBe(true);
+    expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+describe('metric name completions (utf8)', () => {
+  const timeRange = getMockTimeRange();
+
+  it('wraps utf8 metric names as quoted snippets', async () => {
+    jest.spyOn(dataProvider, 'queryMetricNames').mockResolvedValue(['metric.with.dots']);
+
+    const completions = await getCompletions({ type: 'AT_ROOT' }, dataProvider, timeRange, undefined, 'full');
+
+    const utf8 = completions.find((c) => c.label === 'metric.with.dots');
+    expect(utf8?.insertText).toBe('{"metric.with.dots"${1:}}');
+    // 4 === languages.CompletionItemInsertTextRule.InsertAsSnippet
+    expect(utf8?.insertTextRules).toBe(4);
   });
 });
 
@@ -252,17 +96,7 @@ describe('Label value completions', () => {
 
   beforeEach(() => {
     dataProvider = {
-      getAllMetricNames: jest.fn(),
-      metricNamesToMetrics: jest.fn(),
-      getHistory: jest.fn(),
       queryLabelValues: jest.fn().mockResolvedValue(['value1', 'value"2', 'value\\3', "value'4"]),
-      monacoSettings: {
-        setInputInRange: jest.fn(),
-        inputInRange: '',
-        suggestionsIncomplete: false,
-        enableAutocompleteSuggestionsUpdate: jest.fn(),
-      },
-      metricNamesSuggestionLimit: 100,
     } as unknown as DataProvider;
   });
 
