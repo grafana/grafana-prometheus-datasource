@@ -67,10 +67,11 @@ jobs:
           git fetch --no-tags --depth=1 origin "$BASE_SHA"
           added_files=$(git diff --name-only --diff-filter=A "$BASE_SHA" "$HEAD_SHA" -- '.changeset/*.md' \
             ':(exclude).changeset/README.md')
-          for file in $added_files; do
+          while IFS= read -r file; do
+            [[ -z "$file" ]] && continue
             if grep -qiE '"[^"]*promlib[^"]*":[[:space:]]*(minor|major)' "$file"; then
               echo "::error::Changeset file '$file' contains a non-patch bump for promlib. Only 'patch' is allowed."
               exit 1
             fi
-          done
+          done <<< "$added_files"
           echo "All promlib changeset entries are patch-only (or no promlib entries found)."

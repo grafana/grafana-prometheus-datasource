@@ -1,4 +1,5 @@
 const path = require('path');
+const { spawnSync } = require('child_process');
 
 const pkg = require(path.join(__dirname, '..', 'packages', 'grafana-prometheus', 'package.json'));
 const repoUrl = (pkg.repository?.url ?? '').replace(/\.git$/, '');
@@ -8,13 +9,15 @@ function getPRLink(changesetId) {
     return '';
   }
   try {
-    const log = execSync(`git log --all --follow --pretty=format:"%s" -- ".changeset/${changesetId}.md"`, {
-      encoding: 'utf8',
-    }).trim();
-    if (!log) {
+    const result = spawnSync(
+      'git',
+      ['log', '--all', '--follow', '--pretty=format:%s', '--', `.changeset/${changesetId}.md`],
+      { encoding: 'utf8' }
+    );
+    if (result.status !== 0 || !result.stdout) {
       return '';
     }
-    const earliest = log.split('\n').pop();
+    const earliest = result.stdout.trim().split('\n').pop();
     const match = earliest.match(/\(#(\d+)\)\s*$/);
     if (!match) {
       return '';
