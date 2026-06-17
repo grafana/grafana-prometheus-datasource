@@ -104,7 +104,7 @@
     ]
   },
   "dependencies": {
-    "grafanaDependency": ">=12.3.0"
+    "grafanaDependency": ">=12.3.0-0"
   },
   "languages": [
     "en-US",
