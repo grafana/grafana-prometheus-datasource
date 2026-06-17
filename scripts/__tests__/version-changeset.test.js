@@ -6,7 +6,7 @@ const path = require('path');
 
 const {
   DATASOURCE,
-  LIBRARY,
+  NPM_PACKAGE,
   PROMLIB,
   parseArgs,
   getChangesetPackages,
@@ -27,7 +27,7 @@ const {
 } = require('./fixture');
 
 const STUB_REL = path.join('packages', 'grafana-prometheus-datasource');
-const LIB_REL = path.join('packages', 'grafana-prometheus');
+const NPM_PACKAGE_REL = path.join('packages', 'grafana-prometheus');
 const PROMLIB_STUB_REL = path.join('packages', 'promlib');
 const PROMLIB_TARGET_REL = path.join('pkg', 'promlib');
 
@@ -46,12 +46,10 @@ function realRunner(opts) {
 describe('version-changeset / parseArgs', () => {
   it('returns DATASOURCE for --datasource and --plugin', () => {
     expect(parseArgs(['--datasource'])).toBe(DATASOURCE);
-    expect(parseArgs(['--plugin'])).toBe(DATASOURCE);
   });
 
-  it('returns LIBRARY for --library and --lib', () => {
-    expect(parseArgs(['--library'])).toBe(LIBRARY);
-    expect(parseArgs(['--lib'])).toBe(LIBRARY);
+  it('returns NPM_PACKAGE for --npm-package', () => {
+    expect(parseArgs(['--npm-package'])).toBe(NPM_PACKAGE);
   });
 
   it('returns PROMLIB for --promlib', () => {
@@ -62,12 +60,12 @@ describe('version-changeset / parseArgs', () => {
     expect(parseArgs([])).toBe(null);
   });
 
-  it('throws on conflicting flags (datasource + library)', () => {
-    expect(() => parseArgs(['--datasource', '--library'])).toThrow(/Only one of/);
+  it('throws on conflicting flags (datasource + npm-package)', () => {
+    expect(() => parseArgs(['--datasource', '--npm-package'])).toThrow(/Only one of/);
   });
 
-  it('throws on conflicting flags (library + promlib)', () => {
-    expect(() => parseArgs(['--library', '--promlib'])).toThrow(/Only one of/);
+  it('throws on conflicting flags (npm-package + promlib)', () => {
+    expect(() => parseArgs(['--npm-package', '--promlib'])).toThrow(/Only one of/);
   });
 
   it('throws on unknown arguments', () => {
@@ -89,7 +87,7 @@ describe('version-changeset / getChangesetPackages', () => {
   it('parses single-quoted package names (the format @changesets/write produces)', () => {
     const file = path.join(root, '.changeset', 'a.md');
     fs.writeFileSync(file, "---\n'@grafana/prometheus': minor\n---\n\nx\n");
-    expect([...getChangesetPackages(file)]).toEqual([LIBRARY]);
+    expect([...getChangesetPackages(file)]).toEqual([NPM_PACKAGE]);
   });
 
   it('parses double-quoted package names', () => {
@@ -107,7 +105,7 @@ describe('version-changeset / getChangesetPackages', () => {
   it('returns multiple packages when a changeset references both', () => {
     const file = path.join(root, '.changeset', 'd.md');
     fs.writeFileSync(file, "---\n'grafana-prometheus-datasource': patch\n'@grafana/prometheus': minor\n---\n\nx\n");
-    expect(getChangesetPackages(file)).toEqual(new Set([DATASOURCE, LIBRARY]));
+    expect(getChangesetPackages(file)).toEqual(new Set([DATASOURCE, NPM_PACKAGE]));
   });
 
   it('returns empty set when there is no frontmatter', () => {
@@ -129,7 +127,7 @@ describe('version-changeset / listChangesetFiles', () => {
   });
 
   it('returns md files but excludes README.md (case-insensitive)', () => {
-    writeChangeset(root, 'one.md', { [LIBRARY]: 'patch' });
+    writeChangeset(root, 'one.md', { [NPM_PACKAGE]: 'patch' });
     writeChangeset(root, 'two.md', { [DATASOURCE]: 'patch' });
 
     const files = listChangesetFiles(path.join(root, '.changeset')).map((f) => path.basename(f));
@@ -157,7 +155,7 @@ describe('version-changeset / moveChangesetsAside + restoreHeldChangesets', () =
   });
 
   it('holds unrelated changesets aside and restores them on cleanup', () => {
-    writeChangeset(root, 'lib.md', { [LIBRARY]: 'minor' }, 'lib summary');
+    writeChangeset(root, 'lib.md', { [NPM_PACKAGE]: 'minor' }, 'lib summary');
     writeChangeset(root, 'ds.md', { [DATASOURCE]: 'patch' }, 'ds summary');
 
     const held = moveChangesetsAside(DATASOURCE, changesetDir, holdDir);
@@ -174,10 +172,10 @@ describe('version-changeset / moveChangesetsAside + restoreHeldChangesets', () =
   });
 
   it('does nothing when every changeset references the target package', () => {
-    writeChangeset(root, 'a.md', { [LIBRARY]: 'patch' });
-    writeChangeset(root, 'b.md', { [LIBRARY]: 'minor' });
+    writeChangeset(root, 'a.md', { [NPM_PACKAGE]: 'patch' });
+    writeChangeset(root, 'b.md', { [NPM_PACKAGE]: 'minor' });
 
-    const held = moveChangesetsAside(LIBRARY, changesetDir, holdDir);
+    const held = moveChangesetsAside(NPM_PACKAGE, changesetDir, holdDir);
     expect(held).toEqual([]);
     expect(fs.existsSync(holdDir)).toBe(false);
   });
@@ -306,18 +304,9 @@ describe('version-changeset / flattenChangelog', () => {
     flattenChangelog(file);
 
     expect(fs.readFileSync(file, 'utf8')).toBe(
-      [
-        '# grafana-prometheus-datasource',
-        '',
-        '## 13.1.1',
-        '',
-        '🐛 Fix A',
-        '',
-        '🐛 Fix B',
-        '',
-        '🐛 Fix C',
-        '',
-      ].join('\n')
+      ['# grafana-prometheus-datasource', '', '## 13.1.1', '', '🐛 Fix A', '', '🐛 Fix B', '', '🐛 Fix C', ''].join(
+        '\n'
+      )
     );
   });
 
@@ -352,7 +341,7 @@ describe('version-changeset / runVersion (end-to-end with real changeset binary)
   beforeEach(() => {
     root = createFixture({
       rootVersion: '13.1.0',
-      libraryVersion: '13.1.0',
+      npmPackageVersion: '13.1.0',
       datasourceVersion: '13.1.0',
     });
   });
@@ -361,11 +350,11 @@ describe('version-changeset / runVersion (end-to-end with real changeset binary)
     destroyFixture(root);
   });
 
-  it('versions the library only, leaving the datasource stub and root untouched', async () => {
-    writeChangeset(root, 'lib.md', { [LIBRARY]: 'minor' }, 'Add util');
+  it('versions the npm-package only, leaving the datasource stub and root untouched', async () => {
+    writeChangeset(root, 'lib.md', { [NPM_PACKAGE]: 'minor' }, 'Add util');
 
     const result = await runVersion({
-      pkg: LIBRARY,
+      pkg: NPM_PACKAGE,
       repoRoot: root,
       runChangesetVersion: realRunner,
       syncChangelog,
@@ -375,15 +364,15 @@ describe('version-changeset / runVersion (end-to-end with real changeset binary)
     expect(result.exitCode).toBe(0);
     expect(result.versioned).toBe(true);
 
-    expect(readPackageVersion(root, LIB_REL)).toBe('13.2.0');
+    expect(readPackageVersion(root, NPM_PACKAGE_REL)).toBe('13.2.0');
     expect(readPackageVersion(root, STUB_REL)).toBe('13.1.0');
     expect(readPackageVersion(root, '.')).toBe('13.1.0');
 
-    // Library changeset was consumed; nothing held.
+    // npm-package changeset was consumed; nothing held.
     expect(listChangesetMdFiles(root)).toEqual([]);
   });
 
-  it('versions the datasource stub, mirrors version + CHANGELOG to the root, leaves the library untouched', async () => {
+  it('versions the datasource stub, mirrors version + CHANGELOG to the root, leaves the npm-package untouched', async () => {
     writeChangeset(root, 'ds.md', { [DATASOURCE]: 'patch' }, 'Fix panel');
 
     const result = await runVersion({
@@ -399,7 +388,7 @@ describe('version-changeset / runVersion (end-to-end with real changeset binary)
 
     expect(readPackageVersion(root, STUB_REL)).toBe('13.1.1');
     expect(readPackageVersion(root, '.')).toBe('13.1.1');
-    expect(readPackageVersion(root, LIB_REL)).toBe('13.1.0');
+    expect(readPackageVersion(root, NPM_PACKAGE_REL)).toBe('13.1.0');
 
     const rootChangelog = fs.readFileSync(path.join(root, 'CHANGELOG.md'), 'utf8');
     expect(rootChangelog).toContain('## 13.1.1');
@@ -410,12 +399,12 @@ describe('version-changeset / runVersion (end-to-end with real changeset binary)
     expect(listChangesetMdFiles(root)).toEqual([]);
   });
 
-  it('with both pending changesets, --library only consumes the library one and preserves the datasource one', async () => {
-    writeChangeset(root, 'lib.md', { [LIBRARY]: 'minor' }, 'Lib change');
+  it('with both pending changesets, --npm-package only consumes the npm-package one and preserves the datasource one', async () => {
+    writeChangeset(root, 'lib.md', { [NPM_PACKAGE]: 'minor' }, 'NPM Package change');
     writeChangeset(root, 'ds.md', { [DATASOURCE]: 'patch' }, 'DS change');
 
     const result = await runVersion({
-      pkg: LIBRARY,
+      pkg: NPM_PACKAGE,
       repoRoot: root,
       runChangesetVersion: realRunner,
       syncChangelog,
@@ -425,7 +414,7 @@ describe('version-changeset / runVersion (end-to-end with real changeset binary)
     expect(result.exitCode).toBe(0);
     expect(result.heldCount).toBe(1);
 
-    expect(readPackageVersion(root, LIB_REL)).toBe('13.2.0');
+    expect(readPackageVersion(root, NPM_PACKAGE_REL)).toBe('13.2.0');
     expect(readPackageVersion(root, STUB_REL)).toBe('13.1.0');
     expect(readPackageVersion(root, '.')).toBe('13.1.0');
 
@@ -433,8 +422,8 @@ describe('version-changeset / runVersion (end-to-end with real changeset binary)
     expect(fs.existsSync(path.join(root, '.changeset-hold'))).toBe(false);
   });
 
-  it('with both pending changesets, --datasource only consumes the datasource one and preserves the library one', async () => {
-    writeChangeset(root, 'lib.md', { [LIBRARY]: 'minor' }, 'Lib change');
+  it('with both pending changesets, --datasource only consumes the datasource one and preserves the npm-package one', async () => {
+    writeChangeset(root, 'lib.md', { [NPM_PACKAGE]: 'minor' }, 'NPM Package change');
     writeChangeset(root, 'ds.md', { [DATASOURCE]: 'patch' }, 'DS change');
 
     const result = await runVersion({
@@ -450,14 +439,14 @@ describe('version-changeset / runVersion (end-to-end with real changeset binary)
 
     expect(readPackageVersion(root, STUB_REL)).toBe('13.1.1');
     expect(readPackageVersion(root, '.')).toBe('13.1.1');
-    expect(readPackageVersion(root, LIB_REL)).toBe('13.1.0');
+    expect(readPackageVersion(root, NPM_PACKAGE_REL)).toBe('13.1.0');
 
     expect(listChangesetMdFiles(root)).toEqual(['lib.md']);
     expect(fs.existsSync(path.join(root, '.changeset-hold'))).toBe(false);
   });
 
-  it('does nothing and reports "Nothing to version." when no changeset references the chosen package', async () => {
-    writeChangeset(root, 'lib.md', { [LIBRARY]: 'minor' }, 'Lib change');
+  it('applies a synthetic patch bump when no changeset references the chosen package', async () => {
+    writeChangeset(root, 'lib.md', { [NPM_PACKAGE]: 'minor' }, 'NPM Package change');
 
     const logs = [];
     const result = await runVersion({
@@ -469,15 +458,20 @@ describe('version-changeset / runVersion (end-to-end with real changeset binary)
     });
 
     expect(result.exitCode).toBe(0);
-    expect(result.versioned).toBe(false);
-    expect(logs.join('\n')).toMatch(/Nothing to version/);
+    expect(result.versioned).toBe(true);
+    expect(logs.join('\n')).toMatch(/synthetic patch bump/i);
 
-    expect(readPackageVersion(root, LIB_REL)).toBe('13.1.0');
+    // Datasource stub + root bumped by one patch.
+    expect(readPackageVersion(root, STUB_REL)).toBe('13.1.1');
+    expect(readPackageVersion(root, '.')).toBe('13.1.1');
+
+    // npm-package changeset preserved and npm-package version unchanged.
+    expect(readPackageVersion(root, NPM_PACKAGE_REL)).toBe('13.1.0');
     expect(listChangesetMdFiles(root)).toEqual(['lib.md']);
   });
 
   it('restores held changesets even when the changeset binary fails', async () => {
-    writeChangeset(root, 'lib.md', { [LIBRARY]: 'minor' }, 'Lib change');
+    writeChangeset(root, 'lib.md', { [NPM_PACKAGE]: 'minor' }, 'NPM Package change');
     writeChangeset(root, 'ds.md', { [DATASOURCE]: 'patch' }, 'DS change');
 
     const failingRunner = () => 7;
@@ -498,12 +492,12 @@ describe('version-changeset / runVersion (end-to-end with real changeset binary)
     expect(fs.existsSync(path.join(root, '.changeset-hold'))).toBe(false);
   });
 
-  it('does not call syncChangelog when versioning the library', async () => {
-    writeChangeset(root, 'lib.md', { [LIBRARY]: 'minor' }, 'Lib change');
+  it('does not call syncChangelog when versioning the npm-package', async () => {
+    writeChangeset(root, 'lib.md', { [NPM_PACKAGE]: 'minor' }, 'NPM Package change');
 
     const syncSpy = jest.fn();
     await runVersion({
-      pkg: LIBRARY,
+      pkg: NPM_PACKAGE,
       repoRoot: root,
       runChangesetVersion: realRunner,
       syncChangelog: syncSpy,
@@ -524,6 +518,45 @@ describe('version-changeset / runVersion (end-to-end with real changeset binary)
     ).rejects.toThrow(/Invalid package/);
   });
 
+  it('applies a synthetic patch bump for the npm-package when it has no changesets', async () => {
+    // No changesets at all — synthetic bump must still produce a version increment.
+    const result = await runVersion({
+      pkg: NPM_PACKAGE,
+      repoRoot: root,
+      runChangesetVersion: realRunner,
+      syncChangelog,
+      log: () => {},
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.versioned).toBe(true);
+
+    expect(readPackageVersion(root, NPM_PACKAGE_REL)).toBe('13.1.1');
+    // Stub and root are unchanged (npm-package is not a stub package).
+    expect(readPackageVersion(root, STUB_REL)).toBe('13.1.0');
+    expect(readPackageVersion(root, '.')).toBe('13.1.0');
+
+    expect(listChangesetMdFiles(root)).toEqual([]);
+  });
+
+  it('cleans up the synthetic changeset file when the changeset binary fails', async () => {
+    const failingRunner = () => 7;
+
+    const result = await runVersion({
+      pkg: DATASOURCE,
+      repoRoot: root,
+      runChangesetVersion: failingRunner,
+      syncChangelog,
+      log: () => {},
+    });
+
+    expect(result.exitCode).toBe(7);
+    expect(result.versioned).toBe(false);
+
+    // The synthetic file must have been removed even though the binary failed.
+    expect(listChangesetMdFiles(root)).toEqual([]);
+  });
+
   it('versions the promlib stub and mirrors CHANGELOG to pkg/promlib (no version mirror)', async () => {
     writeChangeset(root, 'pl.md', { [PROMLIB]: 'patch' }, 'Fix promlib bug');
 
@@ -540,7 +573,7 @@ describe('version-changeset / runVersion (end-to-end with real changeset binary)
 
     expect(readPackageVersion(root, PROMLIB_STUB_REL)).toBe('0.0.11');
 
-    expect(readPackageVersion(root, LIB_REL)).toBe('13.1.0');
+    expect(readPackageVersion(root, NPM_PACKAGE_REL)).toBe('13.1.0');
     expect(readPackageVersion(root, STUB_REL)).toBe('13.1.0');
     expect(readPackageVersion(root, '.')).toBe('13.1.0');
 
@@ -554,8 +587,8 @@ describe('version-changeset / runVersion (end-to-end with real changeset binary)
     expect(listChangesetMdFiles(root)).toEqual([]);
   });
 
-  it('--promlib leaves library, datasource and root untouched and holds their changesets aside', async () => {
-    writeChangeset(root, 'lib.md', { [LIBRARY]: 'minor' }, 'Lib change');
+  it('--promlib leaves npm-package, datasource and root untouched and holds their changesets aside', async () => {
+    writeChangeset(root, 'lib.md', { [NPM_PACKAGE]: 'minor' }, 'NPM Package change');
     writeChangeset(root, 'ds.md', { [DATASOURCE]: 'patch' }, 'DS change');
     writeChangeset(root, 'pl.md', { [PROMLIB]: 'minor' }, 'Promlib feature');
 
@@ -571,7 +604,7 @@ describe('version-changeset / runVersion (end-to-end with real changeset binary)
     expect(result.heldCount).toBe(2);
 
     expect(readPackageVersion(root, PROMLIB_STUB_REL)).toBe('0.1.0');
-    expect(readPackageVersion(root, LIB_REL)).toBe('13.1.0');
+    expect(readPackageVersion(root, NPM_PACKAGE_REL)).toBe('13.1.0');
     expect(readPackageVersion(root, STUB_REL)).toBe('13.1.0');
     expect(readPackageVersion(root, '.')).toBe('13.1.0');
 

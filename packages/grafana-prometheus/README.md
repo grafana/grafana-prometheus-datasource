@@ -1,4 +1,4 @@
-# Grafana Prometheus Library
+# Grafana Prometheus NPM Library
 
 > **@grafana/prometheus is currently in ALPHA**.
 

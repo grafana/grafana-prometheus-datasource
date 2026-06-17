@@ -8,9 +8,9 @@ workspace root and the `pkg/promlib` Go module).
 ## Packages
 
 | Name                            | Path                                            | What gets versioned                                                                                                                          |
-| ------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| ------------------------------- | ----------------------------------------------- |----------------------------------------------------------------------------------------------------------------------------------------------|
 | `grafana-prometheus-datasource` | `packages/grafana-prometheus-datasource` (stub) | The plugin/workspace root — version + `CHANGELOG.md` mirrored to repo root.                                                                  |
-| `@grafana/prometheus`           | `packages/grafana-prometheus`                   | The published library, versioned in place.                                                                                                   |
+| `@grafana/prometheus`           | `packages/grafana-prometheus`                   | The published npm package, versioned in place.                                                                                               |
 | `promlib`                       | `packages/promlib` (stub)                       | The `pkg/promlib` Go module — `CHANGELOG.md` mirrored to `pkg/promlib/`. The Go module itself is released via `pkg/promlib/vX.Y.Z` git tags. |
 
 Stub packages are private, contain no source, and exist only because
@@ -25,13 +25,13 @@ Creates one `.changeset/<id>.md` for one package.
 
 ```bash
 yarn changeset                                    # fully interactive
-yarn changeset --datasource --patch "Fix panel"
-yarn changeset --library    --minor "Add util"
-yarn changeset --library    --major "Breaking change"
-yarn changeset --promlib    --patch "Fix promlib bug"
+yarn changeset --datasource     --patch "Fix panel"
+yarn changeset --npm-package    --minor "Add util"
+yarn changeset --npm-package    --major "Breaking change"
+yarn changeset --promlib        --patch "Fix promlib bug"
 ```
 
-Flags: `--datasource` (alias `--plugin`), `--library` (alias `--lib`),
+Flags: `--datasource`, `--npm-package`,
 `--promlib`, plus `--patch` / `--minor` / `--major`. Anything left over is the
 summary. Missing inputs are prompted for; an empty package selection is an
 error (no default).
@@ -41,7 +41,7 @@ error (no default).
 Versions exactly one package. `changeset version` always consumes every
 pending changeset for every referenced package, so this script:
 
-1. Picks a target (`--datasource` / `--library` / `--promlib`, or interactive).
+1. Picks a target (`--datasource` / `--npm-package` / `--promlib`, or interactive).
 2. Moves changesets that don't reference that package into `.changeset-hold/`.
 3. Runs `changeset version`.
 4. Restores the held changesets so they remain pending for next time.
@@ -51,7 +51,7 @@ pending changeset for every referenced package, so this script:
 ```bash
 yarn changeset:version                # interactive
 yarn changeset:version --datasource   # plugin/root only
-yarn changeset:version --library      # @grafana/prometheus only
+yarn changeset:version --npm-package  # @grafana/prometheus only
 yarn changeset:version --promlib      # pkg/promlib only
 ```
 

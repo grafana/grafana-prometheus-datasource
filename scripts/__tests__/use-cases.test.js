@@ -13,7 +13,7 @@ const versionChangeset = require('../version-changeset');
 const { syncChangelog } = require('../sync-changelog');
 const {
   DATASOURCE,
-  LIBRARY,
+  NPM_PACKAGE,
   PROMLIB,
   createFixture,
   destroyFixture,
@@ -97,7 +97,7 @@ describe('Use case 1.1 — `yarn changeset` interactive', () => {
     expect(fm.raw).toMatch(/(['"]?)grafana-prometheus-datasource\1\s*:\s*patch/);
   });
 
-  it('user picks 2 (library), minor, summary → produces a library minor changeset', async () => {
+  it('user picks 2 (npm-package), minor, summary → produces a npm-package minor changeset', async () => {
     const prompt = makePrompt(['2', 'minor', 'Add new helper']);
 
     const result = await addChangeset.run({
@@ -107,11 +107,11 @@ describe('Use case 1.1 — `yarn changeset` interactive', () => {
       log: () => {},
     });
 
-    expect(result.pkg).toBe(LIBRARY);
+    expect(result.pkg).toBe(NPM_PACKAGE);
     expect(result.bump).toBe('minor');
 
     const fm = readChangesetFrontmatter(root, listChangesetMdFiles(root)[0]);
-    expect(fm.packages).toEqual(new Set([LIBRARY]));
+    expect(fm.packages).toEqual(new Set([NPM_PACKAGE]));
     expect(fm.raw).toContain('Add new helper');
     expect(fm.raw).toMatch(/(['"]?)@grafana\/prometheus\1\s*:\s*minor/);
   });
@@ -144,7 +144,7 @@ describe('Use case 1.1 — `yarn changeset` interactive', () => {
   });
 });
 
-describe('Use case 1.2 — `yarn changeset --library --minor "..."`', () => {
+describe('Use case 1.2 — `yarn changeset --npm-package --minor "..."`', () => {
   let root;
 
   beforeEach(() => {
@@ -155,18 +155,18 @@ describe('Use case 1.2 — `yarn changeset --library --minor "..."`', () => {
     destroyFixture(root);
   });
 
-  it('produces a library minor changeset, no prompts, correct summary', async () => {
+  it('produces a npm-package minor changeset, no prompts, correct summary', async () => {
     const prompt = makePrompt([]); // must not be called
 
     const result = await addChangeset.run({
-      argv: ['--library', '--minor', 'some', 'test', 'for', 'minor', 'level', 'change'],
+      argv: ['--npm-package', '--minor', 'some', 'test', 'for', 'minor', 'level', 'change'],
       repoRoot: root,
       prompt,
       log: () => {},
     });
 
     expect(result).toMatchObject({
-      pkg: LIBRARY,
+      pkg: NPM_PACKAGE,
       bump: 'minor',
       summary: 'some test for minor level change',
     });
@@ -176,7 +176,7 @@ describe('Use case 1.2 — `yarn changeset --library --minor "..."`', () => {
     expect(files).toHaveLength(1);
 
     const fm = readChangesetFrontmatter(root, files[0]);
-    expect(fm.packages).toEqual(new Set([LIBRARY]));
+    expect(fm.packages).toEqual(new Set([NPM_PACKAGE]));
     expect(fm.raw).toContain('some test for minor level change');
     expect(fm.raw).toMatch(/(['"]?)@grafana\/prometheus\1\s*:\s*minor/);
   });
@@ -226,7 +226,7 @@ describe('Use case 1.4 — `yarn changeset:version --datasource`', () => {
   beforeEach(() => {
     root = createFixture({
       rootVersion: '13.1.0',
-      libraryVersion: '13.1.0',
+      npmPackageVersion: '13.1.0',
       datasourceVersion: '13.1.0',
     });
   });
@@ -235,9 +235,9 @@ describe('Use case 1.4 — `yarn changeset:version --datasource`', () => {
     destroyFixture(root);
   });
 
-  it('consumes ALL datasource changesets, bumps root + stub package.json, leaves library changesets and version untouched', async () => {
+  it('consumes ALL datasource changesets, bumps root + stub package.json, leaves npm-package changesets and version untouched', async () => {
     // Three datasource changesets (a major + a minor + a patch → final bump
-    // is the highest, which is "major"), plus two unrelated library
+    // is the highest, which is "major"), plus two unrelated npm-package
     // changesets that must be preserved on disk.
     await addChangeset.run({
       argv: ['--datasource', '--patch', 'Fix A'],
@@ -258,13 +258,13 @@ describe('Use case 1.4 — `yarn changeset:version --datasource`', () => {
       log: () => {},
     });
     await addChangeset.run({
-      argv: ['--library', '--minor', 'Lib unrelated 1'],
+      argv: ['--npm-package', '--minor', 'Lib unrelated 1'],
       repoRoot: root,
       prompt: makePrompt([]),
       log: () => {},
     });
     await addChangeset.run({
-      argv: ['--library', '--patch', 'Lib unrelated 2'],
+      argv: ['--npm-package', '--patch', 'Lib unrelated 2'],
       repoRoot: root,
       prompt: makePrompt([]),
       log: () => {},
@@ -293,7 +293,7 @@ describe('Use case 1.4 — `yarn changeset:version --datasource`', () => {
     expect(remaining).toHaveLength(2);
     for (const file of remaining) {
       const { packages } = readChangesetFrontmatter(root, file);
-      expect([...packages]).toEqual([LIBRARY]);
+      expect([...packages]).toEqual([NPM_PACKAGE]);
     }
 
     const rootChangelog = fs.readFileSync(path.join(root, 'CHANGELOG.md'), 'utf8');
@@ -315,13 +315,13 @@ describe('Use case 1.4 — `yarn changeset:version --datasource`', () => {
   });
 });
 
-describe('Use case 1.5 — `yarn changeset:version --library`', () => {
+describe('Use case 1.5 — `yarn changeset:version --npm-package`', () => {
   let root;
 
   beforeEach(() => {
     root = createFixture({
       rootVersion: '13.1.0',
-      libraryVersion: '13.1.0',
+      npmPackageVersion: '13.1.0',
       datasourceVersion: '13.1.0',
     });
   });
@@ -330,15 +330,15 @@ describe('Use case 1.5 — `yarn changeset:version --library`', () => {
     destroyFixture(root);
   });
 
-  it('consumes ALL library changesets, bumps the library only, leaves datasource changesets and the root/stub versions untouched', async () => {
+  it('consumes ALL npm-package changesets, bumps the npm-package only, leaves datasource changesets and the root/stub versions untouched', async () => {
     await addChangeset.run({
-      argv: ['--library', '--patch', 'Lib patch 1'],
+      argv: ['--npm-package', '--patch', 'Lib patch 1'],
       repoRoot: root,
       prompt: makePrompt([]),
       log: () => {},
     });
     await addChangeset.run({
-      argv: ['--library', '--minor', 'Lib minor 2'],
+      argv: ['--npm-package', '--minor', 'Lib minor 2'],
       repoRoot: root,
       prompt: makePrompt([]),
       log: () => {},
@@ -353,7 +353,7 @@ describe('Use case 1.5 — `yarn changeset:version --library`', () => {
     expect(listChangesetMdFiles(root)).toHaveLength(3);
 
     const result = await versionChangeset.run({
-      argv: ['--library'],
+      argv: ['--npm-package'],
       repoRoot: root,
       runChangesetVersion: realRunner,
       syncChangelog,
@@ -377,9 +377,9 @@ describe('Use case 1.5 — `yarn changeset:version --library`', () => {
     expect(fs.existsSync(path.join(root, '.changeset-hold'))).toBe(false);
   });
 
-  it('also works through the interactive picker (user types "2" for library)', async () => {
+  it('also works through the interactive picker (user types "2" for npm-package)', async () => {
     await addChangeset.run({
-      argv: ['--library', '--minor', 'Lib via interactive version'],
+      argv: ['--npm-package', '--minor', 'Lib via interactive version'],
       repoRoot: root,
       prompt: makePrompt([]),
       log: () => {},
@@ -407,7 +407,7 @@ describe('Use case 1.6 — `yarn changeset:version --promlib`', () => {
   beforeEach(() => {
     root = createFixture({
       rootVersion: '13.1.0',
-      libraryVersion: '13.1.0',
+      npmPackageVersion: '13.1.0',
       datasourceVersion: '13.1.0',
       promlibVersion: '0.0.10',
     });
@@ -431,7 +431,7 @@ describe('Use case 1.6 — `yarn changeset:version --promlib`', () => {
       log: () => {},
     });
     await addChangeset.run({
-      argv: ['--library', '--minor', 'Lib unrelated'],
+      argv: ['--npm-package', '--minor', 'Lib unrelated'],
       repoRoot: root,
       prompt: makePrompt([]),
       log: () => {},
@@ -479,7 +479,7 @@ describe('Use case 1.6 — `yarn changeset:version --promlib`', () => {
         remainingPackages.add(pkg);
       }
     }
-    expect(remainingPackages).toEqual(new Set([LIBRARY, DATASOURCE]));
+    expect(remainingPackages).toEqual(new Set([NPM_PACKAGE, DATASOURCE]));
 
     expect(fs.existsSync(path.join(root, '.changeset-hold'))).toBe(false);
   });
@@ -505,5 +505,71 @@ describe('Use case 1.6 — `yarn changeset:version --promlib`', () => {
     expect(result.exitCode).toBe(0);
     expect(result.versioned).toBe(true);
     expect(readPackageVersion(root, PROMLIB_STUB_REL)).toBe('0.0.11');
+  });
+});
+
+describe('Use case 1.7 — `yarn changeset:version --datasource` with no pending changesets', () => {
+  let root;
+
+  beforeEach(() => {
+    root = createFixture({
+      rootVersion: '13.1.0',
+      npmPackageVersion: '13.1.0',
+      datasourceVersion: '13.1.0',
+    });
+  });
+
+  afterEach(() => {
+    destroyFixture(root);
+  });
+
+  it('applies a synthetic patch bump and generates a changelog entry even with no changesets', async () => {
+    const result = await versionChangeset.run({
+      argv: ['--datasource'],
+      repoRoot: root,
+      runChangesetVersion: realRunner,
+      syncChangelog,
+      log: () => {},
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.versioned).toBe(true);
+
+    expect(readPackageVersion(root, STUB_REL)).toBe('13.1.1');
+    expect(readPackageVersion(root, '.')).toBe('13.1.1');
+
+    const rootChangelog = fs.readFileSync(path.join(root, 'CHANGELOG.md'), 'utf8');
+    expect(rootChangelog).toContain('## 13.1.1');
+    expect(rootChangelog).toContain('Patch release');
+    expect(rootChangelog).not.toMatch(/### (?:Major|Minor|Patch) Changes/);
+  });
+
+  it('preserves npm-package changesets and does not bump the npm-package version', async () => {
+    await addChangeset.run({
+      argv: ['--npm-package', '--minor', 'Lib unrelated'],
+      repoRoot: root,
+      prompt: makePrompt([]),
+      log: () => {},
+    });
+
+    const result = await versionChangeset.run({
+      argv: ['--datasource'],
+      repoRoot: root,
+      runChangesetVersion: realRunner,
+      syncChangelog,
+      log: () => {},
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.versioned).toBe(true);
+
+    expect(readPackageVersion(root, STUB_REL)).toBe('13.1.1');
+    expect(readPackageVersion(root, '.')).toBe('13.1.1');
+    expect(readPackageVersion(root, LIB_REL)).toBe('13.1.0');
+
+    const remaining = listChangesetMdFiles(root);
+    expect(remaining).toHaveLength(1);
+    const { packages } = readChangesetFrontmatter(root, remaining[0]);
+    expect([...packages]).toEqual([NPM_PACKAGE]);
   });
 });
