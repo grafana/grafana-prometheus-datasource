@@ -265,9 +265,12 @@ async function runVersion({
   const holdDir = path.join(repoRoot, HOLD_SUBDIR);
 
   const targeted = listChangesetFiles(changesetDir).filter((f) => getChangesetPackages(f).has(pkg));
+
+  let syntheticChangeset = null;
   if (targeted.length === 0) {
-    log(`No pending changesets reference "${pkg}". Nothing to version.`);
-    return { exitCode: 0, versioned: false, heldCount: 0 };
+    syntheticChangeset = path.join(changesetDir, '_auto-patch.md');
+    fs.writeFileSync(syntheticChangeset, `---\n'${pkg}': patch\n---\n\nPatch release\n`);
+    log(`No pending changesets for "${pkg}" — applying a synthetic patch bump.`);
   }
 
   const held = moveChangesetsAside(pkg, changesetDir, holdDir);
@@ -280,6 +283,9 @@ async function runVersion({
     exitCode = runChangesetVersion({ repoRoot, changesetBin });
   } finally {
     restoreHeldChangesets(held, holdDir);
+    if (syntheticChangeset && fs.existsSync(syntheticChangeset)) {
+      fs.unlinkSync(syntheticChangeset);
+    }
   }
 
   if (exitCode !== 0) {

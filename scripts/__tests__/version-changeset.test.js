@@ -456,7 +456,7 @@ describe('version-changeset / runVersion (end-to-end with real changeset binary)
     expect(fs.existsSync(path.join(root, '.changeset-hold'))).toBe(false);
   });
 
-  it('does nothing and reports "Nothing to version." when no changeset references the chosen package', async () => {
+  it('applies a synthetic patch bump when no changeset references the chosen package', async () => {
     writeChangeset(root, 'lib.md', { [LIBRARY]: 'minor' }, 'Lib change');
 
     const logs = [];
@@ -469,9 +469,14 @@ describe('version-changeset / runVersion (end-to-end with real changeset binary)
     });
 
     expect(result.exitCode).toBe(0);
-    expect(result.versioned).toBe(false);
-    expect(logs.join('\n')).toMatch(/Nothing to version/);
+    expect(result.versioned).toBe(true);
+    expect(logs.join('\n')).toMatch(/synthetic patch bump/i);
 
+    // Datasource stub + root bumped by one patch.
+    expect(readPackageVersion(root, STUB_REL)).toBe('13.1.1');
+    expect(readPackageVersion(root, '.')).toBe('13.1.1');
+
+    // Library changeset preserved and library version unchanged.
     expect(readPackageVersion(root, LIB_REL)).toBe('13.1.0');
     expect(listChangesetMdFiles(root)).toEqual(['lib.md']);
   });
@@ -522,6 +527,45 @@ describe('version-changeset / runVersion (end-to-end with real changeset binary)
         syncChangelog,
       })
     ).rejects.toThrow(/Invalid package/);
+  });
+
+  it('applies a synthetic patch bump for the library when it has no changesets', async () => {
+    // No changesets at all — synthetic bump must still produce a version increment.
+    const result = await runVersion({
+      pkg: LIBRARY,
+      repoRoot: root,
+      runChangesetVersion: realRunner,
+      syncChangelog,
+      log: () => {},
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.versioned).toBe(true);
+
+    expect(readPackageVersion(root, LIB_REL)).toBe('13.1.1');
+    // Stub and root are unchanged (library is not a stub package).
+    expect(readPackageVersion(root, STUB_REL)).toBe('13.1.0');
+    expect(readPackageVersion(root, '.')).toBe('13.1.0');
+
+    expect(listChangesetMdFiles(root)).toEqual([]);
+  });
+
+  it('cleans up the synthetic changeset file when the changeset binary fails', async () => {
+    const failingRunner = () => 7;
+
+    const result = await runVersion({
+      pkg: DATASOURCE,
+      repoRoot: root,
+      runChangesetVersion: failingRunner,
+      syncChangelog,
+      log: () => {},
+    });
+
+    expect(result.exitCode).toBe(7);
+    expect(result.versioned).toBe(false);
+
+    // The synthetic file must have been removed even though the binary failed.
+    expect(listChangesetMdFiles(root)).toEqual([]);
   });
 
   it('versions the promlib stub and mirrors CHANGELOG to pkg/promlib (no version mirror)', async () => {

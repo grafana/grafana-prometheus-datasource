@@ -507,3 +507,69 @@ describe('Use case 1.6 — `yarn changeset:version --promlib`', () => {
     expect(readPackageVersion(root, PROMLIB_STUB_REL)).toBe('0.0.11');
   });
 });
+
+describe('Use case 1.7 — `yarn changeset:version --datasource` with no pending changesets', () => {
+  let root;
+
+  beforeEach(() => {
+    root = createFixture({
+      rootVersion: '13.1.0',
+      libraryVersion: '13.1.0',
+      datasourceVersion: '13.1.0',
+    });
+  });
+
+  afterEach(() => {
+    destroyFixture(root);
+  });
+
+  it('applies a synthetic patch bump and generates a changelog entry even with no changesets', async () => {
+    const result = await versionChangeset.run({
+      argv: ['--datasource'],
+      repoRoot: root,
+      runChangesetVersion: realRunner,
+      syncChangelog,
+      log: () => {},
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.versioned).toBe(true);
+
+    expect(readPackageVersion(root, STUB_REL)).toBe('13.1.1');
+    expect(readPackageVersion(root, '.')).toBe('13.1.1');
+
+    const rootChangelog = fs.readFileSync(path.join(root, 'CHANGELOG.md'), 'utf8');
+    expect(rootChangelog).toContain('## 13.1.1');
+    expect(rootChangelog).toContain('Patch release');
+    expect(rootChangelog).not.toMatch(/### (?:Major|Minor|Patch) Changes/);
+  });
+
+  it('preserves library changesets and does not bump the library version', async () => {
+    await addChangeset.run({
+      argv: ['--library', '--minor', 'Lib unrelated'],
+      repoRoot: root,
+      prompt: makePrompt([]),
+      log: () => {},
+    });
+
+    const result = await versionChangeset.run({
+      argv: ['--datasource'],
+      repoRoot: root,
+      runChangesetVersion: realRunner,
+      syncChangelog,
+      log: () => {},
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.versioned).toBe(true);
+
+    expect(readPackageVersion(root, STUB_REL)).toBe('13.1.1');
+    expect(readPackageVersion(root, '.')).toBe('13.1.1');
+    expect(readPackageVersion(root, LIB_REL)).toBe('13.1.0');
+
+    const remaining = listChangesetMdFiles(root);
+    expect(remaining).toHaveLength(1);
+    const { packages } = readChangesetFrontmatter(root, remaining[0]);
+    expect([...packages]).toEqual([LIBRARY]);
+  });
+});
