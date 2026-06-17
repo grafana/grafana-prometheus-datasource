@@ -32,8 +32,7 @@ export const durationError = 'Value is not valid, you can use number with time u
 export const seriesLimitError =
   'Value is not valid, you can use only numbers or leave it empty to use default limit or set 0 to have no limit.';
 
-export const warningThresholdError =
-  'Value is not valid, you can use only non-negative numbers.';
+export const warningThresholdError = 'Value is not valid, you can use only non-negative numbers.';
 
 export const errorThresholdError = 'Value is not valid, you can use only non-negative numbers.';
 

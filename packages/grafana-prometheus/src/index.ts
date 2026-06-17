@@ -45,7 +45,10 @@ export { NestedQueryList } from './querybuilder/components/NestedQueryList';
 export { PromQueryBuilder } from './querybuilder/components/PromQueryBuilder';
 export { PromQueryBuilderContainer } from './querybuilder/components/PromQueryBuilderContainer';
 export { PromQueryBuilderExplained } from './querybuilder/components/PromQueryBuilderExplained';
-export { PromQueryBuilderOptions } from './querybuilder/components/PromQueryBuilderOptions';
+export {
+  PromQueryBuilderOptions,
+  type PromQueryBuilderUIOptions,
+} from './querybuilder/components/PromQueryBuilderOptions';
 export { PromQueryCodeEditor } from './querybuilder/components/PromQueryCodeEditor';
 export { PromQueryEditorSelector } from './querybuilder/components/PromQueryEditorSelector';
 export { PromQueryLegendEditor } from './querybuilder/components/PromQueryLegendEditor';

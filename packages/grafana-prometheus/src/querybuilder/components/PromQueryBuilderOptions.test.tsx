@@ -8,7 +8,7 @@ import { CoreApp } from '@grafana/data';
 import { type PromQuery } from '../../types';
 import { getQueryWithDefaults } from '../state';
 
-import { PromQueryBuilderOptions } from './PromQueryBuilderOptions';
+import { PromQueryBuilderOptions, type PromQueryBuilderUIOptions } from './PromQueryBuilderOptions';
 
 describe('PromQueryBuilderOptions', () => {
   it('Can change query type', async () => {
@@ -100,9 +100,55 @@ describe('PromQueryBuilderOptions', () => {
     setup({ exemplar: true });
     expect(screen.getByText('Exemplars: true')).toBeInTheDocument();
   });
+
+  describe('uiOptions', () => {
+    it('hides exemplars switch when uiOptions.exemplars is false', async () => {
+      setup({}, CoreApp.PanelEditor, { exemplars: false });
+      expect(screen.queryByText(/Exemplars:/)).not.toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole('button', { name: /Options/ }));
+      expect(screen.queryByLabelText('Exemplars switch.')).not.toBeInTheDocument();
+    });
+
+    it('hides legend section when uiOptions.legend is false', async () => {
+      setup({}, CoreApp.PanelEditor, { legend: false });
+      expect(screen.queryByText(/Legend:/)).not.toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole('button', { name: /Options/ }));
+      expect(screen.queryByText('Auto')).not.toBeInTheDocument();
+    });
+
+    it('hides type section when uiOptions.type is false', async () => {
+      setup({}, CoreApp.PanelEditor, { type: false });
+      expect(screen.queryByText(/Type:/)).not.toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole('button', { name: /Options/ }));
+      expect(screen.queryByLabelText('Range')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('formatOptions', () => {
+    it('uses the custom format options when provided', async () => {
+      setup({ format: 'table' }, CoreApp.PanelEditor, undefined, [
+        { label: 'Time series', value: 'time_series' },
+        { label: 'Table', value: 'table' },
+      ]);
+
+      expect(screen.getByText('Format: Table')).toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole('button', { name: /Options/ }));
+      await userEvent.click(screen.getByLabelText('Format combobox'));
+      expect(screen.queryByText('Heatmap')).not.toBeInTheDocument();
+    });
+  });
 });
 
-function setup(queryOverrides: Partial<PromQuery> = {}, app: CoreApp = CoreApp.PanelEditor) {
+function setup(
+  queryOverrides: Partial<PromQuery> = {},
+  app: CoreApp = CoreApp.PanelEditor,
+  uiOptions?: PromQueryBuilderUIOptions,
+  formatOptions?: Parameters<typeof PromQueryBuilderOptions>[0]['formatOptions']
+) {
   const props = {
     app,
     query: {
@@ -119,14 +165,8 @@ function setup(queryOverrides: Partial<PromQuery> = {}, app: CoreApp = CoreApp.P
     },
     onRunQuery: jest.fn(),
     onChange: jest.fn(),
-    uiOptions: {
-      exemplars: true,
-      type: true,
-      format: true,
-      minStep: true,
-      legend: true,
-      resolution: true,
-    },
+    uiOptions,
+    formatOptions,
   };
 
   const { container } = render(<PromQueryBuilderOptions {...props} />);
