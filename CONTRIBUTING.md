@@ -132,7 +132,7 @@ _**NOTE: if there is no changeset for the package you want to release, CLI will 
 ### Grafana Plugin Release `grafana-prometheus-datasource`
 
 - Create a new branch from latest `main`.
-- Run `yarn changeset:version` and select `grafana-prometheus-datasource`
+- Run `yarn changeset:version --datasource` (or run `yarn changeset:version` and select `grafana-prometheus-datasource`)
 - Follow the CLI instructions. 
   - Changesets will be aggregated and a new changelog entry will be generated.
   - Aggregated changesets will be deleted.

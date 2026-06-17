@@ -5,26 +5,26 @@
 // stub package that mirrors the workspace root — see
 // scripts/sync-changelog.js), `@grafana/prometheus`, or `promlib` (the stub
 // that mirrors `pkg/promlib`'s CHANGELOG) — via `--datasource` /
-// `--library` / `--promlib`, or interactively when no flag is passed. There
+// `--npm-package` / `--promlib`, or interactively when no flag is passed. There
 // is no default.
 //
 // Usage:
 //   yarn changeset                                     # fully interactive
 //   yarn changeset --datasource --patch "Fix panel"
-//   yarn changeset --library --minor "Add new util"
-//   yarn changeset --library --major "Breaking change"
+//   yarn changeset --npm-package --minor "Add new util"
+//   yarn changeset --npm-package --major "Breaking change"
 //   yarn changeset --promlib --patch "Fix promlib bug"
 const path = require('path');
 const readline = require('readline');
 const write = require('@changesets/write').default;
 
 const DATASOURCE = 'grafana-prometheus-datasource';
-const LIBRARY = '@grafana/prometheus';
+const NPM_PACKAGE = '@grafana/prometheus';
 const PROMLIB = 'promlib';
-const PACKAGES = [DATASOURCE, LIBRARY, PROMLIB];
+const PACKAGES = [DATASOURCE, NPM_PACKAGE, PROMLIB];
 const BUMP_TYPES = ['patch', 'minor', 'major'];
 
-const CONFLICT_MESSAGE = 'Only one of --datasource / --library / --promlib may be used.';
+const CONFLICT_MESSAGE = 'Only one of --datasource / --npm-package / --promlib may be used.';
 
 function setPkg(args, pkg) {
   if (args.pkg && args.pkg !== pkg) {
@@ -39,10 +39,10 @@ function parseArgs(argv) {
   for (const arg of argv) {
     if (arg === '--patch' || arg === '--minor' || arg === '--major') {
       args.bump = arg.slice(2);
-    } else if (arg === '--datasource' || arg === '--plugin') {
+    } else if (arg === '--datasource') {
       setPkg(args, DATASOURCE);
-    } else if (arg === '--library' || arg === '--lib') {
-      setPkg(args, LIBRARY);
+    } else if (arg === '--npm-package') {
+      setPkg(args, NPM_PACKAGE);
     } else if (arg === '--promlib') {
       setPkg(args, PROMLIB);
     } else {
@@ -66,18 +66,16 @@ function defaultPrompt(question, defaultValue) {
 async function pickPackageInteractively(prompt, log) {
   log('Which package?');
   log(`  1) ${DATASOURCE}`);
-  log(`  2) ${LIBRARY}`);
+  log(`  2) ${NPM_PACKAGE}`);
   log(`  3) ${PROMLIB}`);
   const choice = (await prompt('Select [1/2/3]: ', '')).toLowerCase();
   switch (choice) {
     case '1':
     case 'datasource':
-    case 'plugin':
       return DATASOURCE;
     case '2':
-    case 'library':
-    case 'lib':
-      return LIBRARY;
+    case 'npm-package':
+      return NPM_PACKAGE;
     case '3':
     case 'promlib':
       return PROMLIB;
@@ -137,7 +135,7 @@ if (require.main === module) {
 
 module.exports = {
   DATASOURCE,
-  LIBRARY,
+  NPM_PACKAGE,
   PROMLIB,
   PACKAGES,
   BUMP_TYPES,

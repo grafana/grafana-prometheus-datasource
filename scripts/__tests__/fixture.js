@@ -15,7 +15,7 @@ const os = require('os');
 const path = require('path');
 
 const DATASOURCE = 'grafana-prometheus-datasource';
-const LIBRARY = '@grafana/prometheus';
+const NPM_PACKAGE = '@grafana/prometheus';
 const PROMLIB = 'promlib';
 
 function writeJson(filePath, data) {
@@ -31,7 +31,7 @@ function writeText(filePath, content) {
 function createFixture({
   rootName = 'fixture-root',
   rootVersion = '13.1.0',
-  libraryVersion = '13.1.0',
+  npmPackageVersion = '13.1.0',
   datasourceVersion = '13.1.0',
   promlibVersion = '0.0.10',
 } = {}) {
@@ -45,8 +45,8 @@ function createFixture({
   });
 
   writeJson(path.join(root, 'packages', 'grafana-prometheus', 'package.json'), {
-    name: LIBRARY,
-    version: libraryVersion,
+    name: NPM_PACKAGE,
+    version: npmPackageVersion,
   });
 
   writeJson(path.join(root, 'packages', 'grafana-prometheus-datasource', 'package.json'), {
@@ -127,7 +127,7 @@ function getRealChangesetBin() {
 
 module.exports = {
   DATASOURCE,
-  LIBRARY,
+  NPM_PACKAGE,
   PROMLIB,
   createFixture,
   destroyFixture,

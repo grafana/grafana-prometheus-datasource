@@ -4,7 +4,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const { DATASOURCE, LIBRARY, PROMLIB, parseArgs, createChangeset, BUMP_TYPES } = require('../add-changeset');
+const { DATASOURCE, NPM_PACKAGE, PROMLIB, parseArgs, createChangeset, BUMP_TYPES } = require('../add-changeset');
 const { createFixture, destroyFixture, listChangesetMdFiles } = require('./fixture');
 
 describe('add-changeset / parseArgs', () => {
@@ -13,17 +13,9 @@ describe('add-changeset / parseArgs', () => {
     expect(args).toEqual({ pkg: DATASOURCE, bump: 'patch', summary: 'Fix panel' });
   });
 
-  it('parses --library --minor', () => {
-    const args = parseArgs(['--library', '--minor', 'Add util']);
-    expect(args).toEqual({ pkg: LIBRARY, bump: 'minor', summary: 'Add util' });
-  });
-
-  it('parses --plugin as alias for datasource', () => {
-    expect(parseArgs(['--plugin', '--major', 'X']).pkg).toBe(DATASOURCE);
-  });
-
-  it('parses --lib as alias for library', () => {
-    expect(parseArgs(['--lib', '--patch', 'Y']).pkg).toBe(LIBRARY);
+  it('parses --npm-package --minor', () => {
+    const args = parseArgs(['--npm-package', '--minor', 'Add util']);
+    expect(args).toEqual({ pkg: NPM_PACKAGE, bump: 'minor', summary: 'Add util' });
   });
 
   it('parses --promlib --patch with summary', () => {
@@ -38,12 +30,12 @@ describe('add-changeset / parseArgs', () => {
     expect(parseArgs([])).toEqual({ pkg: null, bump: null, summary: '' });
   });
 
-  it('throws when both --datasource and --library are passed', () => {
-    expect(() => parseArgs(['--datasource', '--library'])).toThrow(/Only one of/);
+  it('throws when both --datasource and --npm-package are passed', () => {
+    expect(() => parseArgs(['--datasource', '--npm-package'])).toThrow(/Only one of/);
   });
 
-  it('throws when both --library and --promlib are passed', () => {
-    expect(() => parseArgs(['--library', '--promlib'])).toThrow(/Only one of/);
+  it('throws when both --npm-package and --promlib are passed', () => {
+    expect(() => parseArgs(['--npm-package', '--promlib'])).toThrow(/Only one of/);
   });
 
   it('throws when both --datasource and --promlib are passed', () => {
@@ -93,28 +85,28 @@ describe('add-changeset / createChangeset', () => {
     expect(content).toContain('Fix panel');
   });
 
-  it('writes a changeset for the library with the right frontmatter', async () => {
+  it('writes a changeset for the npm-package with the right frontmatter', async () => {
     const id = await createChangeset({
-      pkg: LIBRARY,
+      pkg: NPM_PACKAGE,
       bump: 'minor',
       summary: 'Add util',
       repoRoot: root,
     });
 
     const content = fs.readFileSync(path.join(root, '.changeset', `${id}.md`), 'utf8');
-    expectFrontmatterEntry(content, LIBRARY, 'minor');
+    expectFrontmatterEntry(content, NPM_PACKAGE, 'minor');
     expect(content).toContain('Add util');
   });
 
   it('supports the major bump', async () => {
     const id = await createChangeset({
-      pkg: LIBRARY,
+      pkg: NPM_PACKAGE,
       bump: 'major',
       summary: 'Breaking change',
       repoRoot: root,
     });
     const content = fs.readFileSync(path.join(root, '.changeset', `${id}.md`), 'utf8');
-    expectFrontmatterEntry(content, LIBRARY, 'major');
+    expectFrontmatterEntry(content, NPM_PACKAGE, 'major');
   });
 
   it('produces files whose frontmatter is parseable by version-changeset getChangesetPackages', async () => {
@@ -136,20 +128,20 @@ describe('add-changeset / createChangeset', () => {
   });
 
   it('rejects an invalid bump type', async () => {
-    await expect(createChangeset({ pkg: LIBRARY, bump: 'huge', summary: 'x', repoRoot: root })).rejects.toThrow(
+    await expect(createChangeset({ pkg: NPM_PACKAGE, bump: 'huge', summary: 'x', repoRoot: root })).rejects.toThrow(
       /Invalid bump type/
     );
   });
 
   it('rejects an empty summary', async () => {
-    await expect(createChangeset({ pkg: LIBRARY, bump: 'patch', summary: '', repoRoot: root })).rejects.toThrow(
+    await expect(createChangeset({ pkg: NPM_PACKAGE, bump: 'patch', summary: '', repoRoot: root })).rejects.toThrow(
       /summary is required/
     );
   });
 
   it('creates multiple distinct changesets in the same fixture', async () => {
     await createChangeset({ pkg: DATASOURCE, bump: 'patch', summary: 'A', repoRoot: root });
-    await createChangeset({ pkg: LIBRARY, bump: 'minor', summary: 'B', repoRoot: root });
+    await createChangeset({ pkg: NPM_PACKAGE, bump: 'minor', summary: 'B', repoRoot: root });
 
     expect(listChangesetMdFiles(root)).toHaveLength(2);
   });

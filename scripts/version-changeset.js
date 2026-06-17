@@ -4,7 +4,7 @@
 // `@changesets/cli version` always consumes every pending changeset and bumps
 // every referenced package. To scope it to one package, this script:
 //   1. Picks a target package (interactive prompt, or
-//      --datasource / --library / --promlib).
+//      --datasource / --npm-package / --promlib).
 //   2. Moves changesets that don't reference that package into a hold folder.
 //   3. Runs `changeset version`.
 //   4. Restores the held changesets so they remain pending for next time.
@@ -16,7 +16,7 @@
 // Usage:
 //   yarn changeset:version                  # interactive
 //   yarn changeset:version --datasource     # version the plugin/datasource only
-//   yarn changeset:version --library        # version @grafana/prometheus only
+//   yarn changeset:version --npm-package    # version @grafana/prometheus only
 //   yarn changeset:version --promlib        # version promlib (pkg/promlib) only
 const fs = require('fs');
 const path = require('path');
@@ -24,9 +24,9 @@ const readline = require('readline');
 const { spawnSync } = require('child_process');
 
 const DATASOURCE = 'grafana-prometheus-datasource';
-const LIBRARY = '@grafana/prometheus';
+const NPM_PACKAGE = '@grafana/prometheus';
 const PROMLIB = 'promlib';
-const PACKAGES = [DATASOURCE, LIBRARY, PROMLIB];
+const PACKAGES = [DATASOURCE, NPM_PACKAGE, PROMLIB];
 // Packages whose CHANGELOG/version need to be mirrored to a real location
 // after `changeset version` runs.
 const STUB_PACKAGES = new Set([DATASOURCE, PROMLIB]);
@@ -35,14 +35,14 @@ const STUB_PACKAGES = new Set([DATASOURCE, PROMLIB]);
 // post-process the file after `changeset version` runs (see flattenChangelog).
 const PACKAGE_DIRS = {
   [DATASOURCE]: path.join('packages', 'grafana-prometheus-datasource'),
-  [LIBRARY]: path.join('packages', 'grafana-prometheus'),
+  [NPM_PACKAGE]: path.join('packages', 'grafana-prometheus'),
   [PROMLIB]: path.join('packages', 'promlib'),
 };
 
 const CHANGESET_SUBDIR = '.changeset';
 const HOLD_SUBDIR = '.changeset-hold';
 
-const CONFLICT_MESSAGE = 'Only one of --datasource / --library / --promlib may be used.';
+const CONFLICT_MESSAGE = 'Only one of --datasource / --npm-package / --promlib may be used.';
 
 function parseArgs(argv) {
   let pkg = null;
@@ -53,10 +53,10 @@ function parseArgs(argv) {
     pkg = next;
   };
   for (const arg of argv) {
-    if (arg === '--datasource' || arg === '--plugin') {
+    if (arg === '--datasource') {
       setPkg(DATASOURCE);
-    } else if (arg === '--library' || arg === '--lib') {
-      setPkg(LIBRARY);
+    } else if (arg === '--npm-package') {
+      setPkg(NPM_PACKAGE);
     } else if (arg === '--promlib') {
       setPkg(PROMLIB);
     } else {
@@ -79,18 +79,16 @@ function defaultPrompt(question) {
 async function pickPackageInteractively(prompt, log) {
   log('Which package do you want to version?');
   log(`  1) ${DATASOURCE}`);
-  log(`  2) ${LIBRARY}`);
+  log(`  2) ${NPM_PACKAGE}`);
   log(`  3) ${PROMLIB}`);
   const choice = (await prompt('Select [1/2/3]: ')).toLowerCase();
   switch (choice) {
     case '1':
     case 'datasource':
-    case 'plugin':
       return DATASOURCE;
     case '2':
-    case 'library':
-    case 'lib':
-      return LIBRARY;
+    case 'npm-package':
+      return NPM_PACKAGE;
     case '3':
     case 'promlib':
       return PROMLIB;
@@ -344,7 +342,7 @@ if (require.main === module) {
 
 module.exports = {
   DATASOURCE,
-  LIBRARY,
+  NPM_PACKAGE,
   PROMLIB,
   PACKAGES,
   PACKAGE_DIRS,
