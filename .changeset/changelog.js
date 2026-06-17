@@ -1,3 +1,30 @@
+const path = require('path');
+
+const pkg = require(path.join(__dirname, '..', 'packages', 'grafana-prometheus', 'package.json'));
+const repoUrl = (pkg.repository?.url ?? '').replace(/\.git$/, '');
+
+function getPRLink(changesetId) {
+  if (!repoUrl) {
+    return '';
+  }
+  try {
+    const log = execSync(`git log --all --follow --pretty=format:"%s" -- ".changeset/${changesetId}.md"`, {
+      encoding: 'utf8',
+    }).trim();
+    if (!log) {
+      return '';
+    }
+    const earliest = log.split('\n').pop();
+    const match = earliest.match(/\(#(\d+)\)\s*$/);
+    if (!match) {
+      return '';
+    }
+    return ` ([#${match[1]}](${repoUrl}/pull/${match[1]}))`;
+  } catch (_) {
+    return '';
+  }
+}
+
 const changelogFunctions = {
   getReleaseLine: async (changeset, type, options) => {
     let prefix = '🎉';
@@ -20,9 +47,9 @@ const changelogFunctions = {
       ) {
         prefix = '⚙️';
       }
-      return [prefix, summary].join(' ');
+      return [prefix, summary].join(' ') + getPRLink(changeset.id);
     }
-    return [prefix, changeset?.summary].join(' ');
+    return [prefix, changeset?.summary].join(' ') + getPRLink(changeset?.id ?? '');
   },
   getDependencyReleaseLine: async (changesets, dependenciesUpdated, options) => {
     return '\n';
