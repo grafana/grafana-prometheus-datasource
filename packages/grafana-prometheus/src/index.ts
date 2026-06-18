@@ -60,6 +60,7 @@ export { MetricsModal } from './querybuilder/components/metrics-modal/MetricsMod
 export { PrometheusDatasource } from './datasource';
 // The parts
 export { addLabelToQuery } from './add_label_to_query';
+export { applyModifyQuery } from './modify_query';
 export { type QueryEditorMode, type PromQueryFormat, type Prometheus } from './dataquery';
 export { interpolateQueryExpr } from './escaping';
 export { loadResources } from './loadResources';

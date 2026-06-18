@@ -40,6 +40,7 @@ import {
 } from '@grafana/runtime';
 
 import { addLabelToQuery } from './add_label_to_query';
+import { applyModifyQuery } from './modify_query';
 import { PrometheusAnnotationSupport } from './annotations';
 import { DEFAULT_SERIES_LIMIT, GET_AND_POST_METADATA_ENDPOINTS, InstantQueryRefIdIndex } from './constants';
 import { interpolateQueryExpr, prometheusRegularEscape } from './escaping';
@@ -50,7 +51,7 @@ import {
   PrometheusLanguageProvider,
   type PrometheusLanguageProviderInterface,
 } from './language_provider';
-import { expandRecordingRules, getPrometheusTime, getRangeSnapInterval } from './language_utils';
+import { getPrometheusTime, getRangeSnapInterval } from './language_utils';
 import { PrometheusMetricFindQuery } from './metric_find_query';
 import { getQueryHints } from './query_hints';
 import { renderLabelsWithoutBrackets } from './querybuilder/shared/rendering/labels';
@@ -640,69 +641,7 @@ export class PrometheusDatasource
   }
 
   modifyQuery(query: PromQuery, action: QueryFixAction): PromQuery {
-    let expression = query.expr ?? '';
-    switch (action.type) {
-      case 'ADD_FILTER': {
-        const { key, value } = action.options ?? {};
-        if (key && value) {
-          expression = addLabelToQuery(expression, key, value);
-        }
-
-        break;
-      }
-      case 'ADD_FILTER_OUT': {
-        const { key, value } = action.options ?? {};
-        if (key && value) {
-          expression = addLabelToQuery(expression, key, value, '!=');
-        }
-        break;
-      }
-      case 'ADD_HISTOGRAM_QUANTILE': {
-        expression = `histogram_quantile(0.95, sum(rate(${expression}[$__rate_interval])) by (le))`;
-        break;
-      }
-      case 'ADD_HISTOGRAM_AVG': {
-        expression = `histogram_avg(rate(${expression}[$__rate_interval]))`;
-        break;
-      }
-      case 'ADD_HISTOGRAM_FRACTION': {
-        expression = `histogram_fraction(0,0.2,rate(${expression}[$__rate_interval]))`;
-        break;
-      }
-      case 'ADD_HISTOGRAM_COUNT': {
-        expression = `histogram_count(rate(${expression}[$__rate_interval]))`;
-        break;
-      }
-      case 'ADD_HISTOGRAM_SUM': {
-        expression = `histogram_sum(rate(${expression}[$__rate_interval]))`;
-        break;
-      }
-      case 'ADD_HISTOGRAM_STDDEV': {
-        expression = `histogram_stddev(rate(${expression}[$__rate_interval]))`;
-        break;
-      }
-      case 'ADD_HISTOGRAM_STDVAR': {
-        expression = `histogram_stdvar(rate(${expression}[$__rate_interval]))`;
-        break;
-      }
-      case 'ADD_RATE': {
-        expression = `rate(${expression}[$__rate_interval])`;
-        break;
-      }
-      case 'ADD_SUM': {
-        expression = `sum(${expression.trim()}) by ($1)`;
-        break;
-      }
-      case 'EXPAND_RULES': {
-        if (action.options) {
-          expression = expandRecordingRules(expression, action.options as any);
-        }
-        break;
-      }
-      default:
-        break;
-    }
-    return { ...query, expr: expression };
+    return applyModifyQuery(query, action);
   }
 
   /**
