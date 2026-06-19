@@ -2,7 +2,13 @@ import { dateTime, type TimeRange } from '@grafana/data';
 
 import { DEFAULT_SERIES_LIMIT } from './constants';
 import { type PrometheusDatasource } from './datasource';
-import { BaseResourceClient, LabelsApiClient, processSeries, SeriesApiClient } from './resource_clients';
+import {
+  BaseResourceClient,
+  LabelsApiClient,
+  parseInfoLabelsNdjson,
+  processSeries,
+  SeriesApiClient,
+} from './resource_clients';
 import { PrometheusCacheLevel } from './types';
 
 const mockTimeRange: TimeRange = {
@@ -1370,5 +1376,116 @@ describe('BaseResourceClient', () => {
 
       expect(result).toEqual([]);
     });
+  });
+});
+
+describe('parseInfoLabelsNdjson', () => {
+  it('collects results from multiple batch lines', () => {
+    const body = [
+      JSON.stringify({ results: [{ name: 'version', values: ['v1.0', 'v2.0'] }] }),
+      JSON.stringify({ results: [{ name: 'env', values: ['prod'] }] }),
+      JSON.stringify({ status: 'success', has_more: false }),
+    ].join('\n');
+
+    expect(parseInfoLabelsNdjson(body)).toEqual([
+      { name: 'version', values: ['v1.0', 'v2.0'] },
+      { name: 'env', values: ['prod'] },
+    ]);
+  });
+
+  it('ignores the success trailer and blank lines', () => {
+    const body = ['', JSON.stringify({ results: [{ name: 'env', values: ['prod'] }] }), '', '{"status":"success"}', ''].join(
+      '\n'
+    );
+    expect(parseInfoLabelsNdjson(body)).toEqual([{ name: 'env', values: ['prod'] }]);
+  });
+
+  it('surfaces batch warnings via console.warn but keeps results', () => {
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const body = JSON.stringify({ results: [{ name: 'env', values: ['prod'] }], warnings: ['partial data'] });
+
+    expect(parseInfoLabelsNdjson(body)).toEqual([{ name: 'env', values: ['prod'] }]);
+    expect(warnSpy).toHaveBeenCalledWith('/api/v1/info_labels warnings:', ['partial data']);
+    warnSpy.mockRestore();
+  });
+
+  it('throws on a mid-stream error line', () => {
+    const body = [
+      JSON.stringify({ results: [{ name: 'env', values: ['prod'] }] }),
+      JSON.stringify({ status: 'error', errorType: 'execution', error: 'query timed out' }),
+    ].join('\n');
+
+    expect(() => parseInfoLabelsNdjson(body)).toThrow('query timed out');
+  });
+
+  it('throws on a pre-stream Prometheus JSON error', () => {
+    const body = JSON.stringify({ status: 'error', errorType: 'bad_data', error: 'invalid expr' });
+    expect(() => parseInfoLabelsNdjson(body)).toThrow('invalid expr');
+  });
+
+  it('tolerates malformed lines without throwing', () => {
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const body = ['not-json', JSON.stringify({ results: [{ name: 'env', values: ['prod'] }] })].join('\n');
+
+    expect(parseInfoLabelsNdjson(body)).toEqual([{ name: 'env', values: ['prod'] }]);
+    warnSpy.mockRestore();
+  });
+});
+
+describe('BaseResourceClient - queryInfoLabels', () => {
+  const mockMetadataRequest = jest.fn();
+  const mockDatasource = {
+    cacheLevel: PrometheusCacheLevel.Low,
+    seriesLimit: DEFAULT_SERIES_LIMIT,
+    metadataRequest: mockMetadataRequest,
+  } as unknown as PrometheusDatasource;
+
+  const timeRange: TimeRange = {
+    from: dateTime(1681300292392),
+    to: dateTime(1681300293392),
+    raw: { from: 'now-1s', to: 'now' },
+  };
+
+  let client: LabelsApiClient;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    client = new LabelsApiClient(jest.fn(), mockDatasource);
+  });
+
+  const ndjson = (records: Array<{ name: string; values: string[] }>) =>
+    [JSON.stringify({ results: records }), '{"status":"success"}'].join('\n');
+
+  it('sends expr and omits metric_match/values_limit by default', async () => {
+    mockMetadataRequest.mockResolvedValueOnce({ data: ndjson([{ name: 'version', values: ['v1.0'] }]) });
+
+    const result = await client.queryInfoLabels(timeRange, 'up');
+
+    expect(result).toEqual([{ name: 'version', values: ['v1.0'] }]);
+    const [url, params, options] = mockMetadataRequest.mock.calls[0];
+    expect(url).toBe('/api/v1/info_labels');
+    expect(params).toMatchObject({ expr: 'up', limit: DEFAULT_SERIES_LIMIT });
+    expect(params).not.toHaveProperty('metric_match');
+    expect(params).not.toHaveProperty('values_limit');
+    expect(options).toMatchObject({ responseType: 'text' });
+  });
+
+  it('passes metric_match and values_limit when provided', async () => {
+    mockMetadataRequest.mockResolvedValueOnce({ data: ndjson([]) });
+
+    await client.queryInfoLabels(timeRange, 'up', 'build_info', 500, 10);
+
+    const [, params] = mockMetadataRequest.mock.calls[0];
+    expect(params).toMatchObject({ expr: 'up', metric_match: 'build_info', limit: 500, values_limit: 10 });
+  });
+
+  it('caches results for identical params (single network call)', async () => {
+    mockMetadataRequest.mockResolvedValueOnce({ data: ndjson([{ name: 'env', values: ['prod'] }]) });
+
+    const first = await client.queryInfoLabels(timeRange, 'up');
+    const second = await client.queryInfoLabels(timeRange, 'up');
+
+    expect(first).toEqual(second);
+    expect(mockMetadataRequest).toHaveBeenCalledTimes(1);
   });
 });

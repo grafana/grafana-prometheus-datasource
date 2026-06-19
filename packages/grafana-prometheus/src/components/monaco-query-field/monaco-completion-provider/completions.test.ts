@@ -12,6 +12,7 @@ const dataProviderSettings = {
   languageProvider: {
     queryLabelKeys: jest.fn(),
     queryLabelValues: jest.fn(),
+    queryInfoLabels: jest.fn(),
     queryMetricsMetadata: jest.fn().mockResolvedValue({}),
     retrieveLabelKeys: jest.fn(),
     retrieveMetricsMetadata: jest.fn().mockReturnValue({}),
@@ -244,6 +245,168 @@ describe('Label value completions', () => {
       const completions = await getCompletions(situation, dataProvider, timeRange);
       expect(completions).toHaveLength(1);
       expect(completions[0].insertText).toBe('"123"');
+    });
+  });
+});
+
+describe('info() label completions', () => {
+  const timeRange = getMockTimeRange();
+  let infoDataProvider: DataProvider;
+
+  beforeEach(() => {
+    infoDataProvider = {
+      getInfoLabels: jest.fn(),
+    } as unknown as DataProvider;
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  describe('IN_INFO_SELECTOR_NO_LABEL_NAME (label names)', () => {
+    it('emits label-name completions with the "=" suffix and triggerOnInsert', async () => {
+      jest.spyOn(infoDataProvider, 'getInfoLabels').mockResolvedValue([
+        { name: 'version', values: ['v1.0', 'v2.0'] },
+        { name: 'env', values: ['prod'] },
+      ]);
+
+      const situation: Situation = {
+        type: 'IN_INFO_SELECTOR_NO_LABEL_NAME',
+        infoExpr: 'up',
+        otherLabels: [],
+        betweenQuotes: false,
+      };
+
+      const completions = await getCompletions(situation, infoDataProvider, timeRange);
+
+      expect(infoDataProvider.getInfoLabels).toHaveBeenCalledWith(timeRange, 'up');
+      expect(completions).toEqual([
+        { type: 'LABEL_NAME', label: 'version', insertText: 'version=', triggerOnInsert: true },
+        { type: 'LABEL_NAME', label: 'env', insertText: 'env=', triggerOnInsert: true },
+      ]);
+    });
+
+    it('excludes labels already present in the selector', async () => {
+      jest.spyOn(infoDataProvider, 'getInfoLabels').mockResolvedValue([
+        { name: 'version', values: ['v1.0'] },
+        { name: 'env', values: ['prod'] },
+      ]);
+
+      const situation: Situation = {
+        type: 'IN_INFO_SELECTOR_NO_LABEL_NAME',
+        infoExpr: 'up',
+        otherLabels: [{ name: 'env', value: 'prod', op: '=' }],
+        betweenQuotes: false,
+      };
+
+      const completions = await getCompletions(situation, infoDataProvider, timeRange);
+
+      expect(completions.map((c) => c.label)).toEqual(['version']);
+    });
+
+    it('quotes UTF-8 label names as snippets', async () => {
+      jest
+        .spyOn(infoDataProvider, 'getInfoLabels')
+        .mockResolvedValue([{ name: 'k8s.cluster', values: ['c1'] }]);
+
+      const situation: Situation = {
+        type: 'IN_INFO_SELECTOR_NO_LABEL_NAME',
+        infoExpr: 'up',
+        otherLabels: [],
+        betweenQuotes: false,
+      };
+
+      const completions = await getCompletions(situation, infoDataProvider, timeRange);
+
+      expect(completions[0].insertText).toBe('"k8s.cluster"=');
+      expect(completions[0].insertTextRules).toBe(4);
+    });
+
+    it('returns an empty list when there are no records', async () => {
+      jest.spyOn(infoDataProvider, 'getInfoLabels').mockResolvedValue([]);
+
+      const situation: Situation = {
+        type: 'IN_INFO_SELECTOR_NO_LABEL_NAME',
+        infoExpr: 'up',
+        otherLabels: [],
+        betweenQuotes: false,
+      };
+
+      const completions = await getCompletions(situation, infoDataProvider, timeRange);
+      expect(completions).toEqual([]);
+    });
+  });
+
+  describe('IN_INFO_SELECTOR_WITH_LABEL_NAME (label values)', () => {
+    beforeEach(() => {
+      jest.replaceProperty(config, 'featureToggles', { prometheusSpecialCharsInLabelValues: false });
+    });
+
+    it('emits the values of the chosen label', async () => {
+      jest.spyOn(infoDataProvider, 'getInfoLabels').mockResolvedValue([
+        { name: 'version', values: ['v1.0', 'v2.0'] },
+        { name: 'env', values: ['prod'] },
+      ]);
+
+      const situation: Situation = {
+        type: 'IN_INFO_SELECTOR_WITH_LABEL_NAME',
+        infoExpr: 'up',
+        labelName: 'version',
+        otherLabels: [],
+        betweenQuotes: true,
+      };
+
+      const completions = await getCompletions(situation, infoDataProvider, timeRange);
+
+      expect(completions).toEqual([
+        { type: 'LABEL_VALUE', label: 'v1.0', insertText: 'v1.0' },
+        { type: 'LABEL_VALUE', label: 'v2.0', insertText: 'v2.0' },
+      ]);
+    });
+
+    it('wraps values in quotes when not between quotes', async () => {
+      jest.spyOn(infoDataProvider, 'getInfoLabels').mockResolvedValue([{ name: 'version', values: ['v1.0'] }]);
+
+      const situation: Situation = {
+        type: 'IN_INFO_SELECTOR_WITH_LABEL_NAME',
+        infoExpr: 'up',
+        labelName: 'version',
+        otherLabels: [],
+        betweenQuotes: false,
+      };
+
+      const completions = await getCompletions(situation, infoDataProvider, timeRange);
+      expect(completions[0].insertText).toBe('"v1.0"');
+    });
+
+    it('matches a quoted (UTF-8) label name against the unquoted record name', async () => {
+      jest.spyOn(infoDataProvider, 'getInfoLabels').mockResolvedValue([{ name: 'k8s.cluster', values: ['c1'] }]);
+
+      const situation: Situation = {
+        type: 'IN_INFO_SELECTOR_WITH_LABEL_NAME',
+        infoExpr: 'up',
+        labelName: '"k8s.cluster"',
+        otherLabels: [],
+        betweenQuotes: true,
+      };
+
+      const completions = await getCompletions(situation, infoDataProvider, timeRange);
+      expect(completions.map((c) => c.label)).toEqual(['c1']);
+    });
+
+    it('returns an empty list when the label is unknown', async () => {
+      jest.spyOn(infoDataProvider, 'getInfoLabels').mockResolvedValue([{ name: 'version', values: ['v1.0'] }]);
+
+      const situation: Situation = {
+        type: 'IN_INFO_SELECTOR_WITH_LABEL_NAME',
+        infoExpr: 'up',
+        labelName: 'missing',
+        otherLabels: [],
+        betweenQuotes: true,
+      };
+
+      const completions = await getCompletions(situation, infoDataProvider, timeRange);
+      expect(completions).toEqual([]);
     });
   });
 });

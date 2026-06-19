@@ -103,6 +103,28 @@ describe('PrometheusDatasource', () => {
     });
   });
 
+  describe('hasInfoLabelsAutocompleteEnabled', () => {
+    it('defaults to false when the jsonData option is unset', () => {
+      expect(ds.hasInfoLabelsAutocompleteEnabled()).toBe(false);
+    });
+
+    it('returns true when the jsonData option is enabled', () => {
+      const enabledDs = new PrometheusDatasource(
+        { ...instanceSettings, jsonData: { ...instanceSettings.jsonData, infoLabelsAutocomplete: true } },
+        templateSrvStub
+      );
+      expect(enabledDs.hasInfoLabelsAutocompleteEnabled()).toBe(true);
+    });
+
+    it('returns false when the jsonData option is explicitly false', () => {
+      const disabledDs = new PrometheusDatasource(
+        { ...instanceSettings, jsonData: { ...instanceSettings.jsonData, infoLabelsAutocomplete: false } },
+        templateSrvStub
+      );
+      expect(disabledDs.hasInfoLabelsAutocompleteEnabled()).toBe(false);
+    });
+  });
+
   describe('Query', () => {
     it('throws if using direct access', async () => {
       const instanceSettings = {

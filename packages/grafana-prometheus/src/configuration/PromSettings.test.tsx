@@ -1,5 +1,5 @@
 // Core Grafana history https://github.com/grafana/grafana/blob/v11.0.0-preview/public/app/plugins/datasource/prometheus/configuration/PromSettings.test.tsx
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { type SyntheticEvent } from 'react';
 
 import { type SelectableValue } from '@grafana/data';
@@ -117,6 +117,39 @@ describe('PromSettings', () => {
       render(<PromSettings onOptionsChange={() => {}} options={options} showQuerySamplesProcessedThresholdFields />);
 
       expect(screen.queryByText('Query threshold already set in custom query parameters')).not.toBeInTheDocument();
+    });
+
+    it('should render the info labels autocomplete switch', () => {
+      const options = createDefaultConfigOptions();
+
+      render(<PromSettings onOptionsChange={() => {}} options={options} />);
+
+      expect(screen.getByText('Info labels autocomplete (experimental)')).toBeInTheDocument();
+      expect(screen.getByTestId('prometheus-info-labels-autocomplete')).not.toBeChecked();
+    });
+
+    it('should reflect an enabled info labels autocomplete option', () => {
+      const options = createDefaultConfigOptions();
+      options.jsonData.infoLabelsAutocomplete = true;
+
+      render(<PromSettings onOptionsChange={() => {}} options={options} />);
+
+      expect(screen.getByTestId('prometheus-info-labels-autocomplete')).toBeChecked();
+    });
+
+    it('should call onOptionsChange when the info labels autocomplete switch is toggled', () => {
+      const options = createDefaultConfigOptions();
+      const onOptionsChange = jest.fn();
+
+      render(<PromSettings onOptionsChange={onOptionsChange} options={options} />);
+
+      fireEvent.click(screen.getByTestId('prometheus-info-labels-autocomplete'));
+
+      expect(onOptionsChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          jsonData: expect.objectContaining({ infoLabelsAutocomplete: true }),
+        })
+      );
     });
   });
 });

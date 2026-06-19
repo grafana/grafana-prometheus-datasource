@@ -6,6 +6,7 @@ import { config } from '@grafana/runtime';
 
 import { DEFAULT_COMPLETION_LIMIT } from '../../../constants';
 import { escapeLabelValueInExactSelector, prometheusRegularEscape } from '../../../escaping';
+import { removeQuotesIfExist } from '../../../language_utils';
 import { getFunctions } from '../../../promql';
 import { isValidLegacyName } from '../../../utf8_support';
 
@@ -226,6 +227,70 @@ function formatLabelValueForCompletion(value: string, betweenQuotes: boolean): s
   return betweenQuotes ? text : `"${text}"`;
 }
 
+/**
+ * Builds label-NAME completions for the `info()` data-label selector.
+ *
+ * Records come from the `/api/v1/info_labels` endpoint (one record per label). We reuse the same
+ * UTF-8 quoting, `=` suffix, and `triggerOnInsert` behaviour as the generic label-name path
+ * ({@link getLabelNamesForCompletions}), and exclude labels already present in the selector.
+ */
+async function getInfoLabelNamesCompletions(
+  infoExpr: string | undefined,
+  otherLabels: Label[],
+  dataProvider: DataProvider,
+  timeRange: TimeRange
+): Promise<Completion[]> {
+  const records = await dataProvider.getInfoLabels(timeRange, infoExpr);
+  const usedLabelNames = new Set(otherLabels.map((l) => l.name));
+
+  return records
+    .map((record) => record.name)
+    .filter((name) => !usedLabelNames.has(name))
+    .map((text) => {
+      const isUtf8 = !isValidLegacyName(text);
+      return {
+        type: 'LABEL_NAME',
+        label: text,
+        ...(isUtf8
+          ? {
+              insertText: `"${text}"=`,
+              insertTextRules: InsertAsSnippet,
+            }
+          : {
+              insertText: `${text}=`,
+            }),
+        triggerOnInsert: true,
+      };
+    });
+}
+
+/**
+ * Builds label-VALUE completions for a chosen label inside the `info()` data-label selector.
+ *
+ * The same `/api/v1/info_labels` response carries the values for every label, so we find the record
+ * matching `labelName` and emit its values (reusing {@link formatLabelValueForCompletion}). Returns
+ * an empty list when the label is unknown.
+ */
+async function getInfoLabelValuesCompletions(
+  infoExpr: string | undefined,
+  labelName: string,
+  betweenQuotes: boolean,
+  dataProvider: DataProvider,
+  timeRange: TimeRange
+): Promise<Completion[]> {
+  const records = await dataProvider.getInfoLabels(timeRange, infoExpr);
+  const record = records.find((r) => r.name === removeQuotesIfExist(labelName));
+  if (!record) {
+    return [];
+  }
+
+  return record.values.map((text) => ({
+    type: 'LABEL_VALUE',
+    label: text,
+    insertText: formatLabelValueForCompletion(text, betweenQuotes),
+  }));
+}
+
 export async function getCompletions(
   situation: Situation,
   dataProvider: DataProvider,
@@ -263,6 +328,16 @@ export async function getCompletions(
         situation.labelName,
         situation.betweenQuotes,
         situation.otherLabels,
+        dataProvider,
+        timeRange
+      );
+    case 'IN_INFO_SELECTOR_NO_LABEL_NAME':
+      return getInfoLabelNamesCompletions(situation.infoExpr, situation.otherLabels, dataProvider, timeRange);
+    case 'IN_INFO_SELECTOR_WITH_LABEL_NAME':
+      return getInfoLabelValuesCompletions(
+        situation.infoExpr,
+        situation.labelName,
+        situation.betweenQuotes,
         dataProvider,
         timeRange
       );

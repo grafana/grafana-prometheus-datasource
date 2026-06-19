@@ -322,3 +322,104 @@ describe('situation', () => {
     });
   });
 });
+
+// Same cursor convention as assertSituation, but with the info-labels flag enabled.
+function assertInfoSituation(situation: string, expectedSituation: Situation | null) {
+  const pos = situation.indexOf('^');
+  if (pos === -1) {
+    throw new Error('cursor missing');
+  }
+  const text = situation.replace('^', '');
+  if (text.indexOf('^') !== -1) {
+    throw new Error('multiple cursors');
+  }
+  const result = getSituation(text, pos, true);
+  if (expectedSituation === null) {
+    expect(result).toStrictEqual(null);
+  } else {
+    expect(result).toMatchObject(expectedSituation);
+  }
+}
+
+describe('situation - info() label autocomplete', () => {
+  it('detects the second argument label-name context', () => {
+    assertInfoSituation('info(up, {^})', {
+      type: 'IN_INFO_SELECTOR_NO_LABEL_NAME',
+      infoExpr: 'up',
+      otherLabels: [],
+      betweenQuotes: false,
+    });
+  });
+
+  it('returns null for an unclosed brace, consistent with generic label behavior', () => {
+    // Monaco auto-inserts the closing brace, so the realistic typed state is `info(up, {})`.
+    // An unclosed `{` produces a bare error node that no resolver matches - the same fallback
+    // the generic (non-info) code path exhibits for `something{`.
+    assertInfoSituation('info(up, {^', null);
+    assertSituation('something{^', null);
+  });
+
+  it('captures a complex first argument as infoExpr', () => {
+    assertInfoSituation('info(rate(http_requests_total[5m]), {^})', {
+      type: 'IN_INFO_SELECTOR_NO_LABEL_NAME',
+      infoExpr: 'rate(http_requests_total[5m])',
+      otherLabels: [],
+      betweenQuotes: false,
+    });
+  });
+
+  it('captures a first argument with a selector as infoExpr', () => {
+    assertInfoSituation('info(http_requests_total{job="api"}, {^})', {
+      type: 'IN_INFO_SELECTOR_NO_LABEL_NAME',
+      infoExpr: 'http_requests_total{job="api"}',
+      otherLabels: [],
+      betweenQuotes: false,
+    });
+  });
+
+  it('detects the value context for a label inside the second argument', () => {
+    assertInfoSituation('info(rate(http_requests_total[5m]), {foo="^"})', {
+      type: 'IN_INFO_SELECTOR_WITH_LABEL_NAME',
+      infoExpr: 'rate(http_requests_total[5m])',
+      labelName: 'foo',
+      betweenQuotes: true,
+      otherLabels: [],
+    });
+  });
+
+  it('includes already-present labels as otherLabels', () => {
+    assertInfoSituation('info(up, {foo="bar", ^})', {
+      type: 'IN_INFO_SELECTOR_NO_LABEL_NAME',
+      infoExpr: 'up',
+      otherLabels: [{ name: 'foo', value: 'bar', op: '=' }],
+      betweenQuotes: false,
+    });
+  });
+
+  it('does NOT treat the first argument selector as an info context', () => {
+    assertInfoSituation('info(up{job="^"}, {})', {
+      type: 'IN_LABEL_SELECTOR_WITH_LABEL_NAME',
+      metricName: 'up',
+      labelName: 'job',
+      betweenQuotes: true,
+      otherLabels: [],
+    });
+  });
+
+  it('falls back to generic label behavior when the flag is off', () => {
+    // identical query, but using the default getSituation (flag off)
+    assertSituation('info(up, {^})', {
+      type: 'IN_LABEL_SELECTOR_NO_LABEL_NAME',
+      otherLabels: [],
+      betweenQuotes: false,
+    });
+  });
+
+  it('does not affect non-info function calls', () => {
+    assertInfoSituation('count(up, {^})', {
+      type: 'IN_LABEL_SELECTOR_NO_LABEL_NAME',
+      otherLabels: [],
+      betweenQuotes: false,
+    });
+  });
+});

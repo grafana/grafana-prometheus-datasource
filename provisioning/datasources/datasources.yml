@@ -12,3 +12,21 @@ datasources:
       path: '/resources'
     secureJsonData:
       apiKey: 'api-key'
+
+  # PoC datasource for the experimental info() data-label autocomplete.
+  # Point it at Arve's info-autocomplete demo Prometheus running on the host:
+  #   git clone https://github.com/aknuds1/prometheus && cd prometheus && git checkout arve/info-autocomplete
+  #   go run ./documentation/examples/info-autocomplete-demo   # serves 127.0.0.1:9090 with the gated /api/v1/info_labels endpoint
+  # Grafana runs in Docker, so we reach the host demo via host.docker.internal (macOS/Windows).
+  # On Linux, replace the URL host with the docker bridge gateway (e.g. 172.17.0.1) or run with --network host.
+  - name: 'prometheus-info-labels-demo'
+    type: 'prometheus'
+    access: proxy
+    isDefault: false
+    orgId: 1
+    version: 1
+    editable: true
+    url: 'http://host.docker.internal:9090'
+    jsonData:
+      # The per-datasource opt-in that gates the whole feature (datasource.hasInfoLabelsAutocompleteEnabled()).
+      infoLabelsAutocomplete: true

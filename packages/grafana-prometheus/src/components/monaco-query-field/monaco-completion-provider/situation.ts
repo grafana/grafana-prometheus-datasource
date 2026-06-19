@@ -6,7 +6,9 @@ import {
   BinaryExpr,
   EqlRegex,
   EqlSingle,
+  FunctionCall,
   FunctionCallBody,
+  FunctionIdentifier,
   GroupingLabels,
   Identifier,
   LabelMatchers,
@@ -33,7 +35,9 @@ type NodeTypeId =
   | 0 // this is used as error-id
   | typeof AggregateExpr
   | typeof AggregateModifier
+  | typeof FunctionCall
   | typeof FunctionCallBody
+  | typeof FunctionIdentifier
   | typeof GroupingLabels
   | typeof Identifier
   | typeof UnquotedLabelMatcher
@@ -160,11 +164,28 @@ export type Situation =
       labelName: string;
       betweenQuotes: boolean;
       otherLabels: Label[];
+    }
+  | {
+      // Cursor inside the data-label selector of `info(<expr>, { … })`, before any label name.
+      // `infoExpr` is the raw text of the first `info()` argument, used to scope the lookup.
+      type: 'IN_INFO_SELECTOR_NO_LABEL_NAME';
+      infoExpr?: string;
+      otherLabels: Label[];
+      // utf8 labels must be in quotes
+      betweenQuotes: boolean;
+    }
+  | {
+      // Cursor inside a value position of the data-label selector of `info(<expr>, { foo="…" })`.
+      type: 'IN_INFO_SELECTOR_WITH_LABEL_NAME';
+      infoExpr?: string;
+      labelName: string;
+      otherLabels: Label[];
+      betweenQuotes: boolean;
     };
 
 type Resolver = {
   path: NodeTypeId[];
-  fun: (node: SyntaxNode, text: string, pos: number) => Situation | null;
+  fun: (node: SyntaxNode, text: string, pos: number, enableInfoLabels: boolean) => Situation | null;
 };
 
 function isPathMatch(resolverPath: NodeTypeId[], cursorPath: number[]): boolean {
@@ -356,7 +377,12 @@ function resolveLabelsForGrouping(node: SyntaxNode, text: string, pos: number): 
   };
 }
 
-function resolveLabelMatcher(node: SyntaxNode, text: string, pos: number): Situation | null {
+function resolveLabelMatcher(
+  node: SyntaxNode,
+  text: string,
+  pos: number,
+  enableInfoLabels: boolean
+): Situation | null {
   // we can arrive here in two situation. `node` is either:
   // - a StringNode (like in `{job="^"}`)
   // - or an error node (like in `{job=^}`)
@@ -385,6 +411,19 @@ function resolveLabelMatcher(node: SyntaxNode, text: string, pos: number): Situa
   // we need to remove "our" label from all-labels, if it is in there
   const otherLabels = allLabels.filter((label) => label.name !== labelName);
 
+  const infoContext = enableInfoLabels
+    ? getInfoContext(walk(labelMatchersNode, [['parent', VectorSelector]]), text)
+    : null;
+  if (infoContext !== null) {
+    return {
+      type: 'IN_INFO_SELECTOR_WITH_LABEL_NAME',
+      labelName,
+      betweenQuotes: inStringNode,
+      otherLabels,
+      ...(infoContext.infoExpr ? { infoExpr: infoContext.infoExpr } : {}),
+    };
+  }
+
   const metricName = getMetricName(labelMatchersNode, text);
 
   // we are probably in a situation without a metric name
@@ -397,7 +436,12 @@ function resolveLabelMatcher(node: SyntaxNode, text: string, pos: number): Situa
   };
 }
 
-function resolveQuotedLabelMatcher(node: SyntaxNode, text: string, pos: number): Situation | null {
+function resolveQuotedLabelMatcher(
+  node: SyntaxNode,
+  text: string,
+  pos: number,
+  enableInfoLabels: boolean
+): Situation | null {
   // we can arrive here in two situation. `node` is either:
   // - a StringNode (like in `{"job"="^"}`)
   // - or an error node (like in `{"job"=^}`)
@@ -425,6 +469,20 @@ function resolveQuotedLabelMatcher(node: SyntaxNode, text: string, pos: number):
 
   // we need to remove "our" label from all-labels, if it is in there
   const otherLabels = allLabels.filter((label) => label.name !== labelName);
+
+  const infoContext = enableInfoLabels
+    ? getInfoContext(walk(labelMatchersNode, [['parent', VectorSelector]]), text)
+    : null;
+  if (infoContext !== null) {
+    return {
+      type: 'IN_INFO_SELECTOR_WITH_LABEL_NAME',
+      labelName,
+      betweenQuotes: inStringNode,
+      otherLabels,
+      ...(infoContext.infoExpr ? { infoExpr: infoContext.infoExpr } : {}),
+    };
+  }
+
   const metricName = getMetricName(parent.parent!, text);
 
   return {
@@ -454,7 +512,12 @@ function resolveDurations(node: SyntaxNode, text: string, pos: number): Situatio
   };
 }
 
-function resolveLabelKeysWithEquals(node: SyntaxNode, text: string, pos: number): Situation | null {
+function resolveLabelKeysWithEquals(
+  node: SyntaxNode,
+  text: string,
+  pos: number,
+  enableInfoLabels: boolean
+): Situation | null {
   // next false positive:
   // `something{a="1"^}`
   let child = walk(node, [['firstChild', UnquotedLabelMatcher]]);
@@ -490,6 +553,18 @@ function resolveLabelKeysWithEquals(node: SyntaxNode, text: string, pos: number)
   }
 
   const otherLabels = getLabels(node, text);
+
+  // `node` is the LabelMatchers node; its parent is the VectorSelector.
+  const infoContext = enableInfoLabels ? getInfoContext(walk(node, [['parent', VectorSelector]]), text) : null;
+  if (infoContext !== null) {
+    return {
+      type: 'IN_INFO_SELECTOR_NO_LABEL_NAME',
+      otherLabels,
+      betweenQuotes: false,
+      ...(infoContext.infoExpr ? { infoExpr: infoContext.infoExpr } : {}),
+    };
+  }
+
   const metricName = getMetricName(node, text);
 
   return {
@@ -500,8 +575,27 @@ function resolveLabelKeysWithEquals(node: SyntaxNode, text: string, pos: number)
   };
 }
 
-function resolveUtf8LabelKeysWithEquals(node: SyntaxNode, text: string, pos: number): Situation | null {
+function resolveUtf8LabelKeysWithEquals(
+  node: SyntaxNode,
+  text: string,
+  pos: number,
+  enableInfoLabels: boolean
+): Situation | null {
   const otherLabels = getLabels(node, text);
+
+  // `node` is the StringLiteral; StringLiteral -> QuotedLabelName -> LabelMatchers -> VectorSelector.
+  const infoContext = enableInfoLabels
+    ? getInfoContext(walk(node, [['parent', QuotedLabelName], ['parent', LabelMatchers], ['parent', VectorSelector]]), text)
+    : null;
+  if (infoContext !== null) {
+    return {
+      type: 'IN_INFO_SELECTOR_NO_LABEL_NAME',
+      otherLabels,
+      betweenQuotes: true,
+      ...(infoContext.infoExpr ? { infoExpr: infoContext.infoExpr } : {}),
+    };
+  }
+
   const metricName = node.parent?.parent ? getMetricName(node.parent.parent, text) : null;
 
   return {
@@ -540,6 +634,59 @@ function getMetricName(node: SyntaxNode, text: string): string | null {
   return null;
 }
 
+/**
+ * Determines whether the label selector rooted at `vectorSelectorNode` is the SECOND argument of a
+ * PromQL `info(<expr>, { … })` call, and if so extracts the first argument's raw text as `infoExpr`.
+ *
+ * Walks `VectorSelector -> parent FunctionCallBody -> parent FunctionCall`, verifies the function
+ * identifier is `info`, and confirms our selector is the second body argument (the data-label
+ * selector) rather than the first (the base expression). Returns `null` for any non-`info` context
+ * or when the cursor is in the first argument, so callers fall back to the generic label situations.
+ *
+ * @param vectorSelectorNode - The VectorSelector node that contains the current label selector.
+ * @param text - The full query text, used to slice out the first argument.
+ * @returns `{ infoExpr }` when in the info data-label selector, otherwise `null`.
+ */
+function getInfoContext(vectorSelectorNode: SyntaxNode | null, text: string): { infoExpr?: string } | null {
+  if (vectorSelectorNode === null) {
+    return null;
+  }
+
+  const bodyNode = walk(vectorSelectorNode, [['parent', FunctionCallBody]]);
+  if (bodyNode === null) {
+    return null;
+  }
+
+  const functionCallNode = walk(bodyNode, [['parent', FunctionCall]]);
+  if (functionCallNode === null) {
+    return null;
+  }
+
+  const functionIdNode = walk(functionCallNode, [['firstChild', FunctionIdentifier]]);
+  if (functionIdNode === null) {
+    return null;
+  }
+
+  if (getNodeText(functionIdNode, text).trim().toLowerCase() !== 'info') {
+    return null;
+  }
+
+  // The direct children of FunctionCallBody are the argument expressions (commas are not nodes).
+  const args = getNodeChildren(bodyNode);
+
+  // Our selector must be the SECOND argument; matching by start offset is robust to the partial
+  // trees produced while the user is still typing.
+  const argIndex = args.findIndex((arg) => arg.from === vectorSelectorNode.from);
+  if (argIndex !== 1) {
+    return null;
+  }
+
+  const firstArg = args[0];
+  const infoExpr = firstArg ? text.slice(firstArg.from, firstArg.to) : undefined;
+
+  return { infoExpr };
+}
+
 // we find the first error-node in the tree that is at the cursor-position.
 // NOTE: this might be too slow, might need to optimize it
 // (ideas: we do not need to go into every subtree, based on from/to)
@@ -563,7 +710,7 @@ function getErrorNode(tree: Tree, pos: number): SyntaxNode | null {
   return null;
 }
 
-export function getSituation(text: string, pos: number): Situation | null {
+export function getSituation(text: string, pos: number, enableInfoLabels = false): Situation | null {
   // there is a special-case when we are at the start of writing text,
   // so we handle that case first
 
@@ -600,7 +747,7 @@ export function getSituation(text: string, pos: number): Situation | null {
     // i do not use a foreach because i want to stop as soon
     // as i find something
     if (isPathMatch(resolver.path, ids)) {
-      return resolver.fun(currentNode, text, pos);
+      return resolver.fun(currentNode, text, pos, enableInfoLabels);
     }
   }
 

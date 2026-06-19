@@ -3,6 +3,7 @@ import { type HistoryItem, type TimeRange } from '@grafana/data';
 import { DEFAULT_COMPLETION_LIMIT, METRIC_LABEL } from '../../../constants';
 import { type PrometheusLanguageProviderInterface } from '../../../language_provider';
 import { removeQuotesIfExist } from '../../../language_utils';
+import { type InfoLabelRecord } from '../../../resource_clients';
 import { type PromQuery } from '../../../types';
 import { escapeForUtf8Support, isValidLegacyName } from '../../../utf8_support';
 
@@ -24,6 +25,12 @@ export class DataProvider {
 
   readonly queryLabelKeys: typeof this.languageProvider.queryLabelKeys;
   readonly queryLabelValues: typeof this.languageProvider.queryLabelValues;
+  readonly queryInfoLabels: typeof this.languageProvider.queryInfoLabels;
+
+  // Memoizes the info-labels fetch per `info()` base expression for the lifetime of this provider
+  // instance, so the label-name completion and a subsequent label-value completion (for the same
+  // expr) share a single network round-trip.
+  private infoLabelsCache: Map<string, Promise<InfoLabelRecord[]>> = new Map();
 
   constructor(params: DataProviderParams) {
     this.languageProvider = params.languageProvider;
@@ -31,6 +38,7 @@ export class DataProvider {
 
     this.queryLabelKeys = this.languageProvider.queryLabelKeys.bind(this.languageProvider);
     this.queryLabelValues = this.languageProvider.queryLabelValues.bind(this.languageProvider);
+    this.queryInfoLabels = this.languageProvider.queryInfoLabels.bind(this.languageProvider);
 
     // Ensure metadata is loaded for completions. The builder mode triggers this via its own
     // components, but the code editor does not, so we need to fetch it here if not already cached.
@@ -64,6 +72,31 @@ export class DataProvider {
       console.warn('Failed to query metric names:', error);
       return [];
     }
+  };
+
+  /**
+   * Fetches info-metric data-labels for a given `info()` base expression.
+   *
+   * Results are memoized per `expr` for the lifetime of this provider instance so the label-name
+   * completion and a subsequent label-value completion reuse one round-trip. Errors are swallowed
+   * and surfaced as an empty list so completion never throws.
+   */
+  getInfoLabels = (timeRange: TimeRange, expr: string | undefined): Promise<InfoLabelRecord[]> => {
+    const key = expr ?? '';
+    const cached = this.infoLabelsCache.get(key);
+    if (cached) {
+      return cached;
+    }
+
+    const promise = this.queryInfoLabels(timeRange, expr, undefined, DEFAULT_COMPLETION_LIMIT)
+      .then((records) => (Array.isArray(records) ? records : []))
+      .catch((error) => {
+        console.warn('Failed to query info labels:', error);
+        return [];
+      });
+
+    this.infoLabelsCache.set(key, promise);
+    return promise;
   };
 
   getHistory(): string[] {

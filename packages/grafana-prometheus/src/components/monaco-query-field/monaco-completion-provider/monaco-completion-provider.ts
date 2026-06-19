@@ -113,7 +113,9 @@ export function getCompletionProvider(
     // Get adjusted position for cursor/selection handling
     const adjustedPosition = getAdjustedPosition(position);
     const offset = model.getOffsetAt(adjustedPosition);
-    const situation = getSituation(model.getValue(), offset);
+    // Per-datasource opt-in; when off, getSituation behaves exactly as before.
+    const enableInfoLabels = dataProvider.languageProvider.datasource.hasInfoLabelsAutocompleteEnabled();
+    const situation = getSituation(model.getValue(), offset, enableInfoLabels);
 
     // Early exit if no situation detected
     if (situation === null) {

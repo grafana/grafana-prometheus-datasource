@@ -70,8 +70,14 @@ const createMockPosition = (column: number, lineNumber = 1): monacoTypes.Positio
     lineNumber,
   }) as monacoTypes.Position;
 
-const createMockDataProvider = (): DataProvider => {
-  return {} as unknown as DataProvider;
+const createMockDataProvider = (enableInfoLabels = false): DataProvider => {
+  return {
+    languageProvider: {
+      datasource: {
+        hasInfoLabelsAutocompleteEnabled: () => enableInfoLabels,
+      },
+    },
+  } as unknown as DataProvider;
 };
 
 const createMockTimeRange = (): TimeRange => ({
@@ -245,6 +251,31 @@ describe('monaco-completion-provider', () => {
         id: 'editor.action.triggerSuggest',
         title: '',
       });
+    });
+  });
+
+  describe('info labels flag wiring', () => {
+    it('passes enableInfoLabels=false to getSituation when the datasource opt-in is off', async () => {
+      const model = createMockModel('info(up, {})');
+      const position = createMockPosition(11);
+
+      const { provider } = getCompletionProvider(monaco, dataProvider, timeRange);
+
+      await (provider.provideCompletionItems as Function)(model, position);
+
+      expect(mockGetSituation).toHaveBeenCalledWith('info(up, {})', expect.any(Number), false);
+    });
+
+    it('passes enableInfoLabels=true to getSituation when the datasource opt-in is on', async () => {
+      const enabledProvider = createMockDataProvider(true);
+      const model = createMockModel('info(up, {})');
+      const position = createMockPosition(11);
+
+      const { provider } = getCompletionProvider(monaco, enabledProvider, timeRange);
+
+      await (provider.provideCompletionItems as Function)(model, position);
+
+      expect(mockGetSituation).toHaveBeenCalledWith('info(up, {})', expect.any(Number), true);
     });
   });
 

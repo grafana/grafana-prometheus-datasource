@@ -9,6 +9,7 @@ import { DataProvider, type DataProviderParams } from './data_provider';
 const createLanguageProviderMock = (existingMetadata: Record<string, unknown> = {}) => ({
   queryLabelKeys: jest.fn(),
   queryLabelValues: jest.fn(),
+  queryInfoLabels: jest.fn(),
   queryMetricsMetadata: jest.fn().mockResolvedValue({}),
   retrieveMetrics: jest.fn().mockReturnValue([]),
   retrieveMetricsMetadata: jest.fn().mockReturnValue(existingMetadata),
@@ -137,6 +138,55 @@ describe('DataProvider', () => {
       const metrics = dataProvider.metricNamesToMetrics(['metric.with.dots']);
 
       expect(metrics).toEqual([{ name: 'metric.with.dots', help: '', type: '', isUtf8: true }]);
+    });
+  });
+
+  describe('getInfoLabels', () => {
+    it('delegates to the language provider with the default completion limit', async () => {
+      const languageProvider = createLanguageProviderMock();
+      languageProvider.queryInfoLabels.mockResolvedValue([{ name: 'version', values: ['v1.0'] }]);
+      const dataProvider = createDataProvider(languageProvider);
+
+      const result = await dataProvider.getInfoLabels(timeRange, 'up');
+
+      expect(result).toEqual([{ name: 'version', values: ['v1.0'] }]);
+      expect(languageProvider.queryInfoLabels).toHaveBeenCalledWith(timeRange, 'up', undefined, DEFAULT_COMPLETION_LIMIT);
+    });
+
+    it('returns an empty array when the language provider rejects', async () => {
+      const languageProvider = createLanguageProviderMock();
+      languageProvider.queryInfoLabels.mockRejectedValue(new Error('network down'));
+      const dataProvider = createDataProvider(languageProvider);
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const result = await dataProvider.getInfoLabels(timeRange, 'up');
+
+      expect(result).toEqual([]);
+      expect(warnSpy).toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
+
+    it('memoizes per expr so name + value completions share one round-trip', async () => {
+      const languageProvider = createLanguageProviderMock();
+      languageProvider.queryInfoLabels.mockResolvedValue([{ name: 'version', values: ['v1.0'] }]);
+      const dataProvider = createDataProvider(languageProvider);
+
+      const first = await dataProvider.getInfoLabels(timeRange, 'up');
+      const second = await dataProvider.getInfoLabels(timeRange, 'up');
+
+      expect(first).toEqual(second);
+      expect(languageProvider.queryInfoLabels).toHaveBeenCalledTimes(1);
+    });
+
+    it('fetches separately for different expressions', async () => {
+      const languageProvider = createLanguageProviderMock();
+      languageProvider.queryInfoLabels.mockResolvedValue([]);
+      const dataProvider = createDataProvider(languageProvider);
+
+      await dataProvider.getInfoLabels(timeRange, 'up');
+      await dataProvider.getInfoLabels(timeRange, 'down');
+
+      expect(languageProvider.queryInfoLabels).toHaveBeenCalledTimes(2);
     });
   });
 

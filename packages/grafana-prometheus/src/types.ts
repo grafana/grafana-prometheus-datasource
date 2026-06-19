@@ -52,6 +52,12 @@ export interface PromOptions extends DataSourceJsonData {
   seriesLimit?: number;
   maxSamplesProcessedWarningThreshold?: number;
   maxSamplesProcessedErrorThreshold?: number;
+  /**
+   * Opt-in to code-editor autocomplete for the PromQL `info()` function's data-label selector.
+   * Requires an experimental Prometheus build exposing `/api/v1/info_labels`
+   * (dual-gated behind the `search-api` and `promql-experimental-functions` feature flags).
+   */
+  infoLabelsAutocomplete?: boolean;
 }
 
 export type ExemplarTraceIdDestination = {
