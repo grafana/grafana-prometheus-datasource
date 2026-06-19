@@ -33,12 +33,23 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           ACTOR: ${{ github.actor }}
+          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
           REPO: ${{ github.repository }}
         run: |
-          PERMISSION=$(gh api "repos/${REPO}/collaborators/${ACTOR}/permission" --jq '.permission')
-          if [[ "$PERMISSION" != "admin" && "$PERMISSION" != "write" ]]; then
-            echo "::error::Only repository admins or users with write access can run this workflow. Your permission level: ${PERMISSION}"
-            exit 1
+          check_permission() {
+            local actor="$1"
+            local permission
+            permission=$(gh api "repos/${REPO}/collaborators/${actor}/permission" --jq '.permission')
+
+            if [[ "$permission" != "admin" && "$permission" != "write" ]]; then
+              echo "::error::Only repository admins or users with write access can run this workflow. ${actor}'s permission level: ${permission}"
+              exit 1
+            fi
+          }
+
+          check_permission "$ACTOR"
+          if [[ "$TRIGGERING_ACTOR" != "$ACTOR" ]]; then
+            check_permission "$TRIGGERING_ACTOR"
           fi
 
   build:
@@ -110,7 +121,7 @@ jobs:
   publish:
     name: Publish @grafana/prometheus
     needs: build
-    if: needs.build.outputs.changed == 'true'
+    if: needs.build.outputs.changed == 'true' && inputs['dry-run'] != true
     runs-on: github-hosted-ubuntu-x64-small
     environment: npm-publish
     permissions:
@@ -134,13 +145,18 @@ jobs:
           path: pkg
 
       - name: Publish to NPM
-        if: inputs.dry-run != true
         env:
           NPM_TAG: ${{ needs.build.outputs.tag }}
         run: npm publish pkg/*.tgz --access public --tag "$NPM_TAG"
 
-      - name: Dry run summary
-        if: inputs.dry-run == true
+  dry-run-summary:
+    name: Dry run summary
+    needs: build
+    if: needs.build.outputs.changed == 'true' && inputs['dry-run'] == true
+    runs-on: github-hosted-ubuntu-x64-small
+    permissions: {}
+    steps:
+      - name: Summarize dry run
         env:
           VERSION: ${{ needs.build.outputs.version }}
           TAG: ${{ needs.build.outputs.tag }}
