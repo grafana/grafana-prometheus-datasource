@@ -126,7 +126,8 @@ export interface PrometheusLanguageProviderInterface extends PrometheusBaseLangu
     expr?: string,
     metricMatch?: string,
     limit?: number,
-    valuesLimit?: number
+    valuesLimit?: number,
+    search?: string
   ) => Promise<InfoLabelRecord[]>;
 }
 
@@ -332,6 +333,7 @@ export class PrometheusLanguageProvider implements PrometheusLanguageProviderInt
    * @param {string} [metricMatch] - Overrides the default info metric (`target_info`).
    * @param {number} [limit] - Max number of label records.
    * @param {number} [valuesLimit] - Max number of values per label.
+   * @param {string} [search] - Case-insensitive substring used to server-filter/rank label names.
    * @returns {Promise<InfoLabelRecord[]>} Records of `{ name, values }` for in-scope info labels.
    */
   public queryInfoLabels = async (
@@ -339,7 +341,8 @@ export class PrometheusLanguageProvider implements PrometheusLanguageProviderInt
     expr?: string,
     metricMatch?: string,
     limit?: number,
-    valuesLimit?: number
+    valuesLimit?: number,
+    search?: string
   ): Promise<InfoLabelRecord[]> => {
     const interpolatedExpr = expr ? this.datasource.interpolateString(expr) : expr;
     const interpolatedMetricMatch = metricMatch ? this.datasource.interpolateString(metricMatch) : metricMatch;
@@ -348,7 +351,8 @@ export class PrometheusLanguageProvider implements PrometheusLanguageProviderInt
       interpolatedExpr,
       interpolatedMetricMatch,
       limit,
-      valuesLimit
+      valuesLimit,
+      search
     );
   };
 

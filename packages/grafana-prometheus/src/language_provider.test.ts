@@ -364,9 +364,9 @@ describe('PrometheusLanguageProvider', () => {
         .spyOn(provider['resourceClient'], 'queryInfoLabels')
         .mockResolvedValue([{ name: 'version', values: ['v1.0'] }]);
 
-      const result = await provider.queryInfoLabels(timeRange, 'up', 'build_info', 100, 10);
+      const result = await provider.queryInfoLabels(timeRange, 'up', 'build_info', 100, 10, 'ver');
 
-      expect(resourceClientSpy).toHaveBeenCalledWith(timeRange, 'up', 'build_info', 100, 10);
+      expect(resourceClientSpy).toHaveBeenCalledWith(timeRange, 'up', 'build_info', 100, 10, 'ver');
       expect(result).toEqual([{ name: 'version', values: ['v1.0'] }]);
     });
 
@@ -384,6 +384,7 @@ describe('PrometheusLanguageProvider', () => {
         'up{job="interpolated_job"}',
         'interpolated_metric',
         undefined,
+        undefined,
         undefined
       );
     });
@@ -394,7 +395,16 @@ describe('PrometheusLanguageProvider', () => {
 
       await provider.queryInfoLabels(timeRange);
 
-      expect(resourceClientSpy).toHaveBeenCalledWith(timeRange, undefined, undefined, undefined, undefined);
+      expect(resourceClientSpy).toHaveBeenCalledWith(timeRange, undefined, undefined, undefined, undefined, undefined);
+    });
+
+    it('forwards the search prefix without interpolating it', async () => {
+      const provider = new PrometheusLanguageProvider(defaultDatasource);
+      const resourceClientSpy = jest.spyOn(provider['resourceClient'], 'queryInfoLabels').mockResolvedValue([]);
+
+      await provider.queryInfoLabels(timeRange, 'up', undefined, undefined, undefined, 'ver');
+
+      expect(resourceClientSpy).toHaveBeenCalledWith(timeRange, 'up', undefined, undefined, undefined, 'ver');
     });
   });
 

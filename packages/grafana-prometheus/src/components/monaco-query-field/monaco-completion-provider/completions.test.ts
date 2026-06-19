@@ -279,7 +279,7 @@ describe('info() label completions', () => {
 
       const completions = await getCompletions(situation, infoDataProvider, timeRange);
 
-      expect(infoDataProvider.getInfoLabels).toHaveBeenCalledWith(timeRange, 'up');
+      expect(infoDataProvider.getInfoLabels).toHaveBeenCalledWith(timeRange, 'up', undefined, undefined);
       expect(completions).toEqual([
         { type: 'LABEL_NAME', label: 'version', insertText: 'version=', triggerOnInsert: true },
         { type: 'LABEL_NAME', label: 'env', insertText: 'env=', triggerOnInsert: true },
@@ -334,6 +334,39 @@ describe('info() label completions', () => {
 
       const completions = await getCompletions(situation, infoDataProvider, timeRange);
       expect(completions).toEqual([]);
+    });
+
+    it('forwards infoMetricMatch and the typed search prefix to the data provider', async () => {
+      jest.spyOn(infoDataProvider, 'getInfoLabels').mockResolvedValue([{ name: 'version', values: ['v1.0'] }]);
+
+      const situation: Situation = {
+        type: 'IN_INFO_SELECTOR_NO_LABEL_NAME',
+        infoExpr: 'up',
+        infoMetricMatch: '~.*_info',
+        otherLabels: [],
+        betweenQuotes: false,
+      };
+
+      await getCompletions(situation, infoDataProvider, timeRange, 'ver');
+
+      expect(infoDataProvider.getInfoLabels).toHaveBeenCalledWith(timeRange, 'up', '~.*_info', 'ver');
+    });
+
+    it('preserves server ordering of label names (no client re-sort)', async () => {
+      jest.spyOn(infoDataProvider, 'getInfoLabels').mockResolvedValue([
+        { name: 'zeta', values: [] },
+        { name: 'alpha', values: [] },
+      ]);
+
+      const situation: Situation = {
+        type: 'IN_INFO_SELECTOR_NO_LABEL_NAME',
+        infoExpr: 'up',
+        otherLabels: [],
+        betweenQuotes: false,
+      };
+
+      const completions = await getCompletions(situation, infoDataProvider, timeRange);
+      expect(completions.map((c) => c.label)).toEqual(['zeta', 'alpha']);
     });
   });
 
@@ -407,6 +440,23 @@ describe('info() label completions', () => {
 
       const completions = await getCompletions(situation, infoDataProvider, timeRange);
       expect(completions).toEqual([]);
+    });
+
+    it('forwards infoMetricMatch (but not search) when fetching values', async () => {
+      jest.spyOn(infoDataProvider, 'getInfoLabels').mockResolvedValue([{ name: 'version', values: ['v1.0'] }]);
+
+      const situation: Situation = {
+        type: 'IN_INFO_SELECTOR_WITH_LABEL_NAME',
+        infoExpr: 'up',
+        infoMetricMatch: '~.*_info',
+        labelName: 'version',
+        otherLabels: [],
+        betweenQuotes: true,
+      };
+
+      await getCompletions(situation, infoDataProvider, timeRange, 'v1');
+
+      expect(infoDataProvider.getInfoLabels).toHaveBeenCalledWith(timeRange, 'up', '~.*_info');
     });
   });
 });

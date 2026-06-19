@@ -170,6 +170,10 @@ export type Situation =
       // `infoExpr` is the raw text of the first `info()` argument, used to scope the lookup.
       type: 'IN_INFO_SELECTOR_NO_LABEL_NAME';
       infoExpr?: string;
+      // Encoded `__name__` matcher from the selector, sent as the API's `metric_match` to narrow
+      // which info metric is queried (overrides the server default `target_info`). See
+      // {@link extractInfoMetricMatch} for the prefix encoding.
+      infoMetricMatch?: string;
       otherLabels: Label[];
       // utf8 labels must be in quotes
       betweenQuotes: boolean;
@@ -178,6 +182,7 @@ export type Situation =
       // Cursor inside a value position of the data-label selector of `info(<expr>, { foo="…" })`.
       type: 'IN_INFO_SELECTOR_WITH_LABEL_NAME';
       infoExpr?: string;
+      infoMetricMatch?: string;
       labelName: string;
       otherLabels: Label[];
       betweenQuotes: boolean;
@@ -415,12 +420,14 @@ function resolveLabelMatcher(
     ? getInfoContext(walk(labelMatchersNode, [['parent', VectorSelector]]), text)
     : null;
   if (infoContext !== null) {
+    const infoMetricMatch = extractInfoMetricMatch(allLabels);
     return {
       type: 'IN_INFO_SELECTOR_WITH_LABEL_NAME',
       labelName,
       betweenQuotes: inStringNode,
       otherLabels,
       ...(infoContext.infoExpr ? { infoExpr: infoContext.infoExpr } : {}),
+      ...(infoMetricMatch ? { infoMetricMatch } : {}),
     };
   }
 
@@ -474,12 +481,14 @@ function resolveQuotedLabelMatcher(
     ? getInfoContext(walk(labelMatchersNode, [['parent', VectorSelector]]), text)
     : null;
   if (infoContext !== null) {
+    const infoMetricMatch = extractInfoMetricMatch(allLabels);
     return {
       type: 'IN_INFO_SELECTOR_WITH_LABEL_NAME',
       labelName,
       betweenQuotes: inStringNode,
       otherLabels,
       ...(infoContext.infoExpr ? { infoExpr: infoContext.infoExpr } : {}),
+      ...(infoMetricMatch ? { infoMetricMatch } : {}),
     };
   }
 
@@ -557,11 +566,13 @@ function resolveLabelKeysWithEquals(
   // `node` is the LabelMatchers node; its parent is the VectorSelector.
   const infoContext = enableInfoLabels ? getInfoContext(walk(node, [['parent', VectorSelector]]), text) : null;
   if (infoContext !== null) {
+    const infoMetricMatch = extractInfoMetricMatch(otherLabels);
     return {
       type: 'IN_INFO_SELECTOR_NO_LABEL_NAME',
       otherLabels,
       betweenQuotes: false,
       ...(infoContext.infoExpr ? { infoExpr: infoContext.infoExpr } : {}),
+      ...(infoMetricMatch ? { infoMetricMatch } : {}),
     };
   }
 
@@ -588,11 +599,13 @@ function resolveUtf8LabelKeysWithEquals(
     ? getInfoContext(walk(node, [['parent', QuotedLabelName], ['parent', LabelMatchers], ['parent', VectorSelector]]), text)
     : null;
   if (infoContext !== null) {
+    const infoMetricMatch = extractInfoMetricMatch(otherLabels);
     return {
       type: 'IN_INFO_SELECTOR_NO_LABEL_NAME',
       otherLabels,
       betweenQuotes: true,
       ...(infoContext.infoExpr ? { infoExpr: infoContext.infoExpr } : {}),
+      ...(infoMetricMatch ? { infoMetricMatch } : {}),
     };
   }
 
@@ -632,6 +645,37 @@ function getMetricName(node: SyntaxNode, text: string): string | null {
 
   // no metric name
   return null;
+}
+
+// Maps a PromQL matcher operator to the prefix the `/api/v1/info_labels` API expects for its
+// `metric_match` param: `=` is the bare value, the others carry their operator as a prefix.
+const INFO_METRIC_MATCH_PREFIX: Record<LabelOperator, string> = {
+  '=': '',
+  '=~': '~',
+  '!=': '!=',
+  '!~': '!~',
+};
+
+/**
+ * Encodes a `__name__` matcher from an `info()` data-label selector into the `metric_match` value
+ * the server expects, mirroring Arve's `extractInfoMetricMatch` (upstream Prometheus PR #17930).
+ *
+ * e.g. `{__name__=~".*_info"}` -> `~.*_info`, `{__name__="build_info"}` -> `build_info`.
+ *
+ * Returns `undefined` when there is no `__name__` matcher (so the server default `target_info`
+ * applies) or when the matcher encodes to an empty string (e.g. `__name__=""`).
+ *
+ * @param labels - The label matchers parsed from the selector.
+ * @returns The encoded `metric_match` value, or `undefined`.
+ */
+function extractInfoMetricMatch(labels: Label[]): string | undefined {
+  const nameLabel = labels.find((label) => label.name === '__name__');
+  if (nameLabel === undefined) {
+    return undefined;
+  }
+
+  const encoded = `${INFO_METRIC_MATCH_PREFIX[nameLabel.op]}${nameLabel.value}`;
+  return encoded === '' ? undefined : encoded;
 }
 
 /**

@@ -1479,6 +1479,53 @@ describe('BaseResourceClient - queryInfoLabels', () => {
     expect(params).toMatchObject({ expr: 'up', metric_match: 'build_info', limit: 500, values_limit: 10 });
   });
 
+  it('sends search[] with case_sensitive=false and sort_by=score when search is provided', async () => {
+    mockMetadataRequest.mockResolvedValueOnce({ data: ndjson([]) });
+
+    await client.queryInfoLabels(timeRange, 'up', undefined, undefined, undefined, 'ver');
+
+    const [, params] = mockMetadataRequest.mock.calls[0];
+    expect(params).toMatchObject({ 'search[]': 'ver', case_sensitive: false, sort_by: 'score' });
+  });
+
+  it('omits search params by default', async () => {
+    mockMetadataRequest.mockResolvedValueOnce({ data: ndjson([]) });
+
+    await client.queryInfoLabels(timeRange, 'up');
+
+    const [, params] = mockMetadataRequest.mock.calls[0];
+    expect(params).not.toHaveProperty('search[]');
+    expect(params).not.toHaveProperty('case_sensitive');
+    expect(params).not.toHaveProperty('sort_by');
+  });
+
+  it('preserves server ordering of records (does not re-sort)', async () => {
+    mockMetadataRequest.mockResolvedValueOnce({
+      data: ndjson([
+        { name: 'zeta', values: ['z2', 'z1'] },
+        { name: 'alpha', values: ['a1'] },
+      ]),
+    });
+
+    const result = await client.queryInfoLabels(timeRange, 'up', undefined, undefined, undefined, 'a');
+
+    expect(result.map((r) => r.name)).toEqual(['zeta', 'alpha']);
+    expect(result[0].values).toEqual(['z2', 'z1']);
+  });
+
+  it('caches separately when search differs', async () => {
+    mockMetadataRequest
+      .mockResolvedValueOnce({ data: ndjson([{ name: 'version', values: ['v1.0'] }]) })
+      .mockResolvedValueOnce({ data: ndjson([{ name: 'env', values: ['prod'] }]) });
+
+    await client.queryInfoLabels(timeRange, 'up', undefined, undefined, undefined, 'ver');
+    await client.queryInfoLabels(timeRange, 'up', undefined, undefined, undefined, 'en');
+    // Same search reuses the cache.
+    await client.queryInfoLabels(timeRange, 'up', undefined, undefined, undefined, 'ver');
+
+    expect(mockMetadataRequest).toHaveBeenCalledTimes(2);
+  });
+
   it('caches results for identical params (single network call)', async () => {
     mockMetadataRequest.mockResolvedValueOnce({ data: ndjson([{ name: 'env', values: ['prod'] }]) });
 

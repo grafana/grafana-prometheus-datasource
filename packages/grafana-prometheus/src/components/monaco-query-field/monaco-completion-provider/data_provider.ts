@@ -27,9 +27,9 @@ export class DataProvider {
   readonly queryLabelValues: typeof this.languageProvider.queryLabelValues;
   readonly queryInfoLabels: typeof this.languageProvider.queryInfoLabels;
 
-  // Memoizes the info-labels fetch per `info()` base expression for the lifetime of this provider
-  // instance, so the label-name completion and a subsequent label-value completion (for the same
-  // expr) share a single network round-trip.
+  // Memoizes the info-labels fetch per `info()` base expression (+ metric_match + search) for the
+  // lifetime of this provider instance, so the label-name completion and a subsequent label-value
+  // completion (for the same expr/metric_match/search) share a single network round-trip.
   private infoLabelsCache: Map<string, Promise<InfoLabelRecord[]>> = new Map();
 
   constructor(params: DataProviderParams) {
@@ -77,18 +77,29 @@ export class DataProvider {
   /**
    * Fetches info-metric data-labels for a given `info()` base expression.
    *
-   * Results are memoized per `expr` for the lifetime of this provider instance so the label-name
-   * completion and a subsequent label-value completion reuse one round-trip. Errors are swallowed
-   * and surfaced as an empty list so completion never throws.
+   * Results are memoized per `expr` + `metricMatch` + `search` for the lifetime of this provider
+   * instance so the label-name completion and a subsequent label-value completion (with the same
+   * inputs) reuse one round-trip. Errors are swallowed and surfaced as an empty list so completion
+   * never throws.
+   *
+   * @param timeRange   - Time range to search.
+   * @param expr        - The `info()` first argument, used server-side to scope identifying labels.
+   * @param metricMatch - Encoded `__name__` matcher narrowing which info metric is queried.
+   * @param search      - Case-insensitive substring used to server-filter/rank label names.
    */
-  getInfoLabels = (timeRange: TimeRange, expr: string | undefined): Promise<InfoLabelRecord[]> => {
-    const key = expr ?? '';
+  getInfoLabels = (
+    timeRange: TimeRange,
+    expr: string | undefined,
+    metricMatch?: string,
+    search?: string
+  ): Promise<InfoLabelRecord[]> => {
+    const key = [expr ?? '', metricMatch ?? '', search ?? ''].join('|');
     const cached = this.infoLabelsCache.get(key);
     if (cached) {
       return cached;
     }
 
-    const promise = this.queryInfoLabels(timeRange, expr, undefined, DEFAULT_COMPLETION_LIMIT)
+    const promise = this.queryInfoLabels(timeRange, expr, metricMatch, DEFAULT_COMPLETION_LIMIT, undefined, search)
       .then((records) => (Array.isArray(records) ? records : []))
       .catch((error) => {
         console.warn('Failed to query info labels:', error);

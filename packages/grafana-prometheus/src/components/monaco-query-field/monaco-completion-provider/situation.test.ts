@@ -422,4 +422,67 @@ describe('situation - info() label autocomplete', () => {
       betweenQuotes: false,
     });
   });
+
+  describe('metric_match extraction from a __name__ matcher', () => {
+    it('encodes an = matcher as the bare value', () => {
+      assertInfoSituation('info(up, {__name__="build_info", ^})', {
+        type: 'IN_INFO_SELECTOR_NO_LABEL_NAME',
+        infoExpr: 'up',
+        infoMetricMatch: 'build_info',
+        otherLabels: [{ name: '__name__', value: 'build_info', op: '=' }],
+        betweenQuotes: false,
+      });
+    });
+
+    it('encodes a =~ matcher with a ~ prefix', () => {
+      assertInfoSituation('info(up, {__name__=~".*_info", ^})', {
+        type: 'IN_INFO_SELECTOR_NO_LABEL_NAME',
+        infoExpr: 'up',
+        infoMetricMatch: '~.*_info',
+        otherLabels: [{ name: '__name__', value: '.*_info', op: '=~' }],
+        betweenQuotes: false,
+      });
+    });
+
+    it('encodes a != matcher with a != prefix', () => {
+      assertInfoSituation('info(up, {__name__!="target_info", ^})', {
+        type: 'IN_INFO_SELECTOR_NO_LABEL_NAME',
+        infoExpr: 'up',
+        infoMetricMatch: '!=target_info',
+        otherLabels: [{ name: '__name__', value: 'target_info', op: '!=' }],
+        betweenQuotes: false,
+      });
+    });
+
+    it('encodes a !~ matcher with a !~ prefix', () => {
+      assertInfoSituation('info(up, {__name__!~".*_info", ^})', {
+        type: 'IN_INFO_SELECTOR_NO_LABEL_NAME',
+        infoExpr: 'up',
+        infoMetricMatch: '!~.*_info',
+        otherLabels: [{ name: '__name__', value: '.*_info', op: '!~' }],
+        betweenQuotes: false,
+      });
+    });
+
+    it('exposes infoMetricMatch in the value context too', () => {
+      assertInfoSituation('info(up, {__name__=~".*_info", version="^"})', {
+        type: 'IN_INFO_SELECTOR_WITH_LABEL_NAME',
+        infoExpr: 'up',
+        infoMetricMatch: '~.*_info',
+        labelName: 'version',
+        otherLabels: [{ name: '__name__', value: '.*_info', op: '=~' }],
+        betweenQuotes: true,
+      });
+    });
+
+    it('omits infoMetricMatch when there is no __name__ matcher', () => {
+      const prefix = 'info(up, {version="v1", ';
+      const result = getSituation(`${prefix}})`, prefix.length, true);
+      expect(result).toMatchObject({
+        type: 'IN_INFO_SELECTOR_NO_LABEL_NAME',
+        infoExpr: 'up',
+      });
+      expect(result).not.toHaveProperty('infoMetricMatch');
+    });
+  });
 });

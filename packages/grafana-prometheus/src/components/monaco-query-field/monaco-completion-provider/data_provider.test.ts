@@ -150,7 +150,31 @@ describe('DataProvider', () => {
       const result = await dataProvider.getInfoLabels(timeRange, 'up');
 
       expect(result).toEqual([{ name: 'version', values: ['v1.0'] }]);
-      expect(languageProvider.queryInfoLabels).toHaveBeenCalledWith(timeRange, 'up', undefined, DEFAULT_COMPLETION_LIMIT);
+      expect(languageProvider.queryInfoLabels).toHaveBeenCalledWith(
+        timeRange,
+        'up',
+        undefined,
+        DEFAULT_COMPLETION_LIMIT,
+        undefined,
+        undefined
+      );
+    });
+
+    it('forwards metricMatch and search to the language provider', async () => {
+      const languageProvider = createLanguageProviderMock();
+      languageProvider.queryInfoLabels.mockResolvedValue([]);
+      const dataProvider = createDataProvider(languageProvider);
+
+      await dataProvider.getInfoLabels(timeRange, 'up', '~.*_info', 'ver');
+
+      expect(languageProvider.queryInfoLabels).toHaveBeenCalledWith(
+        timeRange,
+        'up',
+        '~.*_info',
+        DEFAULT_COMPLETION_LIMIT,
+        undefined,
+        'ver'
+      );
     });
 
     it('returns an empty array when the language provider rejects', async () => {
@@ -187,6 +211,20 @@ describe('DataProvider', () => {
       await dataProvider.getInfoLabels(timeRange, 'down');
 
       expect(languageProvider.queryInfoLabels).toHaveBeenCalledTimes(2);
+    });
+
+    it('fetches separately when metricMatch or search differ for the same expr', async () => {
+      const languageProvider = createLanguageProviderMock();
+      languageProvider.queryInfoLabels.mockResolvedValue([]);
+      const dataProvider = createDataProvider(languageProvider);
+
+      await dataProvider.getInfoLabels(timeRange, 'up');
+      await dataProvider.getInfoLabels(timeRange, 'up', '~.*_info');
+      await dataProvider.getInfoLabels(timeRange, 'up', '~.*_info', 'ver');
+      // The same expr+metricMatch+search reuses the cache.
+      await dataProvider.getInfoLabels(timeRange, 'up', '~.*_info', 'ver');
+
+      expect(languageProvider.queryInfoLabels).toHaveBeenCalledTimes(3);
     });
   });
 

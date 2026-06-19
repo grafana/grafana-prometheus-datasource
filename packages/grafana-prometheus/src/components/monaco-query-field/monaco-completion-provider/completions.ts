@@ -233,14 +233,20 @@ function formatLabelValueForCompletion(value: string, betweenQuotes: boolean): s
  * Records come from the `/api/v1/info_labels` endpoint (one record per label). We reuse the same
  * UTF-8 quoting, `=` suffix, and `triggerOnInsert` behaviour as the generic label-name path
  * ({@link getLabelNamesForCompletions}), and exclude labels already present in the selector.
+ *
+ * `infoMetricMatch` narrows which info metric is queried (from a `__name__` matcher), and the
+ * already-typed `search` prefix is forwarded so the server filters/ranks large label sets. Server
+ * ordering is preserved (records are not re-sorted).
  */
 async function getInfoLabelNamesCompletions(
   infoExpr: string | undefined,
+  infoMetricMatch: string | undefined,
   otherLabels: Label[],
   dataProvider: DataProvider,
-  timeRange: TimeRange
+  timeRange: TimeRange,
+  search?: string
 ): Promise<Completion[]> {
-  const records = await dataProvider.getInfoLabels(timeRange, infoExpr);
+  const records = await dataProvider.getInfoLabels(timeRange, infoExpr, infoMetricMatch, search);
   const usedLabelNames = new Set(otherLabels.map((l) => l.name));
 
   return records
@@ -273,12 +279,13 @@ async function getInfoLabelNamesCompletions(
  */
 async function getInfoLabelValuesCompletions(
   infoExpr: string | undefined,
+  infoMetricMatch: string | undefined,
   labelName: string,
   betweenQuotes: boolean,
   dataProvider: DataProvider,
   timeRange: TimeRange
 ): Promise<Completion[]> {
-  const records = await dataProvider.getInfoLabels(timeRange, infoExpr);
+  const records = await dataProvider.getInfoLabels(timeRange, infoExpr, infoMetricMatch);
   const record = records.find((r) => r.name === removeQuotesIfExist(labelName));
   if (!record) {
     return [];
@@ -332,10 +339,18 @@ export async function getCompletions(
         timeRange
       );
     case 'IN_INFO_SELECTOR_NO_LABEL_NAME':
-      return getInfoLabelNamesCompletions(situation.infoExpr, situation.otherLabels, dataProvider, timeRange);
+      return getInfoLabelNamesCompletions(
+        situation.infoExpr,
+        situation.infoMetricMatch,
+        situation.otherLabels,
+        dataProvider,
+        timeRange,
+        searchTerm
+      );
     case 'IN_INFO_SELECTOR_WITH_LABEL_NAME':
       return getInfoLabelValuesCompletions(
         situation.infoExpr,
+        situation.infoMetricMatch,
         situation.labelName,
         situation.betweenQuotes,
         dataProvider,

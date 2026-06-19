@@ -48,7 +48,8 @@ export interface ResourceApiClient {
     expr?: string,
     metricMatch?: string,
     limit?: number,
-    valuesLimit?: number
+    valuesLimit?: number,
+    search?: string
   ) => Promise<InfoLabelRecord[]>;
 }
 
@@ -194,18 +195,30 @@ export abstract class BaseResourceClient {
    * @param metricMatch - Overrides the server default info metric (`target_info`). Omitted when empty.
    * @param limit       - Max number of label records; falls back to the datasource series limit.
    * @param valuesLimit - Optional cap on the number of values returned per label.
+   * @param search      - Optional case-insensitive substring used to server-filter and rank label
+   *                      names by relevance. When set, `case_sensitive=false` and `sort_by=score`
+   *                      are sent too, and the server's score ordering is preserved (no re-sort).
    */
   public queryInfoLabels = async (
     timeRange: TimeRange,
     expr?: string,
     metricMatch?: string,
     limit?: number,
-    valuesLimit?: number
+    valuesLimit?: number,
+    search?: string
   ): Promise<InfoLabelRecord[]> => {
     const timeParams = getRangeSnapInterval(this.datasource.cacheLevel, timeRange);
     const effectiveLimit = this.getEffectiveLimit(limit);
 
-    const cacheKey = [timeParams.start, timeParams.end, expr ?? '', metricMatch ?? '', effectiveLimit, valuesLimit ?? '']
+    const cacheKey = [
+      timeParams.start,
+      timeParams.end,
+      expr ?? '',
+      metricMatch ?? '',
+      effectiveLimit,
+      valuesLimit ?? '',
+      search ?? '',
+    ]
       .map((v) => String(v))
       .join('|');
     const cached = this._infoLabelsCache.get(cacheKey);
@@ -219,6 +232,7 @@ export abstract class BaseResourceClient {
       ...(metricMatch ? { metric_match: metricMatch } : {}),
       limit: effectiveLimit,
       ...(valuesLimit ? { values_limit: valuesLimit } : {}),
+      ...(search ? { 'search[]': search, case_sensitive: false, sort_by: 'score' } : {}),
     };
 
     const records = await this.requestInfoLabels(params);
