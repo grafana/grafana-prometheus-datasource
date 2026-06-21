@@ -436,6 +436,22 @@ export class SearchApiClient extends BaseResourceClient implements SearchCapable
   }
 
   /**
+   * Caps the limit sent to the streaming search API. Suggestions are scored/fuzzy, so we
+   * never request more than SEARCH_API_DEFAULTS.limit (10000), even when a caller passes
+   * the larger series limit (DEFAULT_SERIES_LIMIT=40000). `0` means unlimited and is
+   * preserved; an explicit smaller limit is honored as-is.
+   */
+  private clampSearchLimit(limit?: number): number {
+    if (limit === undefined) {
+      return SEARCH_API_DEFAULTS.limit;
+    }
+    if (limit === 0) {
+      return 0;
+    }
+    return Math.min(limit, SEARCH_API_DEFAULTS.limit);
+  }
+
+  /**
    * Builds the upstream search param set (as repeated-value records) from a logical
    * request. `sort_by=score` is only used when a search term is present (the API rejects
    * score without `search[]`); the empty-search "list everything" path falls back to
@@ -460,10 +476,11 @@ export class SearchApiClient extends BaseResourceClient implements SearchCapable
     add('end', opts.timeParams.end);
     add('case_sensitive', String(SEARCH_API_DEFAULTS.caseSensitive));
     add('batch_size', SEARCH_API_DEFAULTS.batchSize);
-    // limit=0 means unlimited (same convention as the existing clients) -> passed through.
-    // Defaults to SEARCH_API_DEFAULTS.limit (10000) rather than the datasource series limit
-    // (40000) when no explicit limit is supplied.
-    add('limit', opts.limit ?? SEARCH_API_DEFAULTS.limit);
+    // Streaming search returns scored autocomplete suggestions, so it is clamped to
+    // SEARCH_API_DEFAULTS.limit (10000) — it must never request the larger series limit
+    // (DEFAULT_SERIES_LIMIT=40000) that callers commonly pass. `0` keeps its "unlimited"
+    // meaning and is passed through unchanged.
+    add('limit', this.clampSearchLimit(opts.limit));
 
     const term = opts.search?.trim();
     if (term) {

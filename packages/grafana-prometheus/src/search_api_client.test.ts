@@ -101,6 +101,25 @@ describe('SearchApiClient', () => {
     await p;
   });
 
+  it('clamps the streaming limit to the search default (never the 40k series limit)', () => {
+    const client = new SearchApiClient(mockRequest, makeDatasource());
+    // Caller passes the large series limit (40000); streaming must cap it at 10000.
+    client.searchMetricNames(mockTimeRange, { search: 'up', limit: DEFAULT_SERIES_LIMIT }).subscribe();
+    expect(lastPayload().params.limit).toEqual(['10000']);
+
+    // An explicit smaller limit is honored as-is.
+    client.searchMetricNames(mockTimeRange, { search: 'up', limit: 25 }).subscribe();
+    expect(lastPayload().params.limit).toEqual(['25']);
+
+    // No explicit limit -> the search default (10000).
+    client.searchMetricNames(mockTimeRange, { search: 'up' }).subscribe();
+    expect(lastPayload().params.limit).toEqual(['10000']);
+
+    // 0 keeps its "unlimited" meaning.
+    client.searchMetricNames(mockTimeRange, { search: 'up', limit: 0 }).subscribe();
+    expect(lastPayload().params.limit).toEqual(['0']);
+  });
+
   it('uses score sort + search[] + fuzz params when a search term is present', () => {
     const client = new SearchApiClient(mockRequest, makeDatasource());
     client.searchMetricNames(mockTimeRange, { search: 'up' }).subscribe();
