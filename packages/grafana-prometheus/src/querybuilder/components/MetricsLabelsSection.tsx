@@ -85,8 +85,34 @@ export function MetricsLabelsSection({
     queryString?: string,
     labelName?: string
   ): Promise<SelectableValue[]> => {
+    const forLabelName = labelName ?? '__name__';
+
+    // Server-side search path: route the typed text to the upstream `search[]` (fuzzy +
+    // scored) and build the match selector from the OTHER labels (+ metric) only, instead
+    // of regexifying the typed text into `match[]`.
+    if (datasource.languageProvider.hasServerSideSearch?.()) {
+      const otherLabels = query.labels.filter((x) => x.label !== forLabelName);
+      if (query.metric) {
+        // eslint-disable-next-line @grafana/i18n/no-untranslated-strings
+        otherLabels.push({ label: '__name__', op: '=', value: query.metric });
+      }
+      const interpolatedOtherLabels = otherLabels.map((labelObject) => ({
+        ...labelObject,
+        label: datasource.interpolateString(labelObject.label),
+        value: datasource.interpolateString(labelObject.value),
+      }));
+      const matchExpr = promQueryModeller.renderLabels(interpolatedOtherLabels);
+      const values = await datasource.languageProvider.searchLabelValues(
+        timeRange,
+        forLabelName,
+        queryString ?? '',
+        matchExpr === '' ? undefined : matchExpr
+      );
+      return truncateResult(values).map(toSelectableValue);
+    }
+
     const forLabel = {
-      label: labelName ?? '__name__',
+      label: forLabelName,
       op: '=~',
       value: regexifyLabelValuesQueryString(`.*${queryString}`),
     };

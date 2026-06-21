@@ -91,6 +91,27 @@ describe('DataProvider', () => {
       );
     });
 
+    it('routes the search term to the server-side search (no regex matcher) when supported', async () => {
+      const languageProvider = {
+        ...createLanguageProviderMock(),
+        hasServerSideSearch: jest.fn().mockReturnValue(true),
+        searchMetrics: jest.fn().mockResolvedValue(['http_requests_total']),
+      };
+      const dataProvider = createDataProvider(languageProvider);
+
+      const result = await dataProvider.queryMetricNames(timeRange, 'requests');
+
+      expect(result).toEqual(['http_requests_total']);
+      // Typed text goes straight to searchMetrics (search[]) — no __name__=~ regex.
+      expect(languageProvider.searchMetrics).toHaveBeenCalledWith(
+        timeRange,
+        'requests',
+        undefined,
+        DEFAULT_COMPLETION_LIMIT
+      );
+      expect(languageProvider.queryLabelValues).not.toHaveBeenCalled();
+    });
+
     it('returns an empty array when the language provider rejects', async () => {
       const languageProvider = createLanguageProviderMock();
       languageProvider.queryLabelValues.mockRejectedValue(new Error('network down'));

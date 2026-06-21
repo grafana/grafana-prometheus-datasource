@@ -148,19 +148,33 @@ export const MetricsModalContextProvider: FC<PropsWithChildren<MetricsModalConte
 
           setIsLoading(true);
 
-          const queryString = regexifyLabelValuesQueryString(metricText);
           const filterArray = queryLabels ? formatPrometheusLabelFilters(queryLabels) : [];
-          const match = `{__name__=~"(?i).*${queryString}"${filterArray ? filterArray.join('') : ''}}`;
+          let resultsOptions: MetricsData;
 
-          const results = await languageProvider.queryLabelValues(timeRange, METRIC_LABEL, match);
+          if (languageProvider.hasServerSideSearch?.()) {
+            // Server-side fuzzy/scored search: route the typed text to `search[]` and let
+            // the upstream do ranking — no regex `match[]` injection, no client-side fuzzy.
+            const match = filterArray.length ? `{${filterArray.join('').replace(/^,/, '')}}` : undefined;
+            const results = await languageProvider.searchMetrics(timeRange, metricText, match);
 
-          // Check if this is still the most recent search
-          if (searchId !== latestSearchIdRef.current) {
-            return; // Ignore outdated results
+            if (searchId !== latestSearchIdRef.current) {
+              return; // Ignore outdated results
+            }
+            resultsOptions = results.map((m) => generateMetricData(m, languageProvider));
+          } else {
+            const queryString = regexifyLabelValuesQueryString(metricText);
+            const match = `{__name__=~"(?i).*${queryString}"${filterArray ? filterArray.join('') : ''}}`;
+
+            const results = await languageProvider.queryLabelValues(timeRange, METRIC_LABEL, match);
+
+            // Check if this is still the most recent search
+            if (searchId !== latestSearchIdRef.current) {
+              return; // Ignore outdated results
+            }
+
+            const [fuzzyOrderedMetrics] = fuzzySearch(results, queryString);
+            resultsOptions = fuzzyOrderedMetrics.map((m) => generateMetricData(m, languageProvider));
           }
-
-          const [fuzzyOrderedMetrics] = fuzzySearch(results, queryString);
-          const resultsOptions: MetricsData = fuzzyOrderedMetrics.map((m) => generateMetricData(m, languageProvider));
 
           setMetricsData(resultsOptions);
           setIsLoading(false);

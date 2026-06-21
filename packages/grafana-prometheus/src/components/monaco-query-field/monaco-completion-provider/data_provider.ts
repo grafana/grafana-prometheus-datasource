@@ -46,6 +46,18 @@ export class DataProvider {
    */
   queryMetricNames = async (timeRange: TimeRange, searchTerm: string | undefined): Promise<string[]> => {
     try {
+      // Server-side search path: route the typed text to the upstream `search[]` (fuzzy +
+      // scored) instead of regexifying it into a `__name__=~` match selector.
+      if (this.languageProvider.hasServerSideSearch?.()) {
+        const result = await this.languageProvider.searchMetrics(
+          timeRange,
+          searchTerm ?? '',
+          undefined,
+          DEFAULT_COMPLETION_LIMIT
+        );
+        return Array.isArray(result) ? result : [];
+      }
+
       let match: string | undefined;
       if (searchTerm) {
         const escapedWord = escapeForUtf8Support(removeQuotesIfExist(searchTerm));

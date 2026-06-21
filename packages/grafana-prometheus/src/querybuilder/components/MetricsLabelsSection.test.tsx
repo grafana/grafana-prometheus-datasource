@@ -259,6 +259,40 @@ describe('MetricsLabelsSection', () => {
     expect(datasource.languageProvider.queryLabelValues).toHaveBeenCalled();
   });
 
+  it('routes typed text to searchLabelValues (search[]) when server-side search is supported', async () => {
+    const onChange = jest.fn();
+    const datasource = createMockDatasource();
+    // @ts-expect-error -- augmenting the mock language provider for the search path
+    datasource.languageProvider.hasServerSideSearch = jest.fn().mockReturnValue(true);
+    // @ts-expect-error -- augmenting the mock language provider for the search path
+    datasource.languageProvider.searchLabelValues = jest.fn().mockResolvedValue(['web-1', 'web-2']);
+    const { LabelFilters } = require('./LabelFilters');
+
+    render(
+      <MetricsLabelsSection
+        query={defaultQuery}
+        datasource={datasource}
+        onChange={onChange}
+        timeRange={defaultTimeRange}
+      />
+    );
+
+    const getLabelValuesCallback = LabelFilters.mock.calls[0][0].getLabelValuesAutofillSuggestions;
+    const result = await getLabelValuesCallback('web', 'label2');
+
+    // Typed text is the 3rd arg (search[]); the match selector is built from the OTHER
+    // labels (+ metric), NOT from a regexified typed text.
+    // @ts-expect-error -- augmented in this test
+    expect(datasource.languageProvider.searchLabelValues).toHaveBeenCalledWith(
+      defaultTimeRange,
+      'label2',
+      'web',
+      '{label1="value1", __name__="metric1"}'
+    );
+    expect(datasource.languageProvider.queryLabelValues).not.toHaveBeenCalled();
+    expect(result).toContainEqual(expect.objectContaining({ label: 'web-1', value: 'web-1' }));
+  });
+
   it('should handle onGetLabelValues with no metric correctly', async () => {
     const onChange = jest.fn();
     const datasource = createMockDatasource();
