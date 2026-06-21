@@ -8,18 +8,27 @@ import { METRIC_LABEL } from '../../constants';
 
 import { useMetricsBrowser } from './MetricsBrowserContext';
 import { getStylesLabelSelector, getStylesMetricsBrowser } from './styles';
+import { useStreamingSearch } from './useStreamingSearch';
 
 export function LabelSelector() {
   const styles = useStyles2(getStylesLabelSelector);
   const sharedStyles = useStyles2(getStylesMetricsBrowser);
   const [labelSearchTerm, setLabelSearchTerm] = useState('');
-  const { labelKeys, isLoadingLabelKeys, selectedLabelKeys, onLabelKeyClick } = useMetricsBrowser();
+  const { labelKeys, isLoadingLabelKeys, selectedLabelKeys, onLabelKeyClick, hasServerSideSearch, searchLabelKeysStream } =
+    useMetricsBrowser();
+
+  const { results: serverResults } = useStreamingSearch(hasServerSideSearch, labelSearchTerm, searchLabelKeysStream);
 
   const filteredLabelKeys = useMemo(() => {
+    if (hasServerSideSearch && serverResults !== null) {
+      // Keep selected keys visible and always hide the synthetic __name__ label.
+      const merged = new Set([...selectedLabelKeys, ...serverResults]);
+      return Array.from(merged).filter((lk) => lk !== METRIC_LABEL);
+    }
     return labelKeys.filter(
       (lk) => lk !== METRIC_LABEL && (selectedLabelKeys.includes(lk) || lk.includes(labelSearchTerm))
     );
-  }, [labelKeys, labelSearchTerm, selectedLabelKeys]);
+  }, [hasServerSideSearch, serverResults, labelKeys, labelSearchTerm, selectedLabelKeys]);
 
   return (
     <div className={styles.section}>

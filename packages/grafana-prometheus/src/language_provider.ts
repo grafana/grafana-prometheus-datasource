@@ -14,7 +14,7 @@ import {
 } from '@grafana/data';
 import { type BackendSrvRequest } from '@grafana/runtime';
 
-import { lastValueFrom } from 'rxjs';
+import { from, lastValueFrom, type Observable } from 'rxjs';
 
 import { buildCacheHeaders, getDaysToCacheMetadata, getDefaultCacheHeaders } from './caching';
 import { type PrometheusDatasource } from './datasource';
@@ -151,6 +151,42 @@ export interface PrometheusLanguageProviderInterface extends PrometheusBaseLangu
     match?: string,
     limit?: number
   ) => Promise<string[]>;
+
+  /**
+   * Progressive variant of {@link searchMetrics}. Returns an Observable that emits the
+   * accumulating result set as NDJSON batches stream in (when the streaming search API is
+   * active) and completes on the terminal frame. When server-side search is unavailable it
+   * emits a single value (the non-search query result), so callers can always subscribe.
+   *
+   * `slotId` identifies the logical autocomplete source for the backend's per-slot
+   * cancel-previous (so independent widgets don't cancel each other).
+   */
+  streamMetrics: (
+    timeRange: TimeRange,
+    search: string,
+    match?: string,
+    limit?: number,
+    slotId?: string
+  ) => Observable<string[]>;
+
+  /** Progressive variant of {@link searchLabelKeys}. See {@link streamMetrics}. */
+  streamLabelKeys: (
+    timeRange: TimeRange,
+    search: string,
+    match?: string,
+    limit?: number,
+    slotId?: string
+  ) => Observable<string[]>;
+
+  /** Progressive variant of {@link searchLabelValues}. See {@link streamMetrics}. */
+  streamLabelValues: (
+    timeRange: TimeRange,
+    labelKey: string,
+    search: string,
+    match?: string,
+    limit?: number,
+    slotId?: string
+  ) => Observable<string[]>;
 }
 
 export class PrometheusLanguageProvider implements PrometheusLanguageProviderInterface {
@@ -404,6 +440,55 @@ export class PrometheusLanguageProvider implements PrometheusLanguageProviderInt
       });
     }
     return client.queryLabelValues(timeRange, interpolatedKey, interpolatedMatch, limit);
+  };
+
+  public streamMetrics = (
+    timeRange: TimeRange,
+    search: string,
+    match?: string,
+    limit?: number,
+    slotId?: string
+  ): Observable<string[]> => {
+    const client = this.resourceClient;
+    const interpolatedMatch = match ? this.datasource.interpolateString(match) : match;
+    if (isSearchCapableClient(client)) {
+      return client.searchMetricNames(timeRange, { search, match: interpolatedMatch, limit, slotId });
+    }
+    // Non-streaming fallback: a single emission of the full metric list (the caller keeps
+    // its own client-side filtering of the typed text).
+    return from(client.queryMetrics(timeRange).then((res) => res.metrics));
+  };
+
+  public streamLabelKeys = (
+    timeRange: TimeRange,
+    search: string,
+    match?: string,
+    limit?: number,
+    slotId?: string
+  ): Observable<string[]> => {
+    const client = this.resourceClient;
+    const interpolatedMatch = match ? this.datasource.interpolateString(match) : match;
+    if (isSearchCapableClient(client)) {
+      return client.searchLabelNames(timeRange, { search, match: interpolatedMatch, limit, slotId });
+    }
+    return from(client.queryLabelKeys(timeRange, interpolatedMatch, limit));
+  };
+
+  public streamLabelValues = (
+    timeRange: TimeRange,
+    labelKey: string,
+    search: string,
+    match?: string,
+    limit?: number,
+    slotId?: string
+  ): Observable<string[]> => {
+    const client = this.resourceClient;
+    const interpolatedMatch = match ? this.datasource.interpolateString(match) : match;
+    const interpolatedKey = this.datasource.interpolateString(labelKey);
+    if (isSearchCapableClient(client)) {
+      return client.searchLabelValues(timeRange, interpolatedKey, { search, match: interpolatedMatch, limit, slotId });
+    }
+    return from(client.queryLabelValues(timeRange, interpolatedKey, interpolatedMatch, limit));
   };
 
   /**

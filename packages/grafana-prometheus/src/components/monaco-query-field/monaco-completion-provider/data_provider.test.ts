@@ -1,3 +1,5 @@
+import { of } from 'rxjs';
+
 import { type HistoryItem, type TimeRange } from '@grafana/data';
 
 import { DEFAULT_COMPLETION_LIMIT, METRIC_LABEL } from '../../../constants';
@@ -95,19 +97,20 @@ describe('DataProvider', () => {
       const languageProvider = {
         ...createLanguageProviderMock(),
         hasServerSideSearch: jest.fn().mockReturnValue(true),
-        searchMetrics: jest.fn().mockResolvedValue(['http_requests_total']),
+        streamMetrics: jest.fn().mockReturnValue(of(['http_requests_total'])),
       };
       const dataProvider = createDataProvider(languageProvider);
 
       const result = await dataProvider.queryMetricNames(timeRange, 'requests');
 
       expect(result).toEqual(['http_requests_total']);
-      // Typed text goes straight to searchMetrics (search[]) — no __name__=~ regex.
-      expect(languageProvider.searchMetrics).toHaveBeenCalledWith(
+      // Typed text goes straight to the streaming search (search[]) — no __name__=~ regex.
+      expect(languageProvider.streamMetrics).toHaveBeenCalledWith(
         timeRange,
         'requests',
         undefined,
-        DEFAULT_COMPLETION_LIMIT
+        DEFAULT_COMPLETION_LIMIT,
+        'monaco-metrics'
       );
       expect(languageProvider.queryLabelValues).not.toHaveBeenCalled();
     });

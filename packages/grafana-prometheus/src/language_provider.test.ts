@@ -1,4 +1,6 @@
 // Core Grafana history https://github.com/grafana/grafana/blob/v11.0.0-preview/public/app/plugins/datasource/prometheus/language_provider.test.ts
+import { lastValueFrom, of } from 'rxjs';
+
 import { AbstractLabelOperator, dateTime, type TimeRange } from '@grafana/data';
 
 import { getCacheDurationInMinutes } from './caching';
@@ -373,6 +375,60 @@ describe('PrometheusLanguageProvider', () => {
       expect(provider.retrieveHistogramMetrics()).toEqual(['histogram1', 'histogram2']);
       expect(provider.retrieveMetrics()).toEqual(['metric1', 'metric2']);
       expect(provider.retrieveLabelKeys()).toEqual(['label1', 'label2']);
+    });
+  });
+
+  describe('progressive stream search methods', () => {
+    const setResourceClient = (provider: PrometheusLanguageProvider, client: unknown) => {
+      Object.defineProperty(provider, '_resourceClient', { value: client, writable: true });
+    };
+
+    it('streamMetrics delegates to a search-capable client and forwards slotId', async () => {
+      const provider = new PrometheusLanguageProvider(defaultDatasource);
+      const searchMetricNames = jest.fn().mockReturnValue(of(['up', 'go_goroutines']));
+      setResourceClient(provider, { searchMetricNames });
+
+      const result = await lastValueFrom(
+        provider.streamMetrics(getMockTimeRange(), 'go', '{job="x"}', 50, 'slot-1')
+      );
+
+      expect(result).toEqual(['up', 'go_goroutines']);
+      expect(searchMetricNames).toHaveBeenCalledWith(expect.anything(), {
+        search: 'go',
+        match: '{job="x"}',
+        limit: 50,
+        slotId: 'slot-1',
+      });
+    });
+
+    it('streamMetrics falls back to a single emission of queryMetrics when not search-capable', async () => {
+      const provider = new PrometheusLanguageProvider(defaultDatasource);
+      // Non-capable client: no searchMetricNames -> isSearchCapableClient() is false.
+      const queryMetrics = jest.fn().mockResolvedValue({ metrics: ['m1', 'm2'], histogramMetrics: [] });
+      setResourceClient(provider, { queryMetrics });
+
+      const emissions: string[][] = [];
+      provider.streamMetrics(getMockTimeRange(), 'ignored').subscribe((v) => emissions.push(v));
+      // microtask flush for the wrapped promise
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(queryMetrics).toHaveBeenCalled();
+      expect(emissions).toEqual([['m1', 'm2']]);
+    });
+
+    it('streamLabelValues delegates to a search-capable client (progressive)', async () => {
+      const provider = new PrometheusLanguageProvider(defaultDatasource);
+      const searchLabelValues = jest.fn().mockReturnValue(of(['web-1'], ['web-1', 'web-2']));
+      setResourceClient(provider, { searchMetricNames: jest.fn(), searchLabelValues });
+
+      const result = await lastValueFrom(provider.streamLabelValues(getMockTimeRange(), 'instance', 'web'));
+      expect(result).toEqual(['web-1', 'web-2']);
+      expect(searchLabelValues).toHaveBeenCalledWith(
+        expect.anything(),
+        'instance',
+        expect.objectContaining({ search: 'web' })
+      );
     });
   });
 

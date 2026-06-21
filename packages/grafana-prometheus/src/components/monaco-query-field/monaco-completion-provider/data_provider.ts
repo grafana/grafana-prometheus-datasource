@@ -1,3 +1,5 @@
+import { lastValueFrom } from 'rxjs';
+
 import { type HistoryItem, type TimeRange } from '@grafana/data';
 
 import { DEFAULT_COMPLETION_LIMIT, METRIC_LABEL } from '../../../constants';
@@ -47,13 +49,13 @@ export class DataProvider {
   queryMetricNames = async (timeRange: TimeRange, searchTerm: string | undefined): Promise<string[]> => {
     try {
       // Server-side search path: route the typed text to the upstream `search[]` (fuzzy +
-      // scored) instead of regexifying it into a `__name__=~` match selector.
+      // scored) instead of regexifying it into a `__name__=~` match selector. Consumes the
+      // progressive Observable; Monaco completions are one-shot, so we resolve on the
+      // terminal frame via lastValueFrom.
       if (this.languageProvider.hasServerSideSearch?.()) {
-        const result = await this.languageProvider.searchMetrics(
-          timeRange,
-          searchTerm ?? '',
-          undefined,
-          DEFAULT_COMPLETION_LIMIT
+        const result = await lastValueFrom(
+          this.languageProvider.streamMetrics(timeRange, searchTerm ?? '', undefined, DEFAULT_COMPLETION_LIMIT, 'monaco-metrics'),
+          { defaultValue: [] }
         );
         return Array.isArray(result) ? result : [];
       }

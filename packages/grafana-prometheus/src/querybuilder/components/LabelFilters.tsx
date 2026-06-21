@@ -22,6 +22,8 @@ export interface LabelFiltersProps {
   /** If set to true, component will show error message until at least 1 filter is selected */
   labelFilterRequired?: boolean;
   getLabelValuesAutofillSuggestions: (query: string, labelName?: string) => Promise<SelectableValue[]>;
+  /** Optional server-side label-name search (streaming search API). See LabelFilterItem. */
+  getLabelNamesAutofillSuggestions?: (query: string) => Promise<SelectableValue[]>;
   debounceDuration: number;
   variableEditor?: boolean;
 }
@@ -33,6 +35,7 @@ export function LabelFilters({
   onGetLabelValues,
   labelFilterRequired,
   getLabelValuesAutofillSuggestions,
+  getLabelNamesAutofillSuggestions,
   debounceDuration,
   variableEditor,
 }: LabelFiltersProps) {
@@ -76,6 +79,7 @@ export function LabelFilters({
             invalidLabel={labelFilterRequired && !item.label}
             invalidValue={labelFilterRequired && !item.value}
             getLabelValuesAutofillSuggestions={getLabelValuesAutofillSuggestions}
+            getLabelNamesAutofillSuggestions={getLabelNamesAutofillSuggestions}
           />
         )}
       />

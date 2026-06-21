@@ -133,6 +133,36 @@ export function MetricsLabelsSection({
   };
 
   /**
+   * Server-side label-NAME search-as-you-type (streaming search API only). Routes the typed
+   * text to the upstream fuzzy/scored `search[]`, scoped by the current labels/metric, and
+   * drops already-used label names. Returns undefined when the search API is inactive so the
+   * builder keeps its existing preloaded-list client-side filtering.
+   */
+  const getLabelNamesAutocompleteSuggestions = datasource.languageProvider.hasServerSideSearch?.()
+    ? async (queryString: string): Promise<SelectableValue[]> => {
+        const labelsToConsider = query.labels.slice();
+        if (query.metric) {
+          // eslint-disable-next-line @grafana/i18n/no-untranslated-strings
+          labelsToConsider.push({ label: '__name__', op: '=', value: query.metric });
+        }
+        const interpolated = labelsToConsider.map((labelObject) => ({
+          ...labelObject,
+          label: datasource.interpolateString(labelObject.label),
+          value: datasource.interpolateString(labelObject.value),
+        }));
+        const matchExpr = promQueryModeller.renderLabels(interpolated);
+        const labelsIndex = await datasource.languageProvider.searchLabelKeys(
+          timeRange,
+          queryString,
+          matchExpr === '' ? undefined : matchExpr
+        );
+        return labelsIndex
+          .filter((labelName) => !query.labels.find((filter) => filter.label === labelName))
+          .map((k) => ({ value: k, label: k }));
+      }
+    : undefined;
+
+  /**
    * Function kicked off when users interact with the value of the label filters
    * Formats a promQL expression and passes that into helper functions depending on API support
    * @param forLabel
@@ -180,6 +210,11 @@ export function MetricsLabelsSection({
       <LabelFilters
         debounceDuration={getDebounceTimeInMilliseconds(datasource.cacheLevel)}
         getLabelValuesAutofillSuggestions={getLabelValuesAutocompleteSuggestions}
+        getLabelNamesAutofillSuggestions={
+          getLabelNamesAutocompleteSuggestions
+            ? (query) => withTemplateVariableOptions(getLabelNamesAutocompleteSuggestions(query))
+            : undefined
+        }
         labelsFilters={query.labels}
         onChange={onChangeLabels}
         onGetLabelNames={(forLabel) => withTemplateVariableOptions(onGetLabelNames(forLabel))}

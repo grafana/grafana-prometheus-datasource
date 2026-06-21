@@ -35,6 +35,9 @@ const setupMocks = () => {
   // Mock language provider
   const mockLanguageProvider: PrometheusLanguageProviderInterface = new PrometheusLanguageProvider({
     seriesLimit: DEFAULT_SERIES_LIMIT,
+    // Needed by the (lazy) resourceClient getter that hasServerSideSearch() resolves.
+    hasSearchApiSupport: () => false,
+    hasLabelsMatchAPISupport: () => true,
   } as unknown as PrometheusDatasource);
 
   mockLanguageProvider.retrieveMetrics = jest.fn().mockReturnValue(['metric1', 'metric2', 'metric3']);

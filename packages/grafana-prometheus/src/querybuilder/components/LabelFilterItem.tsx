@@ -21,6 +21,12 @@ interface LabelFilterItemProps {
   invalidLabel?: boolean;
   invalidValue?: boolean;
   getLabelValuesAutofillSuggestions: (query: string, labelName?: string) => Promise<SelectableValue[]>;
+  /**
+   * When provided (streaming search API active), label-name autocomplete routes the typed
+   * text to a server-side fuzzy/scored search instead of filtering the preloaded list
+   * client-side.
+   */
+  getLabelNamesAutofillSuggestions?: (query: string) => Promise<SelectableValue[]>;
   debounceDuration: number;
 }
 
@@ -34,6 +40,7 @@ export function LabelFilterItem({
   invalidLabel,
   invalidValue,
   getLabelValuesAutofillSuggestions,
+  getLabelNamesAutofillSuggestions,
   debounceDuration,
 }: LabelFilterItemProps) {
   const [state, setState] = useState<{
@@ -77,8 +84,14 @@ export function LabelFilterItem({
 
   /**
    * Debounce a search through all the labels possible and truncate by .
+   * When a server-side search callback is supplied (streaming search API active), the typed
+   * text is routed to the upstream fuzzy/scored search; otherwise we filter the preloaded
+   * list client-side.
    */
-  const labelNamesSearch = debounce((query: string) => {
+  const labelNamesSearch = debounce(async (query: string) => {
+    if (getLabelNamesAutofillSuggestions) {
+      return truncateResult(await getLabelNamesAutofillSuggestions(query));
+    }
     // we limit the select to show 1000 options,
     // but we still search through all the possible options
     const results = allLabels.filter((label) => {
