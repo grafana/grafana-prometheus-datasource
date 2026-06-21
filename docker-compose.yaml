@@ -1,9 +1,50 @@
 services:
+  # Phase 0 dev Prometheus for the experimental NDJSON streaming search API.
+  #
+  # Compiled ONCE from the local Prometheus clone into a Docker image (the clone carries
+  # the experimental --enable-feature=search-api flag, not in any released image). Because
+  # this is a real `build:` step, `docker compose up` just launches the prebuilt binary —
+  # it does NOT recompile on every start (unlike the old `go run` approach). The build
+  # context defaults to the layout used during development and can be overridden with
+  # PROMETHEUS_SRC.
+  #
+  # Rebuild only when the Prometheus source changes:  docker compose build prometheus
+  # (BuildKit cache mounts below keep that rebuild incremental — only changed packages
+  # recompile). The first build compiles Prometheus from source and can take a few minutes;
+  # every subsequent `up` is instant.
+  prometheus:
+    image: prometheus-search-api:dev
+    build:
+      context: ${PROMETHEUS_SRC:-../../prometheus/prometheus}
+      dockerfile_inline: |
+        # syntax=docker/dockerfile:1
+        FROM golang:1.26
+        WORKDIR /prometheus-src
+        COPY . .
+        RUN --mount=type=cache,target=/root/.cache/go-build \
+            --mount=type=cache,target=/go/pkg/mod \
+            go build -o /usr/local/bin/prometheus ./cmd/prometheus
+    container_name: 'prometheus-search-api'
+    command:
+      - /usr/local/bin/prometheus
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --enable-feature=search-api
+      - --web.listen-address=0.0.0.0:9090
+      - --storage.tsdb.path=/tmp/tsdb
+    volumes:
+      - ./provisioning/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - 9090:9090/tcp
+
   grafana:
     extends:
       file: .config/docker-compose-base.yaml
       service: grafana
+    depends_on:
+      - prometheus
     environment:
+      # Grafana Live (websocket) is required for the streaming search API transport.
+      GF_LIVE_MAX_CONNECTIONS: '100'
       # Grafana 13 enables splashScreen by default; the overlay blocks Playwright interactions.
       GF_FEATURE_TOGGLES_splashScreen: 'false'
       # Override the base value now that the plugin ID is 'prometheus'.

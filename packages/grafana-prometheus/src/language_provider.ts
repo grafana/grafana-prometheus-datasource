@@ -14,12 +14,20 @@ import {
 } from '@grafana/data';
 import { type BackendSrvRequest } from '@grafana/runtime';
 
+import { lastValueFrom } from 'rxjs';
+
 import { buildCacheHeaders, getDaysToCacheMetadata, getDefaultCacheHeaders } from './caching';
 import { type PrometheusDatasource } from './datasource';
 import { extractLabelMatchers, fixSummariesMetadata, toPromLikeQuery } from './language_utils';
 import { promqlGrammar } from './promql';
 import { buildVisualQueryFromString } from './querybuilder/parsing';
-import { LabelsApiClient, type ResourceApiClient, SeriesApiClient } from './resource_clients';
+import {
+  isSearchCapableClient,
+  LabelsApiClient,
+  type ResourceApiClient,
+  SearchApiClient,
+  SeriesApiClient,
+} from './resource_clients';
 import { type PromMetricsMetadata, type PromQuery } from './types';
 
 interface PrometheusBaseLanguageProvider {
@@ -114,6 +122,35 @@ export interface PrometheusLanguageProviderInterface extends PrometheusBaseLangu
    * Use zero (0) to fetch all label values, but this might return huge amounts of data.
    */
   queryLabelValues: (timeRange: TimeRange, labelKey: string, match?: string, limit?: number) => Promise<string[]>;
+
+  /**
+   * Reports whether the active resource client supports server-side, search-term-aware
+   * (fuzzy, scored) autocomplete. When false, the `search*` methods below transparently
+   * fall back to the standard (non-search) queries, so callers can always use them.
+   */
+  hasServerSideSearch: () => boolean;
+
+  /**
+   * Server-side search for metric names. When the search API is active the typed text is
+   * routed to the upstream `search[]` (fuzzy + scored); otherwise it falls back to the
+   * full metric-names query (the caller's own filtering still applies).
+   *
+   * Returns a Promise resolved with the final result set — suitable for the visual query
+   * builder's Promise-based Selects/Comboboxes.
+   */
+  searchMetrics: (timeRange: TimeRange, search: string, match?: string, limit?: number) => Promise<string[]>;
+
+  /** Server-side search for label names. See {@link searchMetrics}. */
+  searchLabelKeys: (timeRange: TimeRange, search: string, match?: string, limit?: number) => Promise<string[]>;
+
+  /** Server-side search for label values of a given key. See {@link searchMetrics}. */
+  searchLabelValues: (
+    timeRange: TimeRange,
+    labelKey: string,
+    search: string,
+    match?: string,
+    limit?: number
+  ) => Promise<string[]>;
 }
 
 export class PrometheusLanguageProvider implements PrometheusLanguageProviderInterface {
@@ -152,9 +189,15 @@ export class PrometheusLanguageProvider implements PrometheusLanguageProviderInt
    */
   private get resourceClient(): ResourceApiClient {
     if (!this._resourceClient) {
-      this._resourceClient = this.datasource.hasLabelsMatchAPISupport()
-        ? new LabelsApiClient(this.request, this.datasource)
-        : new SeriesApiClient(this.request, this.datasource);
+      if (this.datasource.hasSearchApiSupport?.()) {
+        // Experimental NDJSON streaming search API. The SearchApiClient itself falls
+        // back to labels/series at runtime if Grafana Live is unavailable.
+        this._resourceClient = new SearchApiClient(this.request, this.datasource);
+      } else if (this.datasource.hasLabelsMatchAPISupport()) {
+        this._resourceClient = new LabelsApiClient(this.request, this.datasource);
+      } else {
+        this._resourceClient = new SeriesApiClient(this.request, this.datasource);
+      }
     }
 
     return this._resourceClient;
@@ -305,6 +348,62 @@ export class PrometheusLanguageProvider implements PrometheusLanguageProviderInt
       interpolatedMatch,
       limit
     );
+  };
+
+  public hasServerSideSearch = (): boolean => {
+    return isSearchCapableClient(this.resourceClient);
+  };
+
+  public searchMetrics = async (
+    timeRange: TimeRange,
+    search: string,
+    match?: string,
+    limit?: number
+  ): Promise<string[]> => {
+    const client = this.resourceClient;
+    const interpolatedMatch = match ? this.datasource.interpolateString(match) : match;
+    if (isSearchCapableClient(client)) {
+      return lastValueFrom(client.searchMetricNames(timeRange, { search, match: interpolatedMatch, limit }), {
+        defaultValue: [],
+      });
+    }
+    // Fallback: return the full metric list; the caller's existing filtering still applies.
+    const { metrics } = await client.queryMetrics(timeRange);
+    return metrics;
+  };
+
+  public searchLabelKeys = async (
+    timeRange: TimeRange,
+    search: string,
+    match?: string,
+    limit?: number
+  ): Promise<string[]> => {
+    const client = this.resourceClient;
+    const interpolatedMatch = match ? this.datasource.interpolateString(match) : match;
+    if (isSearchCapableClient(client)) {
+      return lastValueFrom(client.searchLabelNames(timeRange, { search, match: interpolatedMatch, limit }), {
+        defaultValue: [],
+      });
+    }
+    return client.queryLabelKeys(timeRange, interpolatedMatch, limit);
+  };
+
+  public searchLabelValues = async (
+    timeRange: TimeRange,
+    labelKey: string,
+    search: string,
+    match?: string,
+    limit?: number
+  ): Promise<string[]> => {
+    const client = this.resourceClient;
+    const interpolatedMatch = match ? this.datasource.interpolateString(match) : match;
+    const interpolatedKey = this.datasource.interpolateString(labelKey);
+    if (isSearchCapableClient(client)) {
+      return lastValueFrom(client.searchLabelValues(timeRange, interpolatedKey, { search, match: interpolatedMatch, limit }), {
+        defaultValue: [],
+      });
+    }
+    return client.queryLabelValues(timeRange, interpolatedKey, interpolatedMatch, limit);
   };
 
   /**

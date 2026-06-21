@@ -2,25 +2,54 @@ package main
 
 import (
 	"context"
+	"sync"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	sdkhttpclient "github.com/grafana/grafana-plugin-sdk-go/backend/httpclient"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
+	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 	"github.com/grafana/grafana-plugin-sdk-go/config"
 
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib"
+)
+
+var (
+	_ backend.QueryDataHandler    = (*Datasource)(nil)
+	_ backend.CallResourceHandler = (*Datasource)(nil)
+	_ backend.CheckHealthHandler  = (*Datasource)(nil)
+	_ backend.StreamHandler       = (*Datasource)(nil)
 )
 
 func NewDatasource(ctx context.Context, dsInstanceSettings backend.DataSourceInstanceSettings) (instancemgmt.Instance, error) {
 	plog := backend.NewLoggerWith("logger", "tsdb.prometheus")
 	plog.Debug("Initializing")
 	return &Datasource{
-		Service: promlib.NewService(sdkhttpclient.NewProvider(), plog, nil),
+		Service:   promlib.NewService(sdkhttpclient.NewProvider(), plog, nil),
+		logger:    plog,
+		mailboxes: make(map[string]chan publishMsg),
 	}, nil
 }
 
 type Datasource struct {
 	Service *promlib.Service
+
+	logger log.Logger
+
+	// mailboxes bridges PublishStream (producer) and RunStream (consumer) for the
+	// persistent per-session search channels. Keyed by channel path
+	// (search/<sessionNonce>); each value is a buffered Go channel so a publish that
+	// races ahead of RunStream's select loop is not lost.
+	mailboxesMu sync.Mutex
+	mailboxes   map[string]chan publishMsg
+}
+
+// Dispose implements instancemgmt.InstanceDisposer. The SDK calls it when the
+// datasource settings change and this instance is replaced, so any per-instance
+// mailbox state is dropped (the replacement instance gets a fresh map).
+func (d *Datasource) Dispose() {
+	d.mailboxesMu.Lock()
+	defer d.mailboxesMu.Unlock()
+	d.mailboxes = make(map[string]chan publishMsg)
 }
 
 func (d *Datasource) QueryData(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {

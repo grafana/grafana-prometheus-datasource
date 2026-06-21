@@ -1,8 +1,18 @@
-import { type TimeRange } from '@grafana/data';
-import { type BackendSrvRequest } from '@grafana/runtime';
+import { Observable, Subject, type Subscription, filter } from 'rxjs';
+
+import { isLiveChannelMessageEvent, type LiveChannelAddress, LiveChannelScope, type TimeRange } from '@grafana/data';
+import { type BackendSrvRequest, getGrafanaLiveSrv } from '@grafana/runtime';
 
 import { getDefaultCacheHeaders } from './caching';
-import { DEFAULT_SERIES_LIMIT, EMPTY_SELECTOR, MATCH_ALL_LABELS, METRIC_LABEL } from './constants';
+import {
+  DEFAULT_SERIES_LIMIT,
+  EMPTY_SELECTOR,
+  MATCH_ALL_LABELS,
+  METRIC_LABEL,
+  SEARCH_API_DEFAULTS,
+  SEARCH_ENDPOINTS,
+  type SearchEndpoint,
+} from './constants';
 import { type PrometheusDatasource } from './datasource';
 import { getRangeSnapInterval, processHistogramMetrics, removeQuotesIfExist } from './language_utils';
 import { buildVisualQueryFromString } from './querybuilder/parsing';
@@ -25,6 +35,53 @@ export interface ResourceApiClient {
   queryLabelValues: (timeRange: TimeRange, labelKey: string, match?: string, limit?: number) => Promise<string[]>;
 
   querySeries: (timeRange: TimeRange, match: string, limit: number) => Promise<PrometheusSeriesResponse>;
+}
+
+/**
+ * Options for the search-term-aware (fuzzy, scored) methods exposed by the SearchApiClient.
+ */
+export interface SearchOptions {
+  /** Free-text term routed to the upstream `search[]` param. */
+  search?: string;
+  /** PromQL selector(s) routed to `match[]`. */
+  match?: string;
+  limit?: number;
+  /** Stable per-widget identifier used for backend cancel-previous scoping. */
+  slotId?: string;
+}
+
+/**
+ * Extends ResourceApiClient with progressive, server-side search methods. These return
+ * Observables that emit accumulating results as NDJSON batches stream in, completing on
+ * the terminal frame.
+ */
+export interface SearchCapableClient extends ResourceApiClient {
+  searchMetricNames: (timeRange: TimeRange, options: SearchOptions) => Observable<string[]>;
+  searchLabelNames: (timeRange: TimeRange, options: SearchOptions) => Observable<string[]>;
+  searchLabelValues: (timeRange: TimeRange, labelKey: string, options: SearchOptions) => Observable<string[]>;
+}
+
+/**
+ * Type guard for whether a resource client supports the progressive search methods.
+ */
+export function isSearchCapableClient(client: ResourceApiClient): client is SearchCapableClient {
+  return typeof (client as SearchCapableClient).searchMetricNames === 'function';
+}
+
+/**
+ * Wire shape of a single frame sent by the Go RunStream loop over the Live channel,
+ * tagged with the originating requestId so the client can correlate and discard stale
+ * frames.
+ */
+interface SearchFrame {
+  requestId: string;
+  slotId?: string;
+  type: 'batch' | 'terminal' | 'error';
+  results?: Array<Record<string, unknown>>;
+  warnings?: string[];
+  hasMore?: boolean;
+  error?: string;
+  errorType?: string;
 }
 
 type RequestFn = (
@@ -260,6 +317,351 @@ export class SeriesApiClient extends BaseResourceClient implements ResourceApiCl
     );
     this._cache.setLabelValues(timeRange, effectiveMatch, effectiveLimit, labelValues);
     return labelValues;
+  };
+}
+
+/** How long a drop-in search promise waits before resolving with the partial snapshot. */
+const SEARCH_DROP_IN_TIMEOUT_MS = 15000;
+
+function genId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+/**
+ * Extracts the string identifier (`value` for label_values, `name` otherwise) from the
+ * raw result records, preserving server order (score/alpha) and de-duplicating.
+ */
+export function extractSearchValues(
+  endpoint: SearchEndpoint,
+  results: Array<Record<string, unknown>> | undefined,
+  into: string[],
+  seen: Set<string>
+): void {
+  if (!results) {
+    return;
+  }
+  const key = endpoint === SEARCH_ENDPOINTS.labelValues ? 'value' : 'name';
+  for (const record of results) {
+    const v = record[key];
+    if (typeof v === 'string' && !seen.has(v)) {
+      seen.add(v);
+      into.push(v);
+    }
+  }
+}
+
+/**
+ * SearchApiClient implements the existing ResourceApiClient (drop-in replacement) AND the
+ * progressive SearchCapableClient on top of the experimental NDJSON streaming search API.
+ *
+ * Transport: a single persistent, bidirectional Grafana Live channel per client instance
+ * (`search/<sessionNonce>`). The client subscribes ONCE at construction, then publishes
+ * `{requestId, slotId, endpoint, params}` per (debounced) search; the Go RunStream loop
+ * streams requestId-tagged frames back down the same channel.
+ *
+ * Resilience: if Grafana Live is unavailable or the subscription errors, every method
+ * transparently delegates to a LabelsApiClient/SeriesApiClient so autocomplete never
+ * breaks. Drop-in promises always resolve (never reject) — on stream error/timeout they
+ * resolve with the partial snapshot collected so far.
+ */
+export class SearchApiClient extends BaseResourceClient implements SearchCapableClient {
+  private _cache: ResourceClientsCache = new ResourceClientsCache(this.datasource.cacheLevel);
+  private readonly _fallback: ResourceApiClient;
+
+  private readonly channelAddr: LiveChannelAddress;
+  private readonly messages$ = new Subject<SearchFrame>();
+  private liveSub?: Subscription;
+  private useFallback = false;
+
+  public histogramMetrics: string[] = [];
+  public metrics: string[] = [];
+  public labelKeys: string[] = [];
+  public cachedLabelValues: Record<string, string[]> = {};
+
+  constructor(request: RequestFn, datasource: PrometheusDatasource) {
+    super(request, datasource);
+    this._fallback = datasource.hasLabelsMatchAPISupport()
+      ? new LabelsApiClient(request, datasource)
+      : new SeriesApiClient(request, datasource);
+
+    this.channelAddr = {
+      scope: LiveChannelScope.DataSource,
+      // `stream` is the channel namespace; for DataSource scope it is the datasource uid.
+      stream: datasource.uid,
+      namespace: datasource.uid,
+      path: `search/${genId()}`,
+    };
+    this.subscribeOnce();
+  }
+
+  /** Subscribes once to the persistent Live channel. Falls back on any failure. */
+  private subscribeOnce(): void {
+    try {
+      const live = getGrafanaLiveSrv();
+      if (!live) {
+        this.useFallback = true;
+        return;
+      }
+      this.liveSub = live.getStream<SearchFrame>(this.channelAddr).subscribe({
+        next: (event) => {
+          if (isLiveChannelMessageEvent(event)) {
+            this.messages$.next(event.message);
+          }
+        },
+        error: () => {
+          this.useFallback = true;
+        },
+      });
+    } catch {
+      this.useFallback = true;
+    }
+  }
+
+  /** Tears down the Live subscription. */
+  public dispose(): void {
+    this.liveSub?.unsubscribe();
+    this.messages$.complete();
+  }
+
+  private publish(payload: {
+    requestId: string;
+    slotId: string;
+    endpoint: SearchEndpoint;
+    params: Record<string, string[]>;
+  }) {
+    getGrafanaLiveSrv()?.publish(this.channelAddr, payload);
+  }
+
+  /**
+   * Builds the upstream search param set (as repeated-value records) from a logical
+   * request. `sort_by=score` is only used when a search term is present (the API rejects
+   * score without `search[]`); the empty-search "list everything" path falls back to
+   * `alpha`.
+   */
+  private buildParams(opts: {
+    timeParams: { start?: string; end?: string };
+    search?: string;
+    match?: string;
+    label?: string;
+    limit?: number;
+  }): Record<string, string[]> {
+    const params: Record<string, string[]> = {};
+    const add = (key: string, value: string | number | undefined) => {
+      if (value === undefined || value === '') {
+        return;
+      }
+      params[key] = [...(params[key] ?? []), String(value)];
+    };
+
+    add('start', opts.timeParams.start);
+    add('end', opts.timeParams.end);
+    add('case_sensitive', String(SEARCH_API_DEFAULTS.caseSensitive));
+    add('batch_size', SEARCH_API_DEFAULTS.batchSize);
+    // limit=0 means unlimited (same convention as the existing clients) -> passed through.
+    // Defaults to SEARCH_API_DEFAULTS.limit (10000) rather than the datasource series limit
+    // (40000) when no explicit limit is supplied.
+    add('limit', opts.limit ?? SEARCH_API_DEFAULTS.limit);
+
+    const term = opts.search?.trim();
+    if (term) {
+      add('search[]', term);
+      add('sort_by', 'score');
+      add('fuzz_alg', SEARCH_API_DEFAULTS.fuzzAlg);
+      add('fuzz_threshold', SEARCH_API_DEFAULTS.fuzzThreshold);
+    } else {
+      add('sort_by', 'alpha');
+    }
+
+    if (opts.match && opts.match !== EMPTY_SELECTOR) {
+      add('match[]', opts.match);
+    }
+    if (opts.label) {
+      add('label', opts.label);
+    }
+    return params;
+  }
+
+  /**
+   * Drop-in path: resolves Promise<string[]> on the terminal frame for the request, or
+   * with the partial snapshot on error/timeout. Never rejects.
+   */
+  private runSearchPromise(
+    endpoint: SearchEndpoint,
+    params: Record<string, string[]>,
+    slotId: string
+  ): Promise<string[]> {
+    return new Promise<string[]>((resolve) => {
+      const requestId = genId();
+      const acc: string[] = [];
+      const seen = new Set<string>();
+      let settled = false;
+
+      const finish = () => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        sub.unsubscribe();
+        resolve(acc);
+      };
+
+      const sub = this.messages$.pipe(filter((f) => f.requestId === requestId)).subscribe((frame) => {
+        if (frame.type === 'batch') {
+          extractSearchValues(endpoint, frame.results, acc, seen);
+        } else {
+          // terminal or error -> resolve with whatever was collected
+          finish();
+        }
+      });
+
+      const timer = setTimeout(finish, SEARCH_DROP_IN_TIMEOUT_MS);
+      this.publish({ requestId, slotId, endpoint, params });
+    });
+  }
+
+  /**
+   * Progressive path: emits accumulating results as batches stream in, completes on the
+   * terminal/error frame.
+   */
+  private runSearchObservable(
+    endpoint: SearchEndpoint,
+    params: Record<string, string[]>,
+    slotId: string
+  ): Observable<string[]> {
+    return new Observable<string[]>((subscriber) => {
+      const requestId = genId();
+      const acc: string[] = [];
+      const seen = new Set<string>();
+
+      const sub = this.messages$.pipe(filter((f) => f.requestId === requestId)).subscribe((frame) => {
+        if (frame.type === 'batch') {
+          extractSearchValues(endpoint, frame.results, acc, seen);
+          subscriber.next(acc.slice());
+        } else {
+          subscriber.next(acc.slice());
+          subscriber.complete();
+        }
+      });
+
+      this.publish({ requestId, slotId, endpoint, params });
+      return () => sub.unsubscribe();
+    });
+  }
+
+  start = async (timeRange: TimeRange) => {
+    if (this.useFallback) {
+      await this._fallback.start(timeRange);
+      this.metrics = this._fallback.metrics;
+      this.histogramMetrics = this._fallback.histogramMetrics;
+      this.labelKeys = this._fallback.labelKeys;
+      return;
+    }
+    await this.queryMetrics(timeRange);
+    this.labelKeys = await this.queryLabelKeys(timeRange);
+  };
+
+  public queryMetrics = async (
+    timeRange: TimeRange,
+    limit?: number
+  ): Promise<{ metrics: string[]; histogramMetrics: string[] }> => {
+    if (this.useFallback) {
+      const res = await this._fallback.queryMetrics(timeRange);
+      this.metrics = res.metrics;
+      this.histogramMetrics = res.histogramMetrics;
+      return res;
+    }
+    const params = this.buildParams({ timeParams: getRangeSnapInterval(this.datasource.cacheLevel, timeRange), limit });
+    this.metrics = await this.runSearchPromise(SEARCH_ENDPOINTS.metricNames, params, 'metrics');
+    this.histogramMetrics = processHistogramMetrics(this.metrics);
+    return { metrics: this.metrics, histogramMetrics: this.histogramMetrics };
+  };
+
+  public queryLabelKeys = async (timeRange: TimeRange, match?: string, limit?: number): Promise<string[]> => {
+    if (this.useFallback) {
+      return this._fallback.queryLabelKeys(timeRange, match, limit);
+    }
+    const effectiveLimit = this.getEffectiveLimit(limit);
+    const effectiveMatch = match ?? '';
+    const cached = this._cache.getLabelKeys(timeRange, effectiveMatch, effectiveLimit);
+    if (cached) {
+      return cached;
+    }
+    const params = this.buildParams({
+      timeParams: getRangeSnapInterval(this.datasource.cacheLevel, timeRange),
+      match,
+      limit,
+    });
+    const keys = await this.runSearchPromise(SEARCH_ENDPOINTS.labelNames, params, 'labelKeys');
+    this.labelKeys = keys.slice();
+    this._cache.setLabelKeys(timeRange, effectiveMatch, effectiveLimit, this.labelKeys);
+    return keys;
+  };
+
+  public queryLabelValues = async (
+    timeRange: TimeRange,
+    labelKey: string,
+    match?: string,
+    limit?: number
+  ): Promise<string[]> => {
+    if (this.useFallback) {
+      return this._fallback.queryLabelValues(timeRange, labelKey, match, limit);
+    }
+    const effectiveLimit = this.getEffectiveLimit(limit);
+    const label = removeQuotesIfExist(this.datasource.interpolateString(labelKey));
+    const effectiveMatch = `${match ?? ''}-${label}`;
+    const cached = this._cache.getLabelValues(timeRange, effectiveMatch, effectiveLimit);
+    if (cached) {
+      return cached;
+    }
+    const params = this.buildParams({
+      timeParams: this.datasource.getAdjustedInterval(timeRange),
+      match,
+      label,
+      limit,
+    });
+    const values = await this.runSearchPromise(SEARCH_ENDPOINTS.labelValues, params, `labelValues-${label}`);
+    this._cache.setLabelValues(timeRange, effectiveMatch, effectiveLimit, values);
+    return values;
+  };
+
+  public searchMetricNames = (timeRange: TimeRange, options: SearchOptions): Observable<string[]> => {
+    const params = this.buildParams({
+      timeParams: getRangeSnapInterval(this.datasource.cacheLevel, timeRange),
+      search: options.search,
+      match: options.match,
+      limit: options.limit,
+    });
+    return this.runSearchObservable(SEARCH_ENDPOINTS.metricNames, params, options.slotId ?? 'metrics-search');
+  };
+
+  public searchLabelNames = (timeRange: TimeRange, options: SearchOptions): Observable<string[]> => {
+    const params = this.buildParams({
+      timeParams: getRangeSnapInterval(this.datasource.cacheLevel, timeRange),
+      search: options.search,
+      match: options.match,
+      limit: options.limit,
+    });
+    return this.runSearchObservable(SEARCH_ENDPOINTS.labelNames, params, options.slotId ?? 'labelKeys-search');
+  };
+
+  public searchLabelValues = (timeRange: TimeRange, labelKey: string, options: SearchOptions): Observable<string[]> => {
+    const label = removeQuotesIfExist(this.datasource.interpolateString(labelKey));
+    const params = this.buildParams({
+      timeParams: this.datasource.getAdjustedInterval(timeRange),
+      search: options.search,
+      match: options.match,
+      label,
+      limit: options.limit,
+    });
+    return this.runSearchObservable(
+      SEARCH_ENDPOINTS.labelValues,
+      params,
+      options.slotId ?? `labelValues-search-${label}`
+    );
   };
 }
 

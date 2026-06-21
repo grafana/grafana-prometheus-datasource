@@ -24,3 +24,16 @@ export const formatKeyValueStrings = (query: string, labelsFilters?: QueryBuilde
 
   return formatPrometheusLabelFiltersToString(queryString, labelsFilters);
 };
+
+/**
+ * Builds a PromQL selector from ONLY the label filters (no typed-text regex). Used by the
+ * search-API path, where the typed text is routed to `search[]` instead of being
+ * regexified into `match[]`. Returns '' when there are no label filters.
+ */
+export const formatLabelFiltersToString = (labelsFilters?: QueryBuilderLabelFilter[]): string => {
+  const filterArray = labelsFilters ? formatPrometheusLabelFilters(labelsFilters) : [];
+  if (filterArray.length === 0) {
+    return '';
+  }
+  return `{${filterArray.join('').replace(/^,/, '')}}`;
+};

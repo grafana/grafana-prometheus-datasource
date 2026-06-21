@@ -3,6 +3,7 @@ package promlib
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
@@ -24,8 +25,8 @@ type Service struct {
 }
 
 type instance struct {
-	queryData    *querydata.QueryData
-	resource     *resource.Resource
+	queryData        *querydata.QueryData
+	resource         *resource.Resource
 	schemaDatasource *schemas.SchemaDatasource
 }
 
@@ -159,6 +160,21 @@ func (s *Service) CallResource(ctx context.Context, req *backend.CallResourceReq
 	}
 
 	return sender.Send(resp)
+}
+
+// StreamSearch resolves the datasource instance for pluginCtx and performs a streaming
+// NDJSON read against the experimental search API, invoking onLine per decoded line.
+//
+// It intentionally does NOT go through Resource.Execute (which buffers the full body)
+// nor through the ResponseLimitMiddleware path, so long NDJSON responses stream
+// incrementally without being capped/errored. The instance's resource client carries
+// the same instance-settings-built (authenticated) *http.Client used by resource calls.
+func (s *Service) StreamSearch(ctx context.Context, pluginCtx backend.PluginContext, endpoint string, params url.Values, onLine func(resource.SearchLine) error) error {
+	i, err := s.getInstance(ctx, pluginCtx)
+	if err != nil {
+		return err
+	}
+	return i.resource.StreamSearch(ctx, endpoint, params, onLine)
 }
 
 func (s *Service) getInstance(ctx context.Context, pluginCtx backend.PluginContext) (*instance, error) {

@@ -269,6 +269,34 @@ export const PromSettings = (props: Props) => {
                 id={selectors.components.DataSource.Prometheus.configPage.disableMetricLookup}
               />
             </InlineField>
+
+            <InlineField
+              labelWidth={PROM_CONFIG_LABEL_WIDTH}
+              label={t(
+                'grafana-prometheus.configuration.prom-settings.label-enable-search-api',
+                'Streaming search API (experimental)'
+              )}
+              tooltip={
+                <>
+                  <Trans i18nKey="grafana-prometheus.configuration.prom-settings.tooltip-enable-search-api">
+                    Use the experimental Prometheus/Mimir streaming search API (/api/v1/search/*) for fuzzy, scored,
+                    server-side autocomplete of metrics, label names and label values. The upstream must be started with
+                    --enable-feature=search-api. If the stream is unavailable, autocomplete falls back to the standard
+                    labels/series endpoints.{' '}
+                  </Trans>
+                  {docsTip()}
+                </>
+              }
+              interactive={true}
+              disabled={optionsWithDefaults.readOnly}
+              className={styles.switchField}
+            >
+              <Switch
+                value={optionsWithDefaults.jsonData.enableSearchApi ?? false}
+                onChange={onUpdateDatasourceJsonDataOptionChecked(props, 'enableSearchApi')}
+                id="prometheus-config-enable-search-api"
+              />
+            </InlineField>
           </Stack>
         </Box>
       </ConfigSubSection>
