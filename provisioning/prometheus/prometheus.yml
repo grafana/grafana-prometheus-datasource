@@ -1,0 +1,16 @@
+# Scrape config for the dev Prometheus. It scrapes itself and the Grafana dev
+# container so there are real metric names, label names and label values to
+# exercise the plugin against.
+global:
+  scrape_interval: 60s
+  evaluation_interval: 60s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: grafana
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['grafana:3000']
