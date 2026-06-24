@@ -1,0 +1,156 @@
+{
+  "spec": {
+    "type": "object",
+    "properties": {
+      "jsonData": {
+        "type": "object",
+        "properties": {
+          "allowAsRecordingRulesTarget": {
+            "description": "Allow this data source to be used as the target for Grafana-managed recording rules.",
+            "type": "boolean",
+            "default": true
+          },
+          "cacheLevel": {
+            "description": "Sets the browser caching level for editor queries. Higher cache settings are recommended for high cardinality data sources.",
+            "type": "string",
+            "default": "Low",
+            "enum": [
+              "Low",
+              "Medium",
+              "High",
+              "None"
+            ]
+          },
+          "customQueryParameters": {
+            "description": "Add custom parameters to the Prometheus query URL. Examples: timeout, partial_response, dedup, max_source_resolution. Multiple parameters should be joined using \u0026.",
+            "type": "string"
+          },
+          "defaultEditor": {
+            "description": "Sets the default editor mode for new queries in the query editor.",
+            "type": "string",
+            "default": "builder",
+            "enum": [
+              "code",
+              "builder"
+            ]
+          },
+          "disableMetricsLookup": {
+            "description": "When enabled, the metrics chooser in the query editor is not populated. Useful for Prometheus instances with a large number of metrics.",
+            "type": "boolean",
+            "default": false
+          },
+          "disableRecordingRules": {
+            "description": "When enabled, Grafana won't fetch and parse recording rules from Prometheus, improving dashboard performance.",
+            "type": "boolean",
+            "default": false
+          },
+          "exemplarTraceIdDestinations": {
+            "description": "Configure exemplar trace ID destinations. Links traces from Prometheus exemplars to a tracing backend.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "datasourceUid": {
+                  "description": "Data source UID for internal link to a tracing backend.",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "The name of the field in the labels object used to obtain the traceID.",
+                  "type": "string"
+                },
+                "url": {
+                  "description": "External link URL. Interpolate the value using ${__value.raw}.",
+                  "type": "string"
+                },
+                "urlDisplayLabel": {
+                  "description": "Custom display label to override the value of the Label name field.",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "httpMethod": {
+            "description": "HTTP method used for querying Prometheus. POST is recommended for complex queries.",
+            "type": "string",
+            "default": "POST",
+            "enum": [
+              "GET",
+              "POST"
+            ]
+          },
+          "incrementalQueryOverlapWindow": {
+            "description": "Buffer of time added to incremental queries. Default is 10m.",
+            "type": "string",
+            "default": "10m",
+            "x-dsconfig-depends-on": "jsonData.incrementalQuerying == true"
+          },
+          "incrementalQuerying": {
+            "description": "Enable incremental querying to cache results and only fetch new data since the last query. Reduces database and network load.",
+            "type": "boolean",
+            "default": false
+          },
+          "oauthPassThru": {
+            "description": "Forward the OAuth access token (and if available: the OIDC ID token) of the user querying the data source.",
+            "type": "boolean",
+            "default": false
+          },
+          "prometheusType": {
+            "description": "Select the type of your Prometheus-compatible database. Different types support different APIs. Setting this incorrectly may cause unexpected behavior.",
+            "type": "string",
+            "enum": [
+              "Cortex",
+              "Mimir",
+              "Prometheus",
+              "Thanos"
+            ]
+          },
+          "prometheusVersion": {
+            "description": "The version of your Prometheus instance (e.g. 2.37.0, 3.3.0).",
+            "type": "string"
+          },
+          "queryTimeout": {
+            "description": "Sets the Prometheus query timeout. Default is 60s. Without a timeout, complex queries can run indefinitely.",
+            "type": "string",
+            "default": "60s"
+          },
+          "seriesEndpoint": {
+            "description": "Use the /api/v1/series endpoint with match[] parameter instead of the label values endpoint. The series endpoint supports POST method.",
+            "type": "boolean",
+            "default": false
+          },
+          "seriesLimit": {
+            "description": "Maximum number of series returned. Applies to all resources (metrics, labels, values) for both series and labels endpoints. Set to 0 to disable the limit. Default is 40000.",
+            "type": "number",
+            "default": 40000
+          },
+          "timeInterval": {
+            "description": "Sets the standard scrape and evaluation interval. Set it to match the typical scrape interval in your Prometheus configuration. Default is 15s.",
+            "type": "string",
+            "default": "15s"
+          }
+        }
+      }
+    }
+  },
+  "secureValues": [
+    {
+      "key": "basicAuthPassword",
+      "description": "Password for basic authentication."
+    },
+    {
+      "key": "tlsCACert",
+      "description": "PEM-encoded CA certificate to verify the Prometheus server's TLS certificate."
+    },
+    {
+      "key": "tlsClientCert",
+      "description": "PEM-encoded client certificate for TLS client authentication."
+    },
+    {
+      "key": "tlsClientKey",
+      "description": "PEM-encoded client private key for TLS client authentication."
+    }
+  ]
+}

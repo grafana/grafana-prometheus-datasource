@@ -1,5 +1,6 @@
 import path from 'node:path';
 
+import CopyWebpackPlugin from 'copy-webpack-plugin';
 import type { Configuration } from 'webpack';
 import webpack from 'webpack';
 import { merge } from 'webpack-merge';
@@ -33,6 +34,17 @@ const config = async (env: Env): Promise<Configuration> => {
       // TODO: remove once grafana/plugin-tools@951defa ships and this plugin runs
       //  `npx @grafana/create-plugin@latest update` (switches to react/jsx-runtime).
       new webpack.ProvidePlugin({ React: 'react' }),
+      // Copy the dsconfig schema artifacts into dist/schema so Grafana can read
+      // the datasource config schema. Paths are relative to the webpack context
+      // (the plugin source root).
+      new CopyWebpackPlugin({
+        patterns: [
+          { from: '../pkg/schema/dsconfig.json', to: './schema/dsconfig.json', noErrorOnMissing: true },
+          { from: '../pkg/schema/schema.gen.json', to: './schema/v0alpha1.json', noErrorOnMissing: true },
+          { from: '../pkg/schema/settings.gen.json', to: './schema/v0alpha1/settings.json', noErrorOnMissing: true },
+          { from: '../pkg/schema/settings.examples.gen.json', to: './schema/v0alpha1/settings.examples.json', noErrorOnMissing: true },
+        ],
+      }),
     ],
   });
 };

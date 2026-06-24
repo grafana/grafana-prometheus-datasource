@@ -1,5 +1,9 @@
 # grafana-prometheus-datasource
 
+## 13.1.3
+
+- Chore: Added plugin schema and artifacts
+
 ## 13.1.2
 
 🐛 Bump go version to v1.26.4
