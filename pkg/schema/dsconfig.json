@@ -120,7 +120,6 @@
       "label": "Scrape interval",
       "description": "Sets the standard scrape and evaluation interval. Set it to match the typical scrape interval in your Prometheus configuration. Default is 15s.",
       "valueType": "string",
-      "role": "request.interval",
       "target": "jsonData",
       "defaultValue": "15s",
       "ui": {
@@ -134,7 +133,6 @@
       "label": "Query timeout",
       "description": "Sets the Prometheus query timeout. Default is 60s. Without a timeout, complex queries can run indefinitely.",
       "valueType": "string",
-      "role": "http.query.timeout",
       "target": "jsonData",
       "defaultValue": "60s",
       "ui": {
@@ -239,7 +237,6 @@
             "label": "Internal link",
             "description": "Data source UID for internal link to a tracing backend.",
             "valueType": "string",
-            "role": "query.data.link",
             "isItemField": true
           }
         ]
