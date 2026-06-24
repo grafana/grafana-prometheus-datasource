@@ -1,5 +1,11 @@
 # Changelog
 
+## 13.1.7
+
+🐛 Add a `disableTypeBoth` flag to `PromQueryBuilderUIOptions` so embedders can remove the "Both" option from the query Type selector.
+
+🐛 Export resource clients (`LabelsApiClient`, `SeriesApiClient`, `BaseResourceClient`, `ResourceApiClient`)
+
 ## 13.1.6
 
 🐛 Add optional `uiOptions` and `formatOptions` props to PromQueryBuilderOptions. Defaults preserve current behavior, existing callers see no change.
