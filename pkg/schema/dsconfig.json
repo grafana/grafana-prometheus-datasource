@@ -475,6 +475,42 @@
       }
     },
     {
+      "id": "jsonData.maxSamplesProcessedWarningThreshold",
+      "key": "maxSamplesProcessedWarningThreshold",
+      "label": "Query warning threshold",
+      "description": "When set, Grafana appends this value to Prometheus query requests as the max_samples_processed_warning_threshold URL parameter. Leave empty to omit.",
+      "valueType": "number",
+      "target": "jsonData",
+      "ui": {
+        "component": "input",
+        "placeholder": "Example: 100000000"
+      },
+      "validations": [
+        {
+          "type": "range",
+          "min": 0
+        }
+      ]
+    },
+    {
+      "id": "jsonData.maxSamplesProcessedErrorThreshold",
+      "key": "maxSamplesProcessedErrorThreshold",
+      "label": "Query error threshold",
+      "description": "When set, Grafana appends this value to Prometheus query requests as the max_samples_processed_error_threshold URL parameter. Leave empty to omit.",
+      "valueType": "number",
+      "target": "jsonData",
+      "ui": {
+        "component": "input",
+        "placeholder": "Example: 200000000"
+      },
+      "validations": [
+        {
+          "type": "range",
+          "min": 0
+        }
+      ]
+    },
+    {
       "id": "jsonData.timeout",
       "key": "timeout",
       "label": "HTTP request timeout",
@@ -734,7 +770,9 @@
         "jsonData.cacheLevel",
         "jsonData.incrementalQuerying",
         "jsonData.incrementalQueryOverlapWindow",
-        "jsonData.disableRecordingRules"
+        "jsonData.disableRecordingRules",
+        "jsonData.maxSamplesProcessedWarningThreshold",
+        "jsonData.maxSamplesProcessedErrorThreshold"
       ]
     },
     {
