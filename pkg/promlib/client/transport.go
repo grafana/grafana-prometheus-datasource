@@ -3,16 +3,14 @@ package client
 import (
 	"context"
 	"fmt"
-	"strings"
+	"net/http"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	sdkhttpclient "github.com/grafana/grafana-plugin-sdk-go/backend/httpclient"
-	"github.com/grafana/grafana-plugin-sdk-go/data/utils/maputil"
-
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/middleware"
-	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/utils"
+	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/models"
 )
 
 // CreateTransportOptions creates options for the http client.
@@ -22,27 +20,18 @@ func CreateTransportOptions(ctx context.Context, settings backend.DataSourceInst
 		return nil, fmt.Errorf("error getting HTTP options: %w", err)
 	}
 
-	jsonData, err := utils.GetJsonData(settings)
+	jsonData, err := models.ParsePromOptions(settings)
 	if err != nil {
 		return nil, fmt.Errorf("error reading settings: %w", err)
 	}
-	httpMethod, _ := maputil.GetStringOptional(jsonData, "httpMethod")
 
-	opts.Middlewares = middlewares(logger, httpMethod)
-
-	return &opts, nil
-}
-
-func middlewares(logger log.Logger, httpMethod string) []sdkhttpclient.Middleware {
 	middlewares := []sdkhttpclient.Middleware{
-		// TODO: probably isn't needed anymore and should by done by http infra code
 		middleware.CustomQueryParameters(logger),
 	}
-
-	// Needed to control GET vs POST method of the requests
-	if strings.ToLower(httpMethod) == "get" {
+	if jsonData.HTTPMethod == http.MethodGet {
 		middlewares = append(middlewares, middleware.ForceHttpGet(logger))
 	}
+	opts.Middlewares = middlewares
 
-	return middlewares
+	return &opts, nil
 }
