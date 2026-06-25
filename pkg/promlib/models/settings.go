@@ -47,11 +47,11 @@ type PromOptions struct {
 	OauthPassThru                       bool                         `json:"oauthPassThru"`
 	SeriesEndpoint                      bool                         `json:"seriesEndpoint"`
 	SeriesLimit                         *int64                       `json:"seriesLimit"`
-	ExemplarTraceIdDestinations         []ExemplarTraceIdDestination `json:"exemplarTraceIdDestinations"`
+	ExemplarTraceIDDestinations         []ExemplarTraceIDDestination `json:"exemplarTraceIdDestinations"`
 }
 
-// ExemplarTraceIdDestination mirrors the frontend ExemplarTraceIdDestination type.
-type ExemplarTraceIdDestination struct {
+// ExemplarTraceIDDestination mirrors the frontend ExemplarTraceIdDestination type.
+type ExemplarTraceIDDestination struct {
 	Name            string `json:"name"`
 	URL             string `json:"url,omitempty"`
 	URLDisplayLabel string `json:"urlDisplayLabel,omitempty"`
