@@ -88,3 +88,22 @@ func TestParsePromOptions_MalformedJSON(t *testing.T) {
 	_, err := models.ParsePromOptions(settings)
 	require.ErrorContains(t, err, "error unmarshalling JSONData")
 }
+
+func TestParsePromOptions_EmptyJSONData(t *testing.T) {
+	cases := []struct {
+		name     string
+		jsonData []byte
+	}{
+		{name: "nil JSONData", jsonData: nil},
+		{name: "empty slice", jsonData: []byte{}},
+		{name: "empty JSON object", jsonData: []byte(`{}`)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			settings := backend.DataSourceInstanceSettings{JSONData: tc.jsonData}
+			opts, err := models.ParsePromOptions(settings)
+			require.NoError(t, err)
+			require.Equal(t, http.MethodPost, opts.HTTPMethod)
+		})
+	}
+}

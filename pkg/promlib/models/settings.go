@@ -25,7 +25,7 @@ type DataSourceJsonData struct {
 // It mirrors the frontend PromOptions interface (packages/grafana-prometheus/src/types.ts)
 // which extends DataSourceJsonData.
 type PromOptions struct {
-	DataSourceJsonData        // PromOptions extends DataSourceJsonData. Eventhough it is not directly consumed by the prom datasource, it is consumed via plugin-sdk
+	DataSourceJsonData        // PromOptions extends DataSourceJsonData. Even though it is not directly consumed by the prom datasource, it is consumed via plugin-sdk
 	HTTPMethod         string `json:"httpMethod"`
 	TimeInterval       string `json:"timeInterval"`
 	QueryTimeout       string `json:"queryTimeout"`
@@ -62,7 +62,11 @@ type ExemplarTraceIdDestination struct {
 // struct and validates the fields that are actively used by the backend.
 func ParsePromOptions(settings backend.DataSourceInstanceSettings) (*PromOptions, error) {
 	var opts PromOptions
-	if err := json.Unmarshal(settings.JSONData, &opts); err != nil {
+	data := settings.JSONData
+	if len(data) == 0 {
+		data = []byte("{}")
+	}
+	if err := json.Unmarshal(data, &opts); err != nil {
 		return nil, fmt.Errorf("error unmarshalling JSONData: %w", err)
 	}
 	opts.ApplyDefaults()
