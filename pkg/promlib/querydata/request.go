@@ -11,6 +11,7 @@ import (
 
 	"github.com/grafana/dskit/concurrency"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
+	sdkhttpclient "github.com/grafana/grafana-plugin-sdk-go/backend/httpclient"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/tracing"
 	"github.com/grafana/grafana-plugin-sdk-go/data"
@@ -20,6 +21,7 @@ import (
 
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/client"
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/intervalv2"
+	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/middleware"
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/models"
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/querydata/exemplar"
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/utils"
@@ -93,9 +95,17 @@ func New(
 }
 
 func (s *QueryData) Execute(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
-	fromAlert := req.Headers["FromAlert"] == "true"
+	fromAlert := req.Headers[middleware.FromAlertHeaderName] == "true"
 	logger := s.log.FromContext(ctx)
 	logger.Debug("Begin query execution", "fromAlert", fromAlert)
+
+	// FromAlert is a plain header excluded from GetHTTPHeaders(), so the SDK's
+	// generic forwarding never propagates it to the upstream Prometheus. Forward it
+	// explicitly via a contextual middleware (applied by ContextualMiddleware in the
+	// client chain), mirroring core Grafana's in-process HTTPClientMiddleware.
+	if v := req.Headers[middleware.FromAlertHeaderName]; v != "" {
+		ctx = sdkhttpclient.WithContextualMiddleware(ctx, middleware.ForwardFromAlertHeader(v))
+	}
 	result := backend.QueryDataResponse{
 		Responses: backend.Responses{},
 	}

@@ -30,6 +30,13 @@ func CreateTransportOptions(ctx context.Context, settings backend.DataSourceInst
 
 	opts.Middlewares = middlewares(logger, httpMethod)
 
+	// Forward request headers (e.g. the alerting FromAlert / X-Rule-* headers) to
+	// the upstream Prometheus. When the plugin runs as an external (out-of-process)
+	// backend, core Grafana's HTTPClientMiddleware no longer runs in this process,
+	// so the plugin must opt into the SDK's header forwarding itself
+	// Loki did before https://github.com/grafana/grafana/pull/90890
+	opts.ForwardHTTPHeaders = true
+
 	return &opts, nil
 }
 

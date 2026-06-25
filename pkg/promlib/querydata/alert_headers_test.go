@@ -100,7 +100,8 @@ func withSDKHeaderForwarding(ctx context.Context, req *backend.QueryDataRequest)
 
 // newExternalQueryData builds a QueryData wired exactly like the external plugin
 // in pkg/datasource.go: production CreateTransportOptions + a bare SDK provider.
-// A capture middleware is appended last so it sees the final outgoing headers.
+// A capture middleware is installed as the innermost middleware so it sees the
+// final outgoing headers (after the SDK's ContextualMiddleware has applied them).
 func newExternalQueryData(t *testing.T, c *captured) *querydata.QueryData {
 	t.Helper()
 
@@ -112,7 +113,15 @@ func newExternalQueryData(t *testing.T, c *captured) *querydata.QueryData {
 	opts, err := client.CreateTransportOptions(context.Background(), settings, log.New())
 	require.NoError(t, err)
 
-	opts.Middlewares = append(opts.Middlewares, captureMiddleware(c))
+	// httpclient.NewProvider().New appends DefaultMiddlewares() (incl.
+	// ContextualMiddleware, which applies the forwarded headers) AFTER
+	// opts.Middlewares. To observe the request exactly as it leaves for the
+	// upstream, install the capture middleware as the very last (innermost)
+	// middleware via ConfigureMiddleware, so it runs after the forwarding has
+	// happened.
+	opts.ConfigureMiddleware = func(_ httpclient.Options, existing []httpclient.Middleware) []httpclient.Middleware {
+		return append(existing, captureMiddleware(c))
+	}
 
 	httpClient, err := httpclient.NewProvider().New(*opts)
 	require.NoError(t, err)
