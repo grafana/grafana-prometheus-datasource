@@ -3,6 +3,7 @@ module github.com/grafana/grafana-prometheus-datasource
 go 1.26.4
 
 require (
+	github.com/grafana/dsconfig/schema v0.0.5
 	github.com/grafana/grafana-plugin-sdk-go v0.292.1
 	github.com/stretchr/testify v1.11.1
 )
@@ -29,8 +30,7 @@ require (
 	github.com/go-openapi/swag/typeutils v0.26.0 // indirect
 	github.com/go-openapi/swag/yamlutils v0.26.0 // indirect
 	github.com/google/gnostic-models v0.7.1 // indirect
-	github.com/grafana/dsconfig/dsconfig v0.0.3 // indirect
-	github.com/grafana/dsconfig/schema v0.0.3 // indirect
+	github.com/grafana/dsconfig/dsconfig v0.0.5 // indirect
 	github.com/grafana/dskit v0.0.0-20260427162712-0457a92dacc3 // indirect
 	github.com/grafana/grafana/apps/scope v0.0.0-20260427171703-d4f46decefcb // indirect
 	github.com/grafana/grafana/pkg/apimachinery v0.0.0-20260118065639-60cb766a97d6 // indirect
@@ -95,7 +95,7 @@ require (
 	github.com/mattetti/filebuffer v1.0.1 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/mattn/go-runewidth v0.0.20 // indirect
+	github.com/mattn/go-runewidth v0.0.24 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
