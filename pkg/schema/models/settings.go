@@ -35,7 +35,7 @@ type PrometheusSettings struct {
 	DisableRecordingRules         bool                         `json:"disableRecordingRules"`
 	ManageAlerts                  bool                         `json:"manageAlerts"`
 	AllowAsRecordingRulesTarget   bool                         `json:"allowAsRecordingRulesTarget"`
-	OauthPassThru                 bool                         `json:"oauthPassThru"`
+	OAuthPassThru                bool                         `json:"oauthPassThru"`
 	SeriesEndpoint                bool                         `json:"seriesEndpoint"`
 	SeriesLimit                   int                          `json:"seriesLimit"`
 	MaxSamplesProcessedWarning    int                          `json:"maxSamplesProcessedWarningThreshold"`
