@@ -16,6 +16,7 @@ import (
 	"github.com/prometheus/prometheus/promql/parser"
 
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/client"
+	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/middleware"
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/models"
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/utils"
 )
@@ -49,6 +50,16 @@ func New(
 
 func (r *Resource) Execute(ctx context.Context, req *backend.CallResourceRequest) (*backend.CallResourceResponse, error) {
 	r.log.FromContext(ctx).Debug("Sending resource query", "URL", req.URL)
+
+	// CallResourceRequest.Headers is map[string][]string, and FromAlert is a plain
+	// (non "http_"-prefixed) key the SDK's generic forwarding never propagates.
+	// Forward it explicitly, mirroring core Grafana's in-process HTTPClientMiddleware.
+	var fromAlert string
+	if vals := req.Headers[middleware.FromAlertHeaderName]; len(vals) > 0 {
+		fromAlert = vals[0]
+	}
+	ctx = middleware.WithFromAlertForwarding(ctx, fromAlert)
+
 	resp, err := r.promClient.QueryResource(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("error querying resource: %v", err)

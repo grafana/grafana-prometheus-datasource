@@ -11,7 +11,6 @@ import (
 
 	"github.com/grafana/dskit/concurrency"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
-	sdkhttpclient "github.com/grafana/grafana-plugin-sdk-go/backend/httpclient"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/tracing"
 	"github.com/grafana/grafana-plugin-sdk-go/data"
@@ -103,9 +102,7 @@ func (s *QueryData) Execute(ctx context.Context, req *backend.QueryDataRequest) 
 	// generic forwarding never propagates it to the upstream Prometheus. Forward it
 	// explicitly via a contextual middleware (applied by ContextualMiddleware in the
 	// client chain), mirroring core Grafana's in-process HTTPClientMiddleware.
-	if v := req.Headers[middleware.FromAlertHeaderName]; v != "" {
-		ctx = sdkhttpclient.WithContextualMiddleware(ctx, middleware.ForwardFromAlertHeader(v))
-	}
+	ctx = middleware.WithFromAlertForwarding(ctx, req.Headers[middleware.FromAlertHeaderName])
 	result := backend.QueryDataResponse{
 		Responses: backend.Responses{},
 	}

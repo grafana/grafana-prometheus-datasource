@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"testing"
 
@@ -28,13 +29,13 @@ func TestForwardFromAlertHeader(t *testing.T) {
 		require.Equal(t, "true", req.Header.Get(FromAlertHeaderName))
 	})
 
-	t.Run("does not overwrite an existing FromAlert header", func(t *testing.T) {
+	t.Run("overwrites an existing FromAlert header (parity with core's unconditional Set)", func(t *testing.T) {
 		rt := ForwardFromAlertHeader("true").CreateMiddleware(sdkhttpclient.Options{}, finalRoundTripper)
 		req := newReq(t)
 		req.Header.Set(FromAlertHeaderName, "preset")
 		_, err := rt.RoundTrip(req)
 		require.NoError(t, err)
-		require.Equal(t, "preset", req.Header.Get(FromAlertHeaderName))
+		require.Equal(t, "true", req.Header.Get(FromAlertHeaderName))
 	})
 
 	t.Run("is a no-op for an empty value", func(t *testing.T) {
@@ -49,5 +50,22 @@ func TestForwardFromAlertHeader(t *testing.T) {
 		named, ok := ForwardFromAlertHeader("true").(sdkhttpclient.MiddlewareName)
 		require.True(t, ok)
 		require.Equal(t, forwardAlertHeadersMiddlewareName, named.MiddlewareName())
+	})
+}
+
+func TestWithFromAlertForwarding(t *testing.T) {
+	t.Run("installs the contextual middleware for a non-empty value", func(t *testing.T) {
+		ctx := WithFromAlertForwarding(context.Background(), "true")
+		mws := sdkhttpclient.ContextualMiddlewareFromContext(ctx)
+		require.Len(t, mws, 1)
+		named, ok := mws[0].(sdkhttpclient.MiddlewareName)
+		require.True(t, ok)
+		require.Equal(t, forwardAlertHeadersMiddlewareName, named.MiddlewareName())
+	})
+
+	t.Run("is a no-op for an empty value", func(t *testing.T) {
+		ctx := context.Background()
+		require.Equal(t, ctx, WithFromAlertForwarding(ctx, ""))
+		require.Empty(t, sdkhttpclient.ContextualMiddlewareFromContext(WithFromAlertForwarding(ctx, "")))
 	})
 }
