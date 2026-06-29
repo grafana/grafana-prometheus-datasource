@@ -107,3 +107,95 @@ func TestParsePromOptions_EmptyJSONData(t *testing.T) {
 		})
 	}
 }
+
+func TestPromOptions_ApplyDefaults(t *testing.T) {
+	cases := []struct {
+		name       string
+		input      models.PromOptions
+		wantMethod string
+	}{
+		{
+			name:       "empty HTTPMethod defaults to POST",
+			input:      models.PromOptions{},
+			wantMethod: http.MethodPost,
+		},
+		{
+			name:       "whitespace-only HTTPMethod defaults to POST",
+			input:      models.PromOptions{HTTPMethod: "   "},
+			wantMethod: http.MethodPost,
+		},
+		{
+			name:       "lowercase get is normalised to GET",
+			input:      models.PromOptions{HTTPMethod: "get"},
+			wantMethod: http.MethodGet,
+		},
+		{
+			name:       "mixed-case Post is normalised to POST",
+			input:      models.PromOptions{HTTPMethod: "Post"},
+			wantMethod: http.MethodPost,
+		},
+		{
+			name:       "whitespace-padded value is trimmed and uppercased",
+			input:      models.PromOptions{HTTPMethod: "  get  "},
+			wantMethod: http.MethodGet,
+		},
+		{
+			name:       "already-uppercase value is preserved",
+			input:      models.PromOptions{HTTPMethod: http.MethodGet},
+			wantMethod: http.MethodGet,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			opts := tc.input
+			opts.ApplyDefaults()
+			require.Equal(t, tc.wantMethod, opts.HTTPMethod)
+		})
+	}
+}
+
+func TestPromOptions_ApplyDefaults_DoesNotMutateUnrelatedFields(t *testing.T) {
+	seriesLimit := int64(42)
+	opts := models.PromOptions{
+		TimeInterval:   "30s",
+		QueryTimeout:   "60s",
+		PrometheusType: "Prometheus",
+		SeriesLimit:    &seriesLimit,
+	}
+	opts.ApplyDefaults()
+
+	require.Equal(t, "30s", opts.TimeInterval)
+	require.Equal(t, "60s", opts.QueryTimeout)
+	require.Equal(t, "Prometheus", opts.PrometheusType)
+	require.NotNil(t, opts.SeriesLimit)
+	require.Equal(t, int64(42), *opts.SeriesLimit)
+}
+
+func TestPromOptions_Validate(t *testing.T) {
+	cases := []struct {
+		name       string
+		method     string
+		wantErrStr string
+	}{
+		{name: "empty is valid", method: ""},
+		{name: "GET is valid", method: http.MethodGet},
+		{name: "POST is valid", method: http.MethodPost},
+		{name: "lowercase get is valid (Validate uppercases before comparing)", method: "get"},
+		{name: "lowercase post is valid", method: "post"},
+		{name: "PUT is rejected", method: http.MethodPut, wantErrStr: `invalid httpMethod "PUT"`},
+		{name: "DELETE is rejected", method: http.MethodDelete, wantErrStr: `invalid httpMethod "DELETE"`},
+		{name: "PATCH is rejected", method: http.MethodPatch, wantErrStr: `invalid httpMethod "PATCH"`},
+		{name: "arbitrary string is rejected", method: "foo", wantErrStr: `invalid httpMethod "foo"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			opts := models.PromOptions{HTTPMethod: tc.method}
+			err := opts.Validate()
+			if tc.wantErrStr != "" {
+				require.ErrorContains(t, err, tc.wantErrStr)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}

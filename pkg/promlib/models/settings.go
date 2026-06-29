@@ -25,10 +25,12 @@ type DataSourceJsonData struct {
 // It mirrors the frontend PromOptions interface (packages/grafana-prometheus/src/types.ts)
 // which extends DataSourceJsonData.
 type PromOptions struct {
-	DataSourceJsonData        // PromOptions extends DataSourceJsonData. Even though it is not directly consumed by the prom datasource, it is consumed via plugin-sdk
-	HTTPMethod         string `json:"httpMethod"`
-	TimeInterval       string `json:"timeInterval"`
-	QueryTimeout       string `json:"queryTimeout"`
+	// PromOptions extends DataSourceJsonData.
+	// Even though it is not directly consumed by the prom datasource, it is consumed via plugin-sdk.
+	DataSourceJsonData
+	HTTPMethod   string `json:"httpMethod"`
+	TimeInterval string `json:"timeInterval"`
+	QueryTimeout string `json:"queryTimeout"`
 
 	// Following fields are parsed for schema completeness but not yet consumed directly
 	// by the backend. They are currently read via opts.CustomOptions["grafanaData"]
