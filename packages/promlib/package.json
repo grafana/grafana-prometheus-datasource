@@ -1,6 +1,6 @@
 {
   "name": "promlib",
-  "version": "0.0.12",
+  "version": "0.0.13",
   "packageManager": "yarn@4.15.0",
   "private": true,
   "engines": {
