@@ -11,7 +11,6 @@ import (
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
-	"github.com/grafana/grafana-plugin-sdk-go/data/utils/maputil"
 	scope "github.com/grafana/grafana/apps/scope/pkg/apis/scope/v0alpha1"
 	"github.com/prometheus/prometheus/promql/parser"
 
@@ -30,20 +29,14 @@ func New(
 	settings backend.DataSourceInstanceSettings,
 	plog log.Logger,
 ) (*Resource, error) {
-	jsonData, err := utils.GetJsonData(settings)
+	jsonData, err := models.ParsePromOptions(settings)
 	if err != nil {
 		return nil, err
 	}
-	httpMethod, _ := maputil.GetStringOptional(jsonData, "httpMethod")
-
-	if httpMethod == "" {
-		httpMethod = http.MethodPost
-	}
-
 	return &Resource{
 		log: plog,
 		// we don't use queryTimeout for resource calls
-		promClient: client.NewClient(httpClient, httpMethod, settings.URL, ""),
+		promClient: client.NewClient(httpClient, jsonData.HTTPMethod, settings.URL, ""),
 	}, nil
 }
 
