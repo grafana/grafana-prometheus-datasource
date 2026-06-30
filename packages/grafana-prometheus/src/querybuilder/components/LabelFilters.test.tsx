@@ -143,6 +143,23 @@ describe('LabelFilters', () => {
     setup({ labelsFilters: [], labelFilterRequired: true });
     expect(screen.getByText(MISSING_LABEL_FILTER_ERROR_MESSAGE)).toBeInTheDocument();
   });
+
+  it('renders accessible labels for label filter operators', async () => {
+    setup({
+      labelsFilters: [{ label: 'foo', op: '=~', value: 'bar' }],
+    });
+
+    const operatorSelect = screen.getByRole('combobox', { name: 'Label filter operator' });
+    expect(operatorSelect).toBeInTheDocument();
+    expect(screen.getByText('=~')).toBeInTheDocument();
+
+    await userEvent.click(operatorSelect);
+
+    expect(screen.getByRole('option', { name: '=' })).toHaveAttribute('title', 'Equals');
+    expect(screen.getByRole('option', { name: '!=' })).toHaveAttribute('title', 'Not equals');
+    expect(screen.getByRole('option', { name: '=~' })).toHaveAttribute('title', 'Regex match');
+    expect(screen.getByRole('option', { name: '!~' })).toHaveAttribute('title', 'Not regex match');
+  });
 });
 
 function setup(propOverrides?: Partial<ComponentProps<typeof LabelFilters>>) {
