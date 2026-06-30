@@ -26,7 +26,7 @@ func CreateTransportOptions(ctx context.Context, settings backend.DataSourceInst
 	}
 
 	middlewares := []sdkhttpclient.Middleware{
-		middleware.CustomQueryParameters(logger),
+		middleware.CustomQueryParameters(logger, jsonData),
 	}
 	if jsonData.HTTPMethod == http.MethodGet {
 		middlewares = append(middlewares, middleware.ForceHttpGet(logger))

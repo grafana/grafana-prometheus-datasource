@@ -28,28 +28,26 @@ type PromOptions struct {
 	// PromOptions extends DataSourceJsonData.
 	// Even though it is not directly consumed by the prom datasource, it is consumed via plugin-sdk.
 	DataSourceJsonData
-	HTTPMethod   string `json:"httpMethod"`
-	TimeInterval string `json:"timeInterval"`
-	QueryTimeout string `json:"queryTimeout"`
+	HTTPMethod                          string  `json:"httpMethod"`
+	TimeInterval                        string  `json:"timeInterval"`
+	QueryTimeout                        string  `json:"queryTimeout"`
+	CustomQueryParameters               string  `json:"customQueryParameters"`
+	MaxSamplesProcessedWarningThreshold float64 `json:"maxSamplesProcessedWarningThreshold"`
+	MaxSamplesProcessedErrorThreshold   float64 `json:"maxSamplesProcessedErrorThreshold"`
 
-	// Following fields are parsed for schema completeness but not yet consumed directly
-	// by the backend. They are currently read via opts.CustomOptions["grafanaData"]
-	// populated by the Grafana SDK. TODO: migrate in a follow-up PR.
-	PrometheusType                      string                       `json:"prometheusType"`
-	PrometheusVersion                   string                       `json:"prometheusVersion"`
-	CustomQueryParameters               string                       `json:"customQueryParameters"`
-	MaxSamplesProcessedWarningThreshold float64                      `json:"maxSamplesProcessedWarningThreshold"`
-	MaxSamplesProcessedErrorThreshold   float64                      `json:"maxSamplesProcessedErrorThreshold"`
-	DisableMetricsLookup                bool                         `json:"disableMetricsLookup"`
-	CacheLevel                          string                       `json:"cacheLevel"`
-	DefaultEditor                       string                       `json:"defaultEditor"`
-	IncrementalQuerying                 bool                         `json:"incrementalQuerying"`
-	IncrementalQueryOverlapWindow       string                       `json:"incrementalQueryOverlapWindow"`
-	DisableRecordingRules               bool                         `json:"disableRecordingRules"`
-	OauthPassThru                       bool                         `json:"oauthPassThru"`
-	SeriesEndpoint                      bool                         `json:"seriesEndpoint"`
-	SeriesLimit                         *int64                       `json:"seriesLimit"`
-	ExemplarTraceIDDestinations         []ExemplarTraceIDDestination `json:"exemplarTraceIdDestinations"`
+	// Frontend only types
+	PrometheusType                string                       `json:"prometheusType"`
+	PrometheusVersion             string                       `json:"prometheusVersion"`
+	DisableMetricsLookup          bool                         `json:"disableMetricsLookup"`
+	CacheLevel                    string                       `json:"cacheLevel"`
+	DefaultEditor                 string                       `json:"defaultEditor"`
+	IncrementalQuerying           bool                         `json:"incrementalQuerying"`
+	IncrementalQueryOverlapWindow string                       `json:"incrementalQueryOverlapWindow"`
+	DisableRecordingRules         bool                         `json:"disableRecordingRules"`
+	OauthPassThru                 bool                         `json:"oauthPassThru"`
+	SeriesEndpoint                bool                         `json:"seriesEndpoint"`
+	SeriesLimit                   *int64                       `json:"seriesLimit"`
+	ExemplarTraceIDDestinations   []ExemplarTraceIDDestination `json:"exemplarTraceIdDestinations"`
 }
 
 // ExemplarTraceIDDestination mirrors the frontend ExemplarTraceIdDestination type.
