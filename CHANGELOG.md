@@ -1,5 +1,9 @@
 # grafana-prometheus-datasource
 
+## 13.2.0
+
+🚀 Adds dsconfig schema and necessary artifacts
+
 ## 13.1.2
 
 🐛 Bump go version to v1.26.4
