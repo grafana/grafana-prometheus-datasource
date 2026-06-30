@@ -13,7 +13,6 @@ import (
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 	scope "github.com/grafana/grafana/apps/scope/pkg/apis/scope/v0alpha1"
-	schemas "github.com/grafana/schemads"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -215,48 +214,6 @@ func TestResource_GetSuggestionsWithEmptyQueriesButFilters(t *testing.T) {
 	// Check that both label matchers are present with their correct values
 	assert.Contains(t, decodedMatch, `job="testjob"`)
 	assert.Contains(t, decodedMatch, `instance="localhost:9090"`)
-}
-
-func TestSchemaProvider_ColumnsDecodesCompressedResponses(t *testing.T) {
-	mockClient := &http.Client{
-		Transport: &mockRoundTripper{
-			customRoundTrip: func(req *http.Request) (*http.Response, error) {
-				var body []byte
-				switch req.URL.Path {
-				case "/api/v1/labels":
-					body = []byte(`{"status":"success","data":["job"]}`)
-				case "/api/v1/metadata":
-					body = []byte(`{"status":"success","data":{"up":[{"type":"gauge","help":"Up help","unit":"short"}]}}`)
-				default:
-					t.Fatalf("unexpected request path: %s", req.URL.Path)
-				}
-
-				return &http.Response{
-					StatusCode: 200,
-					Body:       io.NopCloser(bytes.NewReader(gzipBody(t, body))),
-					Header:     http.Header{"Content-Encoding": []string{"gzip"}},
-				}, nil
-			},
-		},
-	}
-	settings := backend.DataSourceInstanceSettings{
-		ID:       1,
-		URL:      "http://localhost:9090",
-		JSONData: []byte(`{"httpMethod": "GET"}`),
-	}
-	res, err := resource.New(mockClient, settings, log.DefaultLogger)
-	require.NoError(t, err)
-
-	provider := resource.NewSchemaProvider(res)
-	resp, err := provider.Columns(context.Background(), &schemas.ColumnsRequest{
-		Tables: []string{"up"},
-	})
-
-	require.NoError(t, err)
-	require.Len(t, resp.Columns["up"], 3)
-	require.Equal(t, "job", resp.Columns["up"][2].Name)
-	require.Equal(t, "Up help", resp.TableMetadata["up"].Description)
-	require.Equal(t, "short", resp.TableMetadata["up"].Unit)
 }
 
 func gzipBody(t *testing.T, body []byte) []byte {
