@@ -33,5 +33,12 @@ func CreateTransportOptions(ctx context.Context, settings backend.DataSourceInst
 	}
 	opts.Middlewares = middlewares
 
+	// Forward Grafana-provided HTTP headers (e.g. FromAlert, X-Rule-*, X-Dashboard-*,
+	// X-Panel-*, X-Grafana-Org-Id, X-Grafana-User) to the outgoing datasource request.
+	// When running as an external plugin, Grafana's in-process header-forwarding
+	// middleware does not cross the gRPC boundary, so the SDK's header middleware must
+	// do the forwarding here.
+	opts.ForwardHTTPHeaders = true
+
 	return &opts, nil
 }
