@@ -5,6 +5,7 @@ import {
   getLeftMostChild,
   getString,
   isFunctionOrAggregation,
+  regexifyLabelValuesQueryString,
   replaceBuiltInVariable,
   replaceVariables,
   returnBuiltInVariable,
@@ -57,6 +58,14 @@ describe('getString', () => {
       __V_2__app__V__: '${app}',
       __V_0____interval__V__: '$__interval',
     });
+  });
+});
+
+describe('regexifyLabelValuesQueryString', () => {
+  it('escapes regex special characters in metric search text', () => {
+    expect(regexifyLabelValuesQueryString('http.server request[duration]')).toBe(
+      'http\\\\.server.*request\\\\[duration\\\\].*'
+    );
   });
 });
 
