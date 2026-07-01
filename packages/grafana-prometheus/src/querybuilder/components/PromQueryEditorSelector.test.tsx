@@ -197,6 +197,33 @@ describe('PromQueryEditorSelector', () => {
     });
   });
 
+  it('shows the Kick start your query button for a new query editor', async () => {
+    renderWithProps({ expr: '' });
+    expect(await screen.findByRole('button', { name: /kick start your query/i })).toBeInTheDocument();
+  });
+
+  it('hides the Kick start your query button when the editor opens with an existing query', async () => {
+    renderWithProps({ expr: 'rate(http_requests_total[5m])' });
+    expect(screen.queryByRole('button', { name: /kick start your query/i })).not.toBeInTheDocument();
+  });
+
+  it('keeps the Kick start your query button visible after typing in a new query editor', async () => {
+    const { rerender } = renderWithProps({ expr: '' });
+    expect(await screen.findByRole('button', { name: /kick start your query/i })).toBeInTheDocument();
+
+    rerender(
+      <PromQueryEditorSelector
+        {...defaultProps}
+        query={{
+          refId: 'A',
+          expr: 'rat',
+        }}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: /kick start your query/i })).toBeInTheDocument();
+  });
+
   it('parses query when changing to builder mode', async () => {
     const { rerender } = renderWithProps({
       refId: 'A',

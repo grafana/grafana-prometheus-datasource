@@ -1,6 +1,6 @@
 // Core Grafana history https://github.com/grafana/grafana/blob/v11.0.0-preview/public/app/plugins/datasource/prometheus/querybuilder/components/PromQueryEditorSelector.tsx
 import { isEqual } from 'lodash';
-import { memo, type SyntheticEvent, useCallback, useEffect, useState } from 'react';
+import { memo, type SyntheticEvent, useCallback, useEffect, useRef, useState } from 'react';
 
 import { QueryWithAssistantButton } from '@grafana/assistant';
 import { CoreApp, LoadingState } from '@grafana/data';
@@ -42,6 +42,8 @@ export const PromQueryEditorSelector = memo<Props>((props) => {
   const [queryPatternsModalOpen, setQueryPatternsModalOpen] = useState(false);
   const [dataIsStale, setDataIsStale] = useState(false);
   const { flag: explain, setFlag: setExplain } = useFlag(promQueryEditorExplainKey);
+  // Captured once on mount so typing in a new editor doesn't hide the Kickstart button.
+  const openedWithExistingQueryRef = useRef(Boolean(props.query.expr));
 
   const query = getQueryWithDefaults(props.query, app, defaultEditor);
   // This should be filled in from the defaults by now.
@@ -133,7 +135,7 @@ export const PromQueryEditorSelector = memo<Props>((props) => {
             app={app}
           />
         )}
-        {!query.expr && (
+        {!openedWithExistingQueryRef.current && (
           <Button
             data-testid={selectors.components.QueryBuilder.queryPatterns}
             variant="secondary"
