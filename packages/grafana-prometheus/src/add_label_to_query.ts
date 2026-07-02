@@ -62,6 +62,13 @@ function toLabelFilter(key: string, value: string | number, operator: string): Q
   return { label: key, op: operator, value: transformedValue };
 }
 
+// The metric name can be specified in a selector either as the leading
+// identifier (e.g. `metric{...}`) or as a `__name__` matcher inside the
+// braces. Prometheus rejects exact-match duplicates of the name with
+// "metric name must not be set twice", so we must reconcile the two forms
+// when an adhoc/label filter targets `__name__`.
+const NAME_LABEL = '__name__';
+
 function addFilter(
   query: string,
   vectorSelectorPositions: VectorSelectorPosition[],
@@ -78,6 +85,15 @@ function addFilter(
 
     const start = query.substring(prev, match.from);
     const end = isLast ? query.substring(match.to) : '';
+
+    // Fold the metric prefix into the `__name__` matcher when adding an
+    // exact-match `__name__` filter. Without this, rendering would emit
+    // the name twice (as both prefix and label), which Prometheus rejects.
+    // Non-exact operators (`!=`, `=~`, `!~`) can legitimately coexist with
+    // the metric prefix and are left alone.
+    if (filter.label === NAME_LABEL && filter.op === '=' && match.query.metric) {
+      match.query.metric = '';
+    }
 
     const labelToMatch = labelExists(match.query.labels, filter);
     if (labelToMatch) {

@@ -141,4 +141,51 @@ describe('addLabelToQuery()', () => {
       'metric{label="val", "cenk.erdem"="muhabbet"}'
     );
   });
+
+  // Regression tests for https://github.com/grafana/grafana/issues/126518:
+  // Prometheus rejects queries where the metric name is set both as the
+  // selector prefix and as an exact-match `__name__` label
+  // ("metric name must not be set twice"). The metric prefix must be folded
+  // into the `__name__` matcher in that case so the name is specified once.
+  describe('with a __name__ filter', () => {
+    it('should fold the metric prefix into a __name__ matcher (no labels)', () => {
+      expect(addLabelToQuery('metric_name', '__name__', 'metric_name')).toBe('{__name__="metric_name"}');
+    });
+
+    it('should fold the metric prefix into a __name__ matcher while preserving other labels', () => {
+      expect(addLabelToQuery('metric_name{job="x"}', '__name__', 'metric_name')).toBe(
+        '{job="x", __name__="metric_name"}'
+      );
+    });
+
+    it('should let an adhoc __name__ filter override a differing metric prefix', () => {
+      expect(addLabelToQuery('metric_name{job="x"}', '__name__', 'other_metric')).toBe(
+        '{job="x", __name__="other_metric"}'
+      );
+    });
+
+    it('should leave the metric prefix alone for non-equality __name__ operators', () => {
+      expect(addLabelToQuery('metric_name', '__name__', 'metric_name', '=~')).toBe(
+        'metric_name{__name__=~"metric_name"}'
+      );
+      expect(addLabelToQuery('metric_name', '__name__', 'other', '!=')).toBe('metric_name{__name__!="other"}');
+      expect(addLabelToQuery('metric_name', '__name__', 'other', '!~')).toBe('metric_name{__name__!~"other"}');
+    });
+
+    it('should fold the metric prefix in every vector selector of a binary expression', () => {
+      expect(addLabelToQuery('sum(a) / sum(b)', '__name__', 'a')).toBe(
+        'sum({__name__="a"}) / sum({__name__="a"})'
+      );
+    });
+
+    it('should be idempotent when the same __name__ filter is applied twice', () => {
+      expect(addLabelToQuery(addLabelToQuery('metric_name', '__name__', 'metric_name'), '__name__', 'metric_name')).toBe(
+        '{__name__="metric_name"}'
+      );
+    });
+
+    it('should not affect adding non-__name__ adhoc filters to a metric prefix', () => {
+      expect(addLabelToQuery('metric_name', 'job', 'x')).toBe('metric_name{job="x"}');
+    });
+  });
 });
