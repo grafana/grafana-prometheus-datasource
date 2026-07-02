@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"testing"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
@@ -109,6 +110,50 @@ func TestResource_ExecuteDecodesCompressedResponse(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Equal(t, body, resp.Body)
+}
+
+func TestResource_ExecuteStripsEncodingHeadersAfterDecode(t *testing.T) {
+	body := []byte(`{"status":"success","data":{"groups":[]}}`)
+	gzipped := gzipBody(t, body)
+	mockClient := &http.Client{
+		Transport: &mockRoundTripper{
+			Response: &http.Response{
+				StatusCode: 200,
+				Body:       io.NopCloser(bytes.NewReader(gzipped)),
+				Header: http.Header{
+					"Content-Encoding":  []string{"gzip"},
+					"Content-Length":    []string{strconv.Itoa(len(gzipped))},
+					"Transfer-Encoding": []string{"chunked"},
+					"Content-Type":      []string{"application/json"},
+				},
+			},
+		},
+	}
+	settings := backend.DataSourceInstanceSettings{
+		ID:       1,
+		URL:      "http://mock-server",
+		JSONData: []byte(`{}`),
+	}
+	res, err := resource.New(mockClient, settings, log.DefaultLogger)
+	require.NoError(t, err)
+
+	resp, err := res.Execute(context.Background(), &backend.CallResourceRequest{
+		URL: "/api/v1/rules",
+	})
+	require.NoError(t, err)
+
+	// Body is decoded to plaintext...
+	require.Equal(t, body, resp.Body)
+
+	// ...so the stale framing/encoding headers describing the compressed payload
+	// must be removed to avoid a length/encoding mismatch downstream (HTTP 500).
+	headers := http.Header(resp.Headers)
+	require.Empty(t, headers.Get("Content-Encoding"), "Content-Encoding must be stripped after decode")
+	require.Empty(t, headers.Get("Content-Length"), "Content-Length must be stripped after decode")
+	require.Empty(t, headers.Get("Transfer-Encoding"), "Transfer-Encoding must be stripped after decode")
+
+	// Unrelated headers must be preserved.
+	require.Equal(t, "application/json", headers.Get("Content-Type"))
 }
 
 func TestResource_GetSuggestions(t *testing.T) {
