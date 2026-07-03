@@ -10,7 +10,6 @@ import (
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	sdkapi "github.com/grafana/grafana-plugin-sdk-go/experimental/apis/datasource/v0alpha1"
 
-	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/middleware"
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/models"
 )
 
@@ -32,8 +31,6 @@ func (s *Service) CheckHealth(ctx context.Context, req *backend.CheckHealthReque
 	}
 
 	logger := s.logger.FromContext(ctx)
-
-	ctx = middleware.ForwardGrafanaHeaders(ctx, req.GetHTTPHeaders())
 
 	hc, err := healthcheck(ctx, req, ds)
 	if err != nil {

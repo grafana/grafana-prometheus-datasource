@@ -14,7 +14,6 @@ import (
 
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/client"
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/instrumentation"
-	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/middleware"
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/querydata"
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/resource"
 )
@@ -104,8 +103,6 @@ func newInstanceSettings(httpClientProvider *sdkhttpclient.Provider, log log.Log
 }
 
 func (s *Service) QueryData(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
-	ctx = middleware.ForwardGrafanaHeaders(ctx, req.GetHTTPHeaders())
-
 	req, schemadsRefIDs := normalizeGrafanaSQLRequest(req)
 
 	if len(req.Queries) == 0 {
@@ -137,8 +134,6 @@ func (s *Service) QueryData(ctx context.Context, req *backend.QueryDataRequest) 
 }
 
 func (s *Service) CallResource(ctx context.Context, req *backend.CallResourceRequest, sender backend.CallResourceResponseSender) error {
-	ctx = middleware.ForwardGrafanaHeaders(ctx, req.GetHTTPHeaders())
-
 	i, err := s.getInstance(ctx, req.PluginContext)
 	if err != nil {
 		return err
