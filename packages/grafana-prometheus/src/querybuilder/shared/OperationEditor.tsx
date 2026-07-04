@@ -104,7 +104,7 @@ export function OperationEditor({
               paramDef={paramDef}
               value={operation.params[paramIndex]}
               index={paramIndex}
-              operationId={operation.id}
+              operationId={id}
               query={query}
               datasource={datasource}
               timeRange={timeRange}

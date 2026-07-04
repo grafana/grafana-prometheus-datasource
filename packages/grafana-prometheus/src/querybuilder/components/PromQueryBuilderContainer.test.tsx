@@ -33,6 +33,12 @@ describe('PromQueryBuilderContainer', () => {
       expect(container.querySelector(`${getOperationParamId('0', 0)}`)).toBeInTheDocument();
     });
   });
+
+  it('associates operation parameter labels with their controls', () => {
+    setup({ expr: 'rate(metric_test[5m])' });
+
+    expect(screen.getByLabelText('Range')).toBeInTheDocument();
+  });
 });
 
 function setup(queryOverrides: Partial<PromQuery> = {}) {
