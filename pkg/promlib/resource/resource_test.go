@@ -188,6 +188,45 @@ func TestResource_GetSuggestions(t *testing.T) {
 	assert.NotNil(t, resp)
 }
 
+func TestResource_GetSuggestionsForwardsCacheHeader(t *testing.T) {
+	mockClient := &http.Client{
+		Transport: &mockRoundTripper{
+			Response: &http.Response{
+				StatusCode: 200,
+				Body:       io.NopCloser(bytes.NewReader([]byte(`{"status":"success","data":["instance"]}`))),
+				Header:     make(http.Header),
+			},
+		},
+	}
+	settings := backend.DataSourceInstanceSettings{
+		ID:       1,
+		URL:      "http://localhost:9090",
+		JSONData: []byte(`{"httpMethod": "GET"}`),
+	}
+	res, err := resource.New(mockClient, settings, log.DefaultLogger)
+	require.NoError(t, err)
+
+	suggestionReq := resource.SuggestionRequest{
+		LabelName: "instance",
+		Queries:   []string{"up"},
+	}
+	body, err := json.Marshal(suggestionReq)
+	require.NoError(t, err)
+
+	resp, err := res.GetSuggestions(context.Background(), &backend.CallResourceRequest{
+		Body:    body,
+		Headers: map[string][]string{"X-Grafana-Cache": {"max-age=300"}},
+	})
+	require.NoError(t, err)
+
+	// The X-Grafana-Cache directive from the original request must be honoured
+	// by the inner Execute call so that Cache-Control is present in the response.
+	headers := http.Header(resp.Headers)
+	require.Equal(t, "max-age=300", headers.Get("Cache-Control"),
+		"Cache-Control must be set when X-Grafana-Cache is forwarded")
+	require.Equal(t, "y", headers.Get("X-Grafana-Cache"))
+}
+
 func TestResource_GetSuggestionsWithEmptyQueriesButFilters(t *testing.T) {
 	var capturedURL string
 
