@@ -14,7 +14,6 @@ import (
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/tracing"
 	"github.com/grafana/grafana-plugin-sdk-go/data"
-	"github.com/grafana/grafana-plugin-sdk-go/data/utils/maputil"
 	"github.com/grafana/grafana-plugin-sdk-go/experimental/status"
 	"go.opentelemetry.io/otel/trace"
 
@@ -22,7 +21,6 @@ import (
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/intervalv2"
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/models"
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/querydata/exemplar"
-	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/utils"
 )
 
 const legendFormatAuto = "__auto"
@@ -55,26 +53,12 @@ func New(
 	plog log.Logger,
 	featureToggles backend.FeatureToggles,
 ) (*QueryData, error) {
-	jsonData, err := utils.GetJsonData(settings)
-	if err != nil {
-		return nil, err
-	}
-	httpMethod, _ := maputil.GetStringOptional(jsonData, "httpMethod")
-	if httpMethod == "" {
-		httpMethod = http.MethodPost
-	}
-
-	timeInterval, err := maputil.GetStringOptional(jsonData, "timeInterval")
+	jsonData, err := models.ParsePromOptions(settings)
 	if err != nil {
 		return nil, err
 	}
 
-	queryTimeout, err := maputil.GetStringOptional(jsonData, "queryTimeout")
-	if err != nil {
-		return nil, err
-	}
-
-	promClient := client.NewClient(httpClient, httpMethod, settings.URL, queryTimeout)
+	promClient := client.NewClient(httpClient, jsonData.HTTPMethod, settings.URL, jsonData.QueryTimeout)
 
 	// standard deviation sampler is the default for backwards compatibility
 	exemplarSampler := exemplar.NewStandardDeviationSampler
@@ -84,7 +68,7 @@ func New(
 		tracer:             tracing.DefaultTracer(),
 		log:                plog,
 		client:             promClient,
-		TimeInterval:       timeInterval,
+		TimeInterval:       jsonData.TimeInterval,
 		ID:                 settings.ID,
 		URL:                settings.URL,
 		exemplarSampler:    exemplarSampler,

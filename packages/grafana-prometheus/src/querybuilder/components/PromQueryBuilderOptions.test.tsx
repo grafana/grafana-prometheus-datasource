@@ -125,6 +125,23 @@ describe('PromQueryBuilderOptions', () => {
       await userEvent.click(screen.getByRole('button', { name: /Options/ }));
       expect(screen.queryByLabelText('Range')).not.toBeInTheDocument();
     });
+
+    it('removes the "Both" type option when uiOptions.disableTypeBoth is true', async () => {
+      // PanelEditor would normally offer "Both"
+      setup({}, CoreApp.PanelEditor, { disableTypeBoth: true });
+
+      await userEvent.click(screen.getByRole('button', { name: /Options/ }));
+      expect(screen.getByLabelText('Range')).toBeInTheDocument();
+      expect(screen.getByLabelText('Instant')).toBeInTheDocument();
+      expect(screen.queryByLabelText('Both')).not.toBeInTheDocument();
+    });
+
+    it('keeps the app-based "Both" option when uiOptions.disableTypeBoth is undefined', async () => {
+      setup({}, CoreApp.PanelEditor, {});
+
+      await userEvent.click(screen.getByRole('button', { name: /Options/ }));
+      expect(screen.getByLabelText('Both')).toBeInTheDocument();
+    });
   });
 
   describe('formatOptions', () => {

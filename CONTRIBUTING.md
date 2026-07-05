@@ -1,5 +1,10 @@
 # Contributing to Prometheus Data Source for Grafana
 
+## Signed commits are required
+
+> [!IMPORTANT]
+> All commits must be [signed](https://docs.github.com/en/authentication/managing-commit-signature-verification/signing-commits) (GPG, SSH, or S/MIME) to be merged into this repository. Pull requests with unsigned commits will need to be re-committed with signatures before they can be merged.
+
 Thank you for your interest in contributing! This guide covers how to participate in this open-source project.
 
 Contributors are expected to adhere to the [Grafana Code of Conduct](https://github.com/grafana/grafana/blob/main/CODE_OF_CONDUCT.md).
@@ -8,14 +13,14 @@ You can browse [existing issues](https://github.com/grafana/grafana-prometheus-d
 
 ## Required Tools
 
-| Tool | Notes |
-| --- | --- |
-| [Git](https://git-scm.com/) | Version control |
-| [Go](https://go.dev/) | See `go.mod` for minimum version |
-| [Mage](https://magefile.org/) | Backend build tool |
-| [Node.js](https://nodejs.org/) | `>=22`; see `.nvmrc` for the pinned version |
-| [yarn](https://yarnpkg.com/) | JavaScript package manager |
-| [Docker](https://www.docker.com/) | Required for local Grafana and e2e tests |
+| Tool                              | Notes                                       |
+| --------------------------------- | ------------------------------------------- |
+| [Git](https://git-scm.com/)       | Version control                             |
+| [Go](https://go.dev/)             | See `go.mod` for minimum version            |
+| [Mage](https://magefile.org/)     | Backend build tool                          |
+| [Node.js](https://nodejs.org/)    | `>=22`; see `.nvmrc` for the pinned version |
+| [yarn](https://yarnpkg.com/)      | JavaScript package manager                  |
+| [Docker](https://www.docker.com/) | Required for local Grafana and e2e tests    |
 
 ## Frontend Development
 
@@ -95,18 +100,18 @@ yarn e2e
 Each PR must have a proper changeset that explains the PR's purpose in one line. That information will be used to generate a changelog when we release a new version of the respective package.
 
 To have a changeset, simply run `yarn changeset` and follow the CLI instructions.
-When you are done commit the auto-generated changeset file to your PR.  
+When you are done commit the auto-generated changeset file to your PR.
 
 ## Project Structure
 
-| Path | Description |
-| --- | --- |
-| `src/` | Plugin frontend source (webpack-built, bundled into the Grafana plugin zip) |
-| `packages/grafana-prometheus/` | `@grafana/prometheus` library (rollup-built, published to npm separately) |
-| `pkg/promlib/` | Go backend library (`promlib`) |
-| `provisioning/` | Grafana provisioning config used by the local Docker setup |
-| `playwright/` | E2E test fixtures and helpers |
-| `.config/` | Grafana plugin tooling config — **do not modify** (managed by `@grafana/plugin-tools`) |
+| Path                           | Description                                                                            |
+| ------------------------------ | -------------------------------------------------------------------------------------- |
+| `src/`                         | Plugin frontend source (webpack-built, bundled into the Grafana plugin zip)            |
+| `packages/grafana-prometheus/` | `@grafana/prometheus` library (rollup-built, published to npm separately)              |
+| `pkg/promlib/`                 | Go backend library (`promlib`)                                                         |
+| `provisioning/`                | Grafana provisioning config used by the local Docker setup                             |
+| `playwright/`                  | E2E test fixtures and helpers                                                          |
+| `.config/`                     | Grafana plugin tooling config — **do not modify** (managed by `@grafana/plugin-tools`) |
 
 ## Pull Requests
 
@@ -123,7 +128,7 @@ This repository has three different release processes.
 
 - grafana prometheus plugin release which will be released to plugin catalog.
 - grafana prometheus frontend package which is being released to NPM.
-- grafana prometheus backend library a.k.a `promlib` will be released via tagging. 
+- grafana prometheus backend library a.k.a `promlib` will be released via tagging.
 
 Each will be explained below:
 
@@ -133,14 +138,14 @@ _**NOTE: if there is no changeset for the package you want to release, CLI will 
 
 - Create a new branch from latest `main`.
 - Run `yarn changeset:version --datasource` (or run `yarn changeset:version` and select `grafana-prometheus-datasource`)
-- Follow the CLI instructions. 
+- Follow the CLI instructions.
   - Changesets will be aggregated and a new changelog entry will be generated.
   - Aggregated changesets will be deleted.
   - The version will be bumped in root level `package.json` and `packages/grafana-prometheus-datasource/package.json`.
   - Commit everything.
 - After merging the PR visit [Plugins - CD](https://github.com/grafana/grafana-prometheus-datasource/actions/workflows/publish.yaml) in actions.
 - Run workflow by selecting Branch: `main`, Environment: `prod`, Scope: `cloud (recommended)`
-- An automated workflow will pick your new version and roll it out to cloud.  
+- An automated workflow will pick your new version and roll it out to cloud.
 
 ### NPM Library Release `@grafana/prometheus`
 
