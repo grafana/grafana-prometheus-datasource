@@ -3,9 +3,10 @@ module github.com/grafana/grafana-prometheus-datasource
 go 1.26.4
 
 require (
-	github.com/grafana/dsconfig/schema v0.0.11
+	github.com/grafana/dsconfig/schema v0.0.12
 	github.com/grafana/grafana-plugin-sdk-go v0.292.2
 	github.com/stretchr/testify v1.11.1
+	k8s.io/kube-openapi v0.0.0-20260624041617-8f3fa4921821
 )
 
 require (
@@ -50,7 +51,6 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/apimachinery v0.36.2 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
-	k8s.io/kube-openapi v0.0.0-20260624041617-8f3fa4921821 // indirect
 	k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect

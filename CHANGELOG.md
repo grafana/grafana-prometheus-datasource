@@ -2,7 +2,7 @@
 
 ## 13.1.4
 
-🐛 Fix forwarding Grafana HTTP headers (X-Dashboard-_, X-Grafana-_) to upstream database ([#229](https://github.com/grafana/grafana-prometheus-datasource/pull/229))
+🐛 Fix forwarding Grafana HTTP headers (X-Dashboard-*, X-Grafana-*) to upstream database ([#229](https://github.com/grafana/grafana-prometheus-datasource/pull/229))
 
 ## 13.1.3
 

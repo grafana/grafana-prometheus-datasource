@@ -8,23 +8,21 @@
       ],
       "properties": {
         "basicAuth": {
-          "description": "Enable basic authentication.",
           "type": "boolean",
           "default": false
         },
         "basicAuthUser": {
-          "description": "Username for basic authentication.",
+          "description": "The username of the data source account",
           "type": "string",
-          "x-dsconfig-depends-on": "auth.method == 'basic-auth'",
-          "x-dsconfig-required-when": "auth.method == 'basic-auth'"
+          "x-dsconfig-depends-on": "virtual_authMethod == 'BasicAuth'",
+          "x-dsconfig-required-when": "root_basicAuth == true"
         },
         "jsonData": {
           "type": "object",
           "properties": {
             "allowAsRecordingRulesTarget": {
-              "description": "Allow this data source to be used as the target for Grafana-managed recording rules.",
-              "type": "boolean",
-              "default": true
+              "description": "Allow this data source to be selected as a target for writing recording rules.",
+              "type": "boolean"
             },
             "cacheLevel": {
               "description": "Sets the browser caching level for editor queries. Higher cache settings are recommended for high cardinality data sources.",
@@ -38,30 +36,30 @@
               ]
             },
             "customQueryParameters": {
-              "description": "Add custom parameters to the Prometheus query URL. Examples: timeout, partial_response, dedup, max_source_resolution. Multiple parameters should be joined using \u0026.",
+              "description": "Add custom parameters to the Prometheus query URL. For example timeout, partial_response, dedup, or max_source_resolution. Multiple parameters should be concatenated together with '\u0026'.",
               "type": "string"
             },
             "defaultEditor": {
-              "description": "Sets the default editor mode for new queries in the query editor.",
+              "description": "Set default editor option for all users of this data source.",
               "type": "string",
               "default": "builder",
               "enum": [
-                "code",
-                "builder"
+                "builder",
+                "code"
               ]
             },
             "disableMetricsLookup": {
-              "description": "When enabled, the metrics chooser in the query editor is not populated. Useful for Prometheus instances with a large number of metrics.",
+              "description": "Checking this option will disable the metrics chooser and metric/label support in the query field's autocomplete. This helps if you have performance issues with bigger Prometheus instances.",
               "type": "boolean",
               "default": false
             },
             "disableRecordingRules": {
-              "description": "When enabled, Grafana won't fetch and parse recording rules from Prometheus, improving dashboard performance.",
+              "description": "This feature will disable recording rules. Turn this on to improve dashboard performance",
               "type": "boolean",
               "default": false
             },
             "exemplarTraceIdDestinations": {
-              "description": "Configure exemplar trace ID destinations. Links traces from Prometheus exemplars to a tracing backend.",
+              "description": "Exemplar trace ID destinations. For each configured destination, the plugin renders a link on exemplar labels — either to an internal Grafana tracing data source (datasourceUid) or an external URL. The label whose value carries the trace ID is 'name' (defaults to 'traceID' when new entries are added).",
               "type": "array",
               "items": {
                 "type": "object",
@@ -70,30 +68,31 @@
                 ],
                 "properties": {
                   "datasourceUid": {
-                    "description": "Data source UID for internal link to a tracing backend.",
+                    "description": "The tracing data source the exemplar link should navigate to. Setting this makes the exemplar an internal link and takes precedence over url.",
                     "type": "string"
                   },
                   "name": {
-                    "description": "The name of the field in the labels object used to obtain the traceID.",
                     "type": "string"
                   },
                   "url": {
-                    "description": "External link URL. Interpolate the value using ${__value.raw}.",
+                    "description": "The URL of the trace backend the user would go to see its trace",
                     "type": "string"
                   },
                   "urlDisplayLabel": {
-                    "description": "Custom display label to override the value of the Label name field.",
+                    "description": "Use to override the button label on the exemplar traceID field.",
                     "type": "string"
                   }
                 }
               }
             },
             "httpHeaders": {
-              "description": "Additional headers sent with every request to the data source.",
+              "description": "Additional HTTP headers sent with every request. Header names are stored in jsonData (httpHeaderName\u003cN\u003e); header values are write-only in secureJsonData (httpHeaderValue\u003cN\u003e).",
               "type": "array",
-              "maxItems": 10,
               "items": {
                 "type": "object",
+                "required": [
+                  "name"
+                ],
                 "properties": {
                   "name": {
                     "type": "string",
@@ -106,22 +105,22 @@
               }
             },
             "httpMethod": {
-              "description": "HTTP method used for querying Prometheus. POST is recommended for complex queries.",
+              "description": "You can use either POST or GET HTTP method to query your Prometheus data source. POST is the recommended method as it allows bigger queries. Change this to GET if you have a Prometheus version older than 2.1 or if POST requests are restricted in your network.",
               "type": "string",
               "default": "POST",
               "enum": [
-                "GET",
-                "POST"
+                "POST",
+                "GET"
               ]
             },
             "incrementalQueryOverlapWindow": {
-              "description": "Buffer of time added to incremental queries. Default is 10m.",
+              "description": "Set a duration like 10m or 120s or 0s. Default of 10m. This duration will be added to the duration of each incremental request.",
               "type": "string",
               "default": "10m",
-              "x-dsconfig-depends-on": "jsonData.incrementalQuerying == true"
+              "x-dsconfig-depends-on": "jsonData_incrementalQuerying == true"
             },
             "incrementalQuerying": {
-              "description": "Enable incremental querying to cache results and only fetch new data since the last query. Reduces database and network load.",
+              "description": "This feature will change the default behavior of relative queries to always request fresh data from the prometheus instance, instead query results will be cached, and only new records are requested. Turn this on to decrease database and network load.",
               "type": "boolean",
               "default": false
             },
@@ -134,110 +133,228 @@
             },
             "manageAlerts": {
               "description": "Manage alert rules for this data source. To manage other alerting resources, add an Alertmanager data source.",
-              "type": "boolean",
-              "default": true
+              "type": "boolean"
             },
             "maxSamplesProcessedErrorThreshold": {
-              "description": "When set, Grafana appends this value to Prometheus query requests as the max_samples_processed_error_threshold URL parameter. Leave empty to omit.",
-              "type": "number",
-              "minimum": 0
+              "description": "When set, Grafana appends this value to Prometheus query requests as the max_samples_processed_error_threshold URL parameter. Not exposed in the Prometheus config editor (feature-flagged off — see maxSamplesProcessedWarningThreshold).",
+              "type": "number"
             },
             "maxSamplesProcessedWarningThreshold": {
-              "description": "When set, Grafana appends this value to Prometheus query requests as the max_samples_processed_warning_threshold URL parameter. Leave empty to omit.",
-              "type": "number",
-              "minimum": 0
+              "description": "When set, Grafana appends this value to Prometheus query requests as the max_samples_processed_warning_threshold URL parameter. Not exposed in the Prometheus config editor (the PromSettings component only renders this input when its showQuerySamplesProcessedThresholdFields prop is true — the plugin never passes it), but the field is parsed by the backend (pkg/promlib/models/settings.go:41).",
+              "type": "number"
             },
             "oauthPassThru": {
-              "description": "Forward the OAuth access token (and if available: the OIDC ID token) of the user querying the data source.",
               "type": "boolean",
               "default": false
             },
-            "pdcInjected": {
-              "description": "When enabled, connection is made via Grafana's Private Data Source Connect (PDC).",
-              "type": "boolean"
-            },
             "prometheusType": {
-              "description": "Select the type of your Prometheus-compatible database. Different types support different APIs. Setting this incorrectly may cause unexpected behavior.",
+              "description": "Set this to the type of your prometheus database, e.g. Prometheus, Cortex, Mimir or Thanos. Changing this field will save your current settings. Certain types of Prometheus supports or does not support various APIs. For example, some types support regex matching for label queries to improve performance. Some types have an API for metadata. If you set this incorrectly you may experience odd behavior when querying metrics and labels. Please check your Prometheus documentation to ensure you enter the correct type.",
               "type": "string",
               "enum": [
+                "Prometheus",
                 "Cortex",
                 "Mimir",
-                "Prometheus",
                 "Thanos"
               ]
             },
             "prometheusVersion": {
-              "description": "The version of your Prometheus instance (e.g. 2.37.0, 3.3.0).",
-              "type": "string"
+              "description": "Use this to set the version of your Prometheus instance if it is not automatically configured. The option list depends on the selected Prometheus type (see PromFlavorVersions.ts in @grafana/prometheus).",
+              "type": "string",
+              "x-dsconfig-depends-on": "jsonData_prometheusType != ''"
             },
             "queryTimeout": {
-              "description": "Sets the Prometheus query timeout. Default is 60s. Without a timeout, complex queries can run indefinitely.",
-              "type": "string",
-              "default": "60s"
+              "description": "Set the Prometheus query timeout.",
+              "type": "string"
             },
             "seriesEndpoint": {
-              "description": "Use the /api/v1/series endpoint with match[] parameter instead of the label values endpoint. The series endpoint supports POST method.",
+              "description": "Checking this option will favor the series endpoint with match[] parameter over the label values endpoint with match[] parameter. While the label values endpoint is considered more performant, some users may prefer the series because it has a POST method while the label values endpoint only has a GET method.",
               "type": "boolean",
               "default": false
             },
             "seriesLimit": {
-              "description": "Maximum number of series returned. Applies to all resources (metrics, labels, values) for both series and labels endpoints. Set to 0 to disable the limit. Default is 40000.",
-              "type": "number",
-              "default": 40000
+              "description": "The limit applies to all resources (metrics, labels, and values) for both endpoints (series and labels). Leave the field empty to use the default limit (40000). Set to 0 to disable the limit and fetch everything — this may cause performance issues. Default limit is 40000.",
+              "type": "number"
             },
             "serverName": {
-              "description": "Controls the server name used for certificate common name/subject alternative name verification. Defaults to using the data source URL.",
+              "description": "A Servername is used to verify the hostname on the returned certificate",
               "type": "string",
-              "x-dsconfig-depends-on": "jsonData.tlsAuth == true"
+              "x-dsconfig-depends-on": "jsonData_tlsAuth == true",
+              "x-dsconfig-required-when": "jsonData_tlsAuth == true"
             },
             "timeInterval": {
-              "description": "Sets the standard scrape and evaluation interval. Set it to match the typical scrape interval in your Prometheus configuration. Default is 15s.",
-              "type": "string",
-              "default": "15s"
+              "description": "This interval is how frequently Prometheus scrapes targets. Set this to the typical scrape and evaluation interval configured in your Prometheus config file. If you set this to a greater value than your Prometheus config file interval, Grafana will evaluate the data according to this interval and you will see less data points. Defaults to 15s.",
+              "type": "string"
             },
             "timeout": {
-              "description": "HTTP request timeout in seconds. Overrides the global dataproxy.timeout setting.",
-              "type": "number",
-              "minimum": 0
+              "description": "HTTP request timeout in seconds",
+              "type": "number"
             },
             "tlsAuth": {
-              "description": "Enable TLS client certificate authentication.",
-              "type": "boolean"
+              "description": "Validate using TLS client authentication, in which the server authenticates the client",
+              "type": "boolean",
+              "default": false
             },
             "tlsAuthWithCACert": {
-              "description": "Verify self-signed TLS certificates using a CA certificate.",
-              "type": "boolean"
+              "description": "Add your own Certificate Authority (CA) certificate on top of one generated by the certificate authorities for additional security measures",
+              "type": "boolean",
+              "default": false
             },
             "tlsSkipVerify": {
-              "description": "Skip TLS certificate verification. Use only for testing.",
-              "type": "boolean"
+              "description": "Skipping TLS certificate validation is not recommended unless absolutely necessary or for testing",
+              "type": "boolean",
+              "default": false
             }
           }
         },
         "url": {
           "description": "URL of your Prometheus server. If Prometheus is running locally, use http://localhost:9090.",
-          "type": "string",
-          "pattern": "^https?://"
+          "type": "string"
         }
       }
     },
     "secureValues": [
       {
         "key": "basicAuthPassword",
-        "description": "Password for basic authentication."
+        "description": "The password of the data source account"
       },
       {
         "key": "tlsCACert",
-        "description": "PEM-encoded CA certificate to verify the Prometheus server's TLS certificate."
+        "description": "Your self-signed certificate"
       },
       {
         "key": "tlsClientCert",
-        "description": "PEM-encoded client certificate for TLS client authentication."
+        "description": "The client certificate can be generated from a Certificate Authority or be self-signed"
       },
       {
         "key": "tlsClientKey",
-        "description": "PEM-encoded client private key for TLS client authentication."
+        "description": "The client key can be generated from a Certificate Authority or be self-signed"
       }
     ]
+  },
+  "settingsExamples": {
+    "examples": {
+      "": {
+        "summary": "Default configuration",
+        "description": "The defaults a new datasource starts with: no authentication, POST as the HTTP method. Only root.url needs to be filled in to get a working datasource pointed at a Prometheus server on localhost:9090.",
+        "value": {
+          "jsonData": {
+            "httpMethod": "POST"
+          },
+          "secureJsonData": {
+            "basicAuthPassword": ""
+          },
+          "url": "http://localhost:9090"
+        }
+      },
+      "basicAuth": {
+        "summary": "Basic authentication",
+        "description": "Authenticate with a Prometheus that requires HTTP Basic. Both basicAuth and basicAuthUser live at the datasource root; only basicAuthPassword is secret.",
+        "value": {
+          "basicAuth": true,
+          "basicAuthUser": "grafana",
+          "jsonData": {
+            "httpMethod": "POST"
+          },
+          "secureJsonData": {
+            "basicAuthPassword": "REPLACE_WITH_PASSWORD"
+          },
+          "url": "https://prometheus.example.com"
+        }
+      },
+      "getHTTPMethod": {
+        "summary": "GET HTTP method (legacy or restricted networks)",
+        "description": "Older Prometheus (\u003c 2.1) or environments that block POST. Everything else stays default. seriesEndpoint is enabled to prefer /api/v1/series (which supports POST) over /api/v1/label/*/values.",
+        "value": {
+          "jsonData": {
+            "httpMethod": "GET",
+            "seriesEndpoint": true
+          },
+          "secureJsonData": {
+            "basicAuthPassword": ""
+          },
+          "url": "http://legacy-prom.example.com:9090"
+        }
+      },
+      "mimirWithExemplars": {
+        "summary": "Mimir with exemplar drilldown",
+        "description": "Grafana Mimir with exemplar trace-ID destinations wired to a Tempo data source. name is the label carrying the trace ID; datasourceUid takes precedence over url when set.",
+        "value": {
+          "basicAuth": true,
+          "basicAuthUser": "grafana",
+          "jsonData": {
+            "cacheLevel": "Medium",
+            "exemplarTraceIdDestinations": [
+              {
+                "datasourceUid": "tempo",
+                "name": "traceID"
+              }
+            ],
+            "httpMethod": "POST",
+            "incrementalQuerying": true,
+            "prometheusType": "Mimir",
+            "prometheusVersion": "2.9.1",
+            "timeInterval": "15s"
+          },
+          "secureJsonData": {
+            "basicAuthPassword": "REPLACE_WITH_PASSWORD"
+          },
+          "url": "https://mimir.example.com/prometheus"
+        }
+      },
+      "noAuth": {
+        "summary": "No authentication",
+        "description": "A public or network-isolated Prometheus with no HTTP-level auth. Prometheus type and version are set explicitly so the query editor exposes flavour-specific query hints.",
+        "value": {
+          "jsonData": {
+            "httpMethod": "POST",
+            "prometheusType": "Prometheus",
+            "prometheusVersion": "2.50.1",
+            "timeInterval": "15s"
+          },
+          "url": "http://prometheus.example.com:9090"
+        }
+      },
+      "oauthForward": {
+        "summary": "Forward OAuth Identity",
+        "description": "Forward the signed-in user's upstream OAuth identity to Prometheus. The editor writes only jsonData.oauthPassThru; there is no accompanying secret.",
+        "value": {
+          "jsonData": {
+            "httpMethod": "POST",
+            "oauthPassThru": true
+          },
+          "url": "https://prometheus.example.com"
+        }
+      },
+      "tlsMutualAuth": {
+        "summary": "TLS mutual auth (mTLS)",
+        "description": "Prometheus requiring mTLS. jsonData.tlsAuth=true triggers the SDK to build a client-authenticated transport using serverName plus the PEM-encoded client cert and key in secureJsonData.",
+        "value": {
+          "jsonData": {
+            "httpMethod": "POST",
+            "serverName": "prometheus.example.com",
+            "tlsAuth": true
+          },
+          "secureJsonData": {
+            "tlsClientCert": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
+            "tlsClientKey": "-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----"
+          },
+          "url": "https://prometheus.example.com"
+        }
+      },
+      "tlsSelfSignedCA": {
+        "summary": "Self-signed CA verification",
+        "description": "Prometheus behind a private CA. jsonData.tlsAuthWithCACert=true tells the SDK to verify the server certificate against the PEM-encoded CA in secureJsonData.tlsCACert.",
+        "value": {
+          "jsonData": {
+            "httpMethod": "POST",
+            "tlsAuthWithCACert": true
+          },
+          "secureJsonData": {
+            "tlsCACert": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----"
+          },
+          "url": "https://prometheus.internal.corp"
+        }
+      }
+    }
   }
 }
