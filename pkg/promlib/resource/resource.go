@@ -192,6 +192,12 @@ func (r *Resource) GetSuggestions(ctx context.Context, req *backend.CallResource
 		PluginContext: req.PluginContext,
 	}
 
+	// Execute reads X-Grafana-Cache to set Cache-Control on the response.
+	// Carry it forward from the original request so suggestion responses are cached.
+	if v := req.GetHTTPHeaders().Get("X-Grafana-Cache"); v != "" {
+		newReq.Headers = map[string][]string{"X-Grafana-Cache": {v}}
+	}
+
 	if sugReq.LabelName != "" {
 		// Get label values for the given name (key)
 		newReq.Path = "/api/v1/label/" + sugReq.LabelName + "/values"
