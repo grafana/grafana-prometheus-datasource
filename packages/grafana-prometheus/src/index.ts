@@ -88,6 +88,7 @@ export {
 export { PrometheusVariableSupport } from './variables';
 
 export type { PrometheusLanguageProviderInterface } from './language_provider';
+export { BaseResourceClient, LabelsApiClient, SeriesApiClient, type ResourceApiClient } from './resource_clients';
 
 // For Metrics Drilldown
 export { getPrometheusTime } from './language_utils';

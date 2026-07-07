@@ -1,8 +1,12 @@
 # grafana-prometheus-datasource
 
-## 13.2.0
+## 13.1.4
 
-🚀 Adds dsconfig schema and necessary artifacts
+🐛 Fix forwarding Grafana HTTP headers (X-Dashboard-_, X-Grafana-_) to upstream database ([#229](https://github.com/grafana/grafana-prometheus-datasource/pull/229))
+
+## 13.1.3
+
+🐛 Bump grafana-plugin-sdk-go version to v0.292.2 ([#226](https://github.com/grafana/grafana-prometheus-datasource/pull/226))
 
 ## 13.1.2
 

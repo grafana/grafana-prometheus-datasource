@@ -24,4 +24,10 @@ func TestCreateTransportOptions(t *testing.T) {
 		require.Equal(t, http.Header{"Foo": []string{"bar"}}, opts.Header)
 		require.Equal(t, 1, len(opts.Middlewares))
 	})
+
+	t.Run("enables ForwardHTTPHeaders so Grafana headers (FromAlert, X-Rule-*, X-Dashboard-*, X-Panel-*, X-Grafana-*) are forwarded to the datasource", func(t *testing.T) {
+		opts, err := CreateTransportOptions(context.Background(), backend.DataSourceInstanceSettings{}, backend.NewLoggerWith("logger", "test"))
+		require.NoError(t, err)
+		require.True(t, opts.ForwardHTTPHeaders)
+	})
 }
