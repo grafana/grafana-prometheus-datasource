@@ -20,7 +20,7 @@ jobs:
 
   publish-and-deploy:
     if: github.ref == 'refs/heads/main'
-    uses: grafana/data-sources-ci-workflows/.github/workflows/cd-dev.yml@main
+    uses: grafana/data-sources-ci-workflows/.github/workflows/cd-dev.yml@eb4737ecd019da88152779fc94fb137edfd053fe # main
     permissions:
       attestations: write
       contents: write
