@@ -159,14 +159,14 @@ func TestPromOptions_ApplyDefaults_DoesNotMutateUnrelatedFields(t *testing.T) {
 	opts := models.PromOptions{
 		TimeInterval:   "30s",
 		QueryTimeout:   "60s",
-		PrometheusType: "Prometheus",
+		PrometheusType: models.PromApplicationPrometheus,
 		SeriesLimit:    &seriesLimit,
 	}
 	opts.ApplyDefaults()
 
 	require.Equal(t, "30s", opts.TimeInterval)
 	require.Equal(t, "60s", opts.QueryTimeout)
-	require.Equal(t, "Prometheus", opts.PrometheusType)
+	require.Equal(t, models.PromApplicationPrometheus, opts.PrometheusType)
 	require.NotNil(t, opts.SeriesLimit)
 	require.Equal(t, int64(42), *opts.SeriesLimit)
 }
