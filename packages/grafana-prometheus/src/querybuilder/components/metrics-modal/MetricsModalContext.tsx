@@ -12,6 +12,7 @@ import {
 } from 'react';
 
 import { type SelectableValue, type TimeRange } from '@grafana/data';
+import { reportInteraction } from '@grafana/runtime';
 
 import { METRIC_LABEL, PROMETHEUS_QUERY_BUILDER_MAX_RESULTS } from '../../../constants';
 import { type PrometheusLanguageProviderInterface } from '../../../language_provider';
@@ -161,6 +162,11 @@ export const MetricsModalContextProvider: FC<PropsWithChildren<MetricsModalConte
 
           const [fuzzyOrderedMetrics] = fuzzySearch(results, queryString);
           const resultsOptions: MetricsData = fuzzyOrderedMetrics.map((m) => generateMetricData(m, languageProvider));
+
+          reportInteraction('grafana_prometheus_metrics_explorer_search_performed', {
+            searchQuery: metricText,
+            resultsCount: resultsOptions.length,
+          });
 
           setMetricsData(resultsOptions);
           setIsLoading(false);

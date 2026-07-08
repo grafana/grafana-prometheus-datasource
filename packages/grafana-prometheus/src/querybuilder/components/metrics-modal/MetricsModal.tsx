@@ -4,6 +4,7 @@ import { cx } from '@emotion/css';
 import { type SelectableValue, type TimeRange } from '@grafana/data';
 import { selectors } from '@grafana/e2e-selectors';
 import { t, Trans } from '@grafana/i18n';
+import { reportInteraction } from '@grafana/runtime';
 import { Icon, Input, Modal, MultiSelect, Pagination, Spinner, useStyles2 } from '@grafana/ui';
 
 import { type PrometheusDatasource } from '../../../datasource';
@@ -92,7 +93,13 @@ const MetricsModalContent = (props: MetricsModalProps) => {
             options={typeOptions}
             value={selectedTypes}
             placeholder={placeholders.filterType}
-            onChange={setSelectedTypes}
+            onChange={(value) => {
+              reportInteraction('grafana_prometheus_metrics_explorer_type_filter_changed', {
+                selectedTypes: value.map((v) => v.value ?? '').join(','),
+                selectedTypesCount: value.length,
+              });
+              setSelectedTypes(value);
+            }}
           />
         </div>
         <div>
@@ -129,7 +136,14 @@ const MetricsModalContent = (props: MetricsModalProps) => {
         <Pagination
           currentPage={pagination.pageNum > pagination.totalPageNum ? 1 : pagination.pageNum}
           numberOfPages={pagination.totalPageNum}
-          onNavigate={(val: number) => setPagination({ ...pagination, pageNum: val ?? 1 })}
+          onNavigate={(val: number) => {
+            const pageNum = val ?? 1;
+            reportInteraction('grafana_prometheus_metrics_explorer_page_changed', {
+              pageNum,
+              totalPageNum: pagination.totalPageNum,
+            });
+            setPagination({ ...pagination, pageNum });
+          }}
         />
       </div>
     </Modal>

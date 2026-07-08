@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { type DataSourceInstanceSettings, type DataSourcePluginMeta } from '@grafana/data';
+import { reportInteraction } from '@grafana/runtime';
 
 import { PrometheusDatasource } from '../../../datasource';
 import { type PrometheusLanguageProviderInterface } from '../../../language_provider';
@@ -14,7 +15,6 @@ import { type PromVisualQuery } from '../../types';
 import { MetricsModal } from './MetricsModal';
 import { metricsModaltestIds } from './testIds';
 
-// don't care about interaction tracking in our unit tests
 jest.mock('@grafana/runtime', () => ({
   ...jest.requireActual('@grafana/runtime'),
   reportInteraction: jest.fn(),
@@ -80,6 +80,23 @@ describe('MetricsModal', () => {
     expect(screen.getByText('all-metrics-help')).toBeInTheDocument();
   });
 
+  it('reports an interaction when a metric is selected', async () => {
+    jest.mocked(reportInteraction).mockClear();
+    setup(defaultQuery, listOfMetrics);
+    await waitFor(() => {
+      expect(screen.getByText('all-metrics')).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByText('all-metrics'));
+
+    expect(reportInteraction).toHaveBeenCalledWith('grafana_prometheus_metrics_explorer_metric_selected', {
+      hasType: true,
+      searchQuery: '',
+      selectedTypesCount: 0,
+      pageNum: 1,
+    });
+  });
+
   // Filtering
   it('has a filter for selected type', async () => {
     setup(defaultQuery, listOfMetrics);
@@ -139,6 +156,26 @@ describe('MetricsModal', () => {
     });
   });
 
+  it('reports an interaction when a search is performed', async () => {
+    jest.mocked(reportInteraction).mockClear();
+    setup(defaultQuery, listOfMetrics);
+    await waitFor(() => {
+      expect(screen.getByText('a_bucket')).toBeInTheDocument();
+    });
+
+    const searchMetric = screen.getByTestId(metricsModaltestIds.searchMetric);
+    await userEvent.type(searchMetric, 'a_buck');
+
+    // the mocked language provider's queryLabelValues resolves to [] (see EmptyLanguageProviderMock),
+    // so the backend search always comes back empty regardless of the search term
+    await waitFor(() => {
+      expect(reportInteraction).toHaveBeenCalledWith('grafana_prometheus_metrics_explorer_search_performed', {
+        searchQuery: 'a_buck',
+        resultsCount: 0,
+      });
+    });
+  });
+
   it('searches by name and description with a fuzzy search when setting is turned on', async () => {
     // search for a_bucket by metadata type counter but only type countt
     setup(defaultQuery, listOfMetrics);
@@ -189,6 +226,50 @@ describe('MetricsModal', () => {
     const nativeHistogram = await screen.getByText('new_histogram');
 
     expect(nativeHistogram).toBeInTheDocument();
+  });
+
+  it('reports an interaction when the type filter changes', async () => {
+    jest.mocked(reportInteraction).mockClear();
+    setup(defaultQuery, listOfMetrics);
+
+    const selectType = screen.getByText('Filter by type');
+    await userEvent.click(selectType);
+
+    const nativeHistogramOption = await screen.getByText('Native histograms are different', { exact: false });
+    await userEvent.click(nativeHistogramOption);
+
+    expect(reportInteraction).toHaveBeenCalledWith('grafana_prometheus_metrics_explorer_type_filter_changed', {
+      selectedTypes: 'native histogram',
+      selectedTypesCount: 1,
+    });
+  });
+
+  it('reports an interaction when the page changes', async () => {
+    jest.mocked(reportInteraction).mockClear();
+
+    // more than one page (DEFAULT_RESULTS_PER_PAGE = 25) of results, so pagination controls are rendered
+    const manyMetricsMetadata: Record<string, { type: string; help: string }> = {};
+    for (let i = 0; i < 30; i++) {
+      manyMetricsMetadata[`metric_${i}`] = { type: 'counter', help: `metric_${i} help` };
+    }
+    const datasource = createDatasource();
+    datasource.languageProvider.queryMetricsMetadata = jest.fn().mockResolvedValue(manyMetricsMetadata);
+    datasource.languageProvider.retrieveMetricsMetadata = jest.fn().mockReturnValue(manyMetricsMetadata);
+    const props = createProps(defaultQuery, datasource, []);
+
+    render(<MetricsModal {...props} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('metric_0')).toBeInTheDocument();
+    });
+
+    const nextPageButton = screen.getByRole('button', { name: '2' });
+    await userEvent.click(nextPageButton);
+
+    expect(reportInteraction).toHaveBeenCalledWith('grafana_prometheus_metrics_explorer_page_changed', {
+      pageNum: 2,
+      totalPageNum: 2,
+    });
   });
 });
 

@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
+import { useDebounce } from 'react-use';
 import { FixedSizeList } from 'react-window';
 
 import { selectors } from '@grafana/e2e-selectors';
 import { t, Trans } from '@grafana/i18n';
+import { reportInteraction } from '@grafana/runtime';
 import { BrowserLabel as PromLabel, Input, Label, useStyles2, Spinner } from '@grafana/ui';
 
 import { LIST_ITEM_SIZE } from '../../constants';
@@ -27,6 +29,18 @@ export function ValueSelector() {
     }
     setFilteredLabelValues(filtered);
   }, [labelValues, valueSearchTerm]);
+
+  useDebounce(
+    () => {
+      if (valueSearchTerm) {
+        // Label values may contain sensitive/high-cardinality data, so we only track result counts, not the search text itself.
+        const resultsCount = Object.values(filteredLabelValues).reduce((sum, values) => sum + values.length, 0);
+        reportInteraction('grafana_prometheus_metrics_browser_value_search_performed', { resultsCount });
+      }
+    },
+    500,
+    [valueSearchTerm]
+  );
 
   return (
     <div className={styles.section}>

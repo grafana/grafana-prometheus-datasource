@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 
 import { type DataSourceInstanceSettings } from '@grafana/data';
+import { reportInteraction } from '@grafana/runtime';
 
 import { PrometheusDatasource } from '../../datasource';
 import { type PrometheusLanguageProviderInterface } from '../../language_provider';
@@ -12,6 +13,11 @@ import { getMockTimeRange } from '../../test/mocks/datasource';
 import { type PromOptions } from '../../types';
 
 import { MetricCombobox, type MetricComboboxProps } from './MetricCombobox';
+
+jest.mock('@grafana/runtime', () => ({
+  ...jest.requireActual('@grafana/runtime'),
+  reportInteraction: jest.fn(),
+}));
 
 describe('MetricCombobox', () => {
   beforeAll(() => {
@@ -146,5 +152,16 @@ describe('MetricCombobox', () => {
     await userEvent.click(button);
 
     expect(screen.getByText('Metrics explorer')).toBeInTheDocument();
+  });
+
+  it('reports an interaction when the metrics explorer is opened', async () => {
+    render(<MetricCombobox {...defaultProps} onGetMetrics={() => Promise.resolve([])} />);
+
+    const button = screen.getByRole('button', { name: /open metrics explorer/i });
+    await userEvent.click(button);
+
+    expect(reportInteraction).toHaveBeenCalledWith('grafana_prometheus_metrics_explorer_opened', {
+      hasSelectedMetric: false,
+    });
   });
 });
