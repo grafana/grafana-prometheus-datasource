@@ -164,4 +164,36 @@ describe('MetricCombobox', () => {
       hasSelectedMetric: false,
     });
   });
+
+  it('does not open the explorer or report an interaction when metrics lookups are disabled', async () => {
+    const lookupsDisabledDatasource = new PrometheusDatasource(
+      {
+        ...instanceSettings,
+        jsonData: { ...instanceSettings.jsonData, disableMetricsLookup: true },
+      } as unknown as DataSourceInstanceSettings<PromOptions>,
+      undefined,
+      mockLanguageProvider
+    );
+
+    render(
+      <MetricCombobox
+        {...defaultProps}
+        datasource={lookupsDisabledDatasource}
+        onGetMetrics={() => Promise.resolve([])}
+      />
+    );
+
+    // the button has a tooltip, so @grafana/ui's Button renders aria-disabled (not the native
+    // disabled attribute) to keep the tooltip interactive - but its onClick is still a no-op
+    const button = screen.getByRole('button', { name: /open metrics explorer/i });
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+
+    await userEvent.click(button);
+
+    expect(screen.queryByText('Metrics explorer')).not.toBeInTheDocument();
+    expect(reportInteraction).not.toHaveBeenCalledWith(
+      'grafana_prometheus_metrics_explorer_opened',
+      expect.anything()
+    );
+  });
 });

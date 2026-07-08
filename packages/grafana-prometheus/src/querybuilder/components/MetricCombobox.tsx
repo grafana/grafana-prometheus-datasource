@@ -106,6 +106,7 @@ export function MetricCombobox({
           variant="secondary"
           icon="book-open"
           className={styles.button}
+          disabled={datasource.lookupsDisabled}
           onClick={() => {
             reportInteraction('grafana_prometheus_metrics_explorer_opened', {
               hasSelectedMetric: !!query.metric,
