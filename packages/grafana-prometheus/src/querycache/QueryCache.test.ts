@@ -447,6 +447,123 @@ describe('QueryCache: Prometheus', function () {
     expect(storageLengthAfterThirdQuery).toEqual(21);
   });
 
+  it('emits frames whose length stays consistent with trimmed field values', () => {
+    // Regression producing invalid DataFrames:
+    // after amendTable merges the new window and trimTable shortens the field, frame.length was left at the pre-trim length, so frame.length > fields[].values.length.
+    const storage = new QueryCache<PromQuery>({
+      getTargetSignature: getPrometheusTargetSignature,
+      overlapString: '10m',
+    });
+
+    const firstFrames = IncrementalStorageDataFrameScenarios.histogram.evictionRequests.first
+      .dataFrames as unknown as DataFrame[];
+    const secondFrames = IncrementalStorageDataFrameScenarios.histogram.evictionRequests.second
+      .dataFrames as unknown as DataFrame[];
+    const thirdFrames = IncrementalStorageDataFrameScenarios.histogram.evictionRequests.second
+      .dataFrames as unknown as DataFrame[];
+
+    const cache = new Map<string, string>();
+    const interval = 15000;
+
+    // start time of scenario
+    const firstFrom = dateTime(new Date(1675107180000));
+    const firstTo = dateTime(new Date(1675107180000)).add(1, 'hours');
+    const firstRange: TimeRange = {
+      from: firstFrom,
+      to: firstTo,
+      raw: {
+        from: 'now-1h',
+        to: 'now',
+      },
+    };
+
+    // 30 seconds later
+    const secondNumberOfSamplesLater = 2;
+    const secondFrom = dateTime(new Date(1675107180000 + interval * secondNumberOfSamplesLater));
+    const secondTo = dateTime(new Date(1675107180000 + interval * secondNumberOfSamplesLater)).add(1, 'hours');
+    const secondRange: TimeRange = {
+      from: secondFrom,
+      to: secondTo,
+      raw: {
+        from: 'now-1h',
+        to: 'now',
+      },
+    };
+
+    // 1 minute + 30 seconds later, but 5 minute viewing window forces trimming
+    const thirdNumberOfSamplesLater = 6;
+    const thirdFrom = dateTime(new Date(1675107180000 + interval * thirdNumberOfSamplesLater));
+    const thirdTo = dateTime(new Date(1675107180000 + interval * thirdNumberOfSamplesLater)).add(5, 'minutes');
+    const thirdRange: TimeRange = {
+      from: thirdFrom,
+      to: thirdTo,
+      raw: {
+        from: 'now-5m',
+        to: 'now',
+      },
+    };
+
+    const dashboardId = `dashid`;
+    const panelId = 300;
+    const targetIdentity = `${dashboardId}|${panelId}|A`;
+
+    const request = mockPromRequest({
+      range: firstRange,
+      dashboardUID: dashboardId,
+      panelId: panelId,
+    });
+
+    const requestInfo: CacheRequestInfo<PromQuery> = {
+      requests: [], // unused
+      targetSignatures: cache,
+      shouldCache: true,
+    };
+    cache.set(targetIdentity, `1=1|${interval}|${JSON.stringify(request.rangeRaw ?? '')}`);
+
+    storage.procFrames(request, requestInfo, firstFrames);
+
+    storage.procFrames(
+      mockPromRequest({
+        range: secondRange,
+        dashboardUID: dashboardId,
+        panelId: panelId,
+      }),
+      {
+        requests: [], // unused
+        targetSignatures: cache,
+        shouldCache: true,
+      },
+      secondFrames
+    );
+
+    cache.set(targetIdentity, `'1=1'|${interval}|${JSON.stringify(thirdRange.raw)}`);
+
+    // The 5 minute window forces trimTable to drop the many leading points that
+    // were merged in over the previous 1 hour window.
+    const thirdQueryResult = storage.procFrames(
+      mockPromRequest({
+        range: thirdRange,
+        dashboardUID: dashboardId,
+        panelId: panelId,
+      }),
+      {
+        requests: [], // unused
+        targetSignatures: cache,
+        shouldCache: true,
+      },
+      thirdFrames
+    );
+
+    // Every emitted frame must be internally consistent: its declared length has
+    // to match the actual number of values in each field.
+    thirdQueryResult.forEach((frame) => {
+      expect(frame.length).toBe(frame.fields[0].values.length);
+      frame.fields.forEach((field) => {
+        expect(field.values.length).toBe(frame.length);
+      });
+    });
+  });
+
   it('Will build signature using target overrides', () => {
     const targetInterval = '30s';
     const requestInterval = '15s';
