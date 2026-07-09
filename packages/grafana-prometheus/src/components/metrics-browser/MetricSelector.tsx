@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FixedSizeList } from 'react-window';
 
 import { selectors } from '@grafana/e2e-selectors';
@@ -14,6 +14,30 @@ export function MetricSelector() {
   const styles = useStyles2(getStylesMetricSelector);
   const [metricSearchTerm, setMetricSearchTerm] = useState('');
   const { metrics, selectedMetric, seriesLimit, setSeriesLimit, onMetricClick } = useMetricsBrowser();
+
+  // Keep a local draft while typing so we only commit the limit (and trigger
+  // label/metric refetch) on blur — not on every keystroke.
+  // See https://github.com/grafana/grafana/issues/120727
+  const [seriesLimitInput, setSeriesLimitInput] = useState(
+    Number.isFinite(seriesLimit) ? String(seriesLimit) : ''
+  );
+
+  useEffect(() => {
+    setSeriesLimitInput(Number.isFinite(seriesLimit) ? String(seriesLimit) : '');
+  }, [seriesLimit]);
+
+  const applySeriesLimit = (rawValue: string) => {
+    const trimmed = rawValue.trim();
+    if (trimmed === '') {
+      // Empty means "use default"; NaN is handled downstream as empty limit.
+      setSeriesLimit(NaN);
+      return;
+    }
+    const parsed = parseInt(trimmed, 10);
+    if (!Number.isNaN(parsed)) {
+      setSeriesLimit(parsed);
+    }
+  };
 
   const filteredMetrics = useMemo(() => {
     return metrics.filter((m) => m.name === selectedMetric || m.name.includes(metricSearchTerm));
@@ -51,12 +75,19 @@ export function MetricSelector() {
         </Label>
         <div>
           <Input
-            onChange={(e) => setSeriesLimit(parseInt(e.currentTarget.value.trim(), 10))}
+            onChange={(e) => setSeriesLimitInput(e.currentTarget.value)}
+            onBlur={(e) => applySeriesLimit(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                applySeriesLimit(e.currentTarget.value);
+                e.currentTarget.blur();
+              }
+            }}
             aria-label={t(
               'grafana-prometheus.components.metric-selector.aria-label-limit-results-from-series-endpoint',
               'Limit results from series endpoint'
             )}
-            value={seriesLimit}
+            value={seriesLimitInput}
             data-testid={selectors.components.DataSource.Prometheus.queryEditor.code.metricsBrowser.seriesLimit}
           />
         </div>
