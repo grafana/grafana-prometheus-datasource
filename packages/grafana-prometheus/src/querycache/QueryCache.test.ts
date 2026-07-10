@@ -192,13 +192,10 @@ function runEvictionScenario() {
     overlapString: '10m',
   });
 
-  const firstFrames = IncrementalStorageDataFrameScenarios.histogram.evictionRequests.first
-    .dataFrames as unknown as DataFrame[];
-  const secondFrames = IncrementalStorageDataFrameScenarios.histogram.evictionRequests.second
-    .dataFrames as unknown as DataFrame[];
+  const firstFrames = IncrementalStorageDataFrameScenarios.histogram.evictionRequests.first.dataFrames as DataFrame[];
+  const secondFrames = IncrementalStorageDataFrameScenarios.histogram.evictionRequests.second.dataFrames as DataFrame[];
   // third reuses second's data — only the viewing window changes
-  const thirdFrames = IncrementalStorageDataFrameScenarios.histogram.evictionRequests.second
-    .dataFrames as unknown as DataFrame[];
+  const thirdFrames = IncrementalStorageDataFrameScenarios.histogram.evictionRequests.second.dataFrames as DataFrame[];
 
   const interval = 15000;
   const dashboardId = 'dashid';
