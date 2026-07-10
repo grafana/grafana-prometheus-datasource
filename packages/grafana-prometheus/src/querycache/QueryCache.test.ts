@@ -177,6 +177,84 @@ describe('QueryCache: Generic', function () {
   });
 });
 
+/**
+ * Runs the three-query eviction scenario used by the eviction and frame-length tests:
+ *   1. Full 1-hour window query
+ *   2. Same query 30 seconds later (still 1-hour window, incremental append)
+ *   3. Same query 1.5 minutes later but narrowed to 5-minute window (triggers trimTable)
+ *
+ * Returns all three `procFrames` results plus the storage and target identity so
+ * callers can inspect the cache after the fact.
+ */
+function runEvictionScenario() {
+  const storage = new QueryCache<PromQuery>({
+    getTargetSignature: getPrometheusTargetSignature,
+    overlapString: '10m',
+  });
+
+  const firstFrames = IncrementalStorageDataFrameScenarios.histogram.evictionRequests.first
+    .dataFrames as unknown as DataFrame[];
+  const secondFrames = IncrementalStorageDataFrameScenarios.histogram.evictionRequests.second
+    .dataFrames as unknown as DataFrame[];
+  // third reuses second's data — only the viewing window changes
+  const thirdFrames = IncrementalStorageDataFrameScenarios.histogram.evictionRequests.second
+    .dataFrames as unknown as DataFrame[];
+
+  const interval = 15000;
+  const dashboardId = 'dashid';
+  const panelId = 200;
+  const targetIdentity = `${dashboardId}|${panelId}|A`;
+
+  const firstFrom = dateTime(new Date(1675107180000));
+  const firstRange: TimeRange = {
+    from: firstFrom,
+    to: dateTime(new Date(1675107180000)).add(1, 'hours'),
+    raw: { from: 'now-1h', to: 'now' },
+  };
+
+  // 30 seconds later (2 × 15 s steps)
+  const secondFrom = dateTime(new Date(1675107180000 + interval * 2));
+  const secondRange: TimeRange = {
+    from: secondFrom,
+    to: dateTime(new Date(1675107180000 + interval * 2)).add(1, 'hours'),
+    raw: { from: 'now-1h', to: 'now' },
+  };
+
+  // 1 min 30 s later (6 × 15 s steps), 5-minute window forces trimTable to drop leading points
+  const thirdFrom = dateTime(new Date(1675107180000 + interval * 6));
+  const thirdRange: TimeRange = {
+    from: thirdFrom,
+    to: dateTime(new Date(1675107180000 + interval * 6)).add(5, 'minutes'),
+    raw: { from: 'now-5m', to: 'now' },
+  };
+
+  const cache = new Map<string, string>();
+  const firstRequest = mockPromRequest({ range: firstRange, dashboardUID: dashboardId, panelId });
+  cache.set(targetIdentity, `1=1|${interval}|${JSON.stringify(firstRequest.rangeRaw ?? '')}`);
+
+  const firstResult = storage.procFrames(
+    firstRequest,
+    { requests: [], targetSignatures: cache, shouldCache: true },
+    firstFrames
+  );
+
+  const secondResult = storage.procFrames(
+    mockPromRequest({ range: secondRange, dashboardUID: dashboardId, panelId }),
+    { requests: [], targetSignatures: cache, shouldCache: true },
+    secondFrames
+  );
+
+  cache.set(targetIdentity, `'1=1'|${interval}|${JSON.stringify(thirdRange.raw)}`);
+
+  const thirdResult = storage.procFrames(
+    mockPromRequest({ range: thirdRange, dashboardUID: dashboardId, panelId }),
+    { requests: [], targetSignatures: cache, shouldCache: true },
+    thirdFrames
+  );
+
+  return { storage, targetIdentity, firstResult, secondResult, thirdResult };
+}
+
 describe('QueryCache: Prometheus', function () {
   it('Merges incremental queries in storage', () => {
     const scenarios = [
@@ -320,248 +398,35 @@ describe('QueryCache: Prometheus', function () {
   });
 
   it('Will evict old dataframes, and use stored data when user shortens query window', () => {
-    const storage = new QueryCache<PromQuery>({
-      getTargetSignature: getPrometheusTargetSignature,
-      overlapString: '10m',
-    });
+    const { firstResult, secondResult, storage, targetIdentity } = runEvictionScenario();
 
-    // Initial request with all data for time range
-    const firstFrames = IncrementalStorageDataFrameScenarios.histogram.evictionRequests.first
-      .dataFrames as unknown as DataFrame[];
+    const firstMergedLength = firstResult[0].fields[0].values.length;
+    const secondMergedLength = secondResult[0].fields[0].values.length;
 
-    // Shortened request 30s later
-    const secondFrames = IncrementalStorageDataFrameScenarios.histogram.evictionRequests.second
-      .dataFrames as unknown as DataFrame[];
-
-    // Now the user waits a minute and changes the query duration to just the last 5 minutes, luckily the interval hasn't changed, so we can still use the data in storage except for the latest minute
-    const thirdFrames = IncrementalStorageDataFrameScenarios.histogram.evictionRequests.second
-      .dataFrames as unknown as DataFrame[];
-
-    const cache = new Map<string, string>();
-    const interval = 15000;
-
-    // start time of scenario
-    const firstFrom = dateTime(new Date(1675107180000));
-    const firstTo = dateTime(new Date(1675107180000)).add(1, 'hours');
-    const firstRange: TimeRange = {
-      from: firstFrom,
-      to: firstTo,
-      raw: {
-        from: 'now-1h',
-        to: 'now',
-      },
-    };
-
-    // 30 seconds later
-    const secondNumberOfSamplesLater = 2;
-    const secondFrom = dateTime(new Date(1675107180000 + interval * secondNumberOfSamplesLater));
-    const secondTo = dateTime(new Date(1675107180000 + interval * secondNumberOfSamplesLater)).add(1, 'hours');
-    const secondRange: TimeRange = {
-      from: secondFrom,
-      to: secondTo,
-      raw: {
-        from: 'now-1h',
-        to: 'now',
-      },
-    };
-
-    // 1 minute + 30 seconds later, but 5 minute viewing window
-    const thirdNumberOfSamplesLater = 6;
-    const thirdFrom = dateTime(new Date(1675107180000 + interval * thirdNumberOfSamplesLater));
-    const thirdTo = dateTime(new Date(1675107180000 + interval * thirdNumberOfSamplesLater)).add(5, 'minutes');
-    const thirdRange: TimeRange = {
-      from: thirdFrom,
-      to: thirdTo,
-      raw: {
-        from: 'now-5m',
-        to: 'now',
-      },
-    };
-
-    // Signifier definition
-
-    const dashboardId = `dashid`;
-    const panelId = 200;
-
-    const targetIdentity = `${dashboardId}|${panelId}|A`;
-
-    const request = mockPromRequest({
-      range: firstRange,
-      dashboardUID: dashboardId,
-      panelId: panelId,
-    });
-
-    const requestInfo: CacheRequestInfo<PromQuery> = {
-      requests: [], // unused
-      targetSignatures: cache,
-      shouldCache: true,
-    };
-    const targetSignature = `1=1|${interval}|${JSON.stringify(request.rangeRaw ?? '')}`;
-    cache.set(targetIdentity, targetSignature);
-
-    const firstQueryResult = storage.procFrames(request, requestInfo, firstFrames);
-
-    const firstMergedLength = firstQueryResult[0].fields[0].values.length;
-
-    const secondQueryResult = storage.procFrames(
-      mockPromRequest({
-        range: secondRange,
-        dashboardUID: dashboardId,
-        panelId: panelId,
-      }),
-      {
-        requests: [], // unused
-        targetSignatures: cache,
-        shouldCache: true,
-      },
-      secondFrames
-    );
-
-    const secondMergedLength = secondQueryResult[0].fields[0].values.length;
-
-    // Since the step is 15s, and the request was 30 seconds later, we should have 2 extra frames, but we should evict the first one so we keep one datapoint before the new from so the first datapoint in view connects to the y-axis
+    // Step is 15 s; request was 30 s later → 2 new points appended, 1 evicted so there
+    // is always one point before the viewport edge for the line to connect to the y-axis.
     expect(firstMergedLength + 1).toEqual(secondMergedLength);
-    expect(firstQueryResult[0].fields[0].values[1]).toEqual(secondQueryResult[0].fields[0].values[0]);
-    expect(firstQueryResult[0].fields[0].values[0] + 30000).toEqual(secondQueryResult[0].fields[0].values[1]);
+    expect(firstResult[0].fields[0].values[1]).toEqual(secondResult[0].fields[0].values[0]);
+    expect(firstResult[0].fields[0].values[0] + 30000).toEqual(secondResult[0].fields[0].values[1]);
 
-    cache.set(targetIdentity, `'1=1'|${interval}|${JSON.stringify(thirdRange.raw)}`);
-
-    storage.procFrames(
-      mockPromRequest({
-        range: thirdRange,
-        dashboardUID: dashboardId,
-        panelId: panelId,
-      }),
-      {
-        requests: [], // unused
-        targetSignatures: cache,
-        shouldCache: true,
-      },
-      thirdFrames
-    );
-
+    // After the 5-minute window: 20 visible data points (5 min / 15 s) plus one leading point.
     const cachedAfterThird = storage.cache.get(targetIdentity);
-    const storageLengthAfterThirdQuery = cachedAfterThird?.frames[0].fields[0].values.length;
-
-    // Should have the 20 data points in the viz, plus one extra
-    expect(storageLengthAfterThirdQuery).toEqual(21);
+    expect(cachedAfterThird?.frames[0].fields[0].values.length).toEqual(21);
   });
 
-  it('emits frames whose length stays consistent with trimmed field values', () => {
-    // Regression producing invalid DataFrames:
-    // after amendTable merges the new window and trimTable shortens the field, frame.length was left at the pre-trim length, so frame.length > fields[].values.length.
-    const storage = new QueryCache<PromQuery>({
-      getTargetSignature: getPrometheusTargetSignature,
-      overlapString: '10m',
-    });
+  it('emits frames whose length is consistent with trimmed field values (regression)', () => {
+    // Regression: after amendTable merged the new window, trimTable shortened the
+    // field values but left frame.length at the pre-trim count, producing invalid
+    // DataFrames (frame.length > fields[].values.length) that crashed consumers
+    // such as the heatmap panel.
+    const { firstResult, secondResult, thirdResult } = runEvictionScenario();
 
-    const firstFrames = IncrementalStorageDataFrameScenarios.histogram.evictionRequests.first
-      .dataFrames as unknown as DataFrame[];
-    const secondFrames = IncrementalStorageDataFrameScenarios.histogram.evictionRequests.second
-      .dataFrames as unknown as DataFrame[];
-    const thirdFrames = IncrementalStorageDataFrameScenarios.histogram.evictionRequests.second
-      .dataFrames as unknown as DataFrame[];
-
-    const cache = new Map<string, string>();
-    const interval = 15000;
-
-    // start time of scenario
-    const firstFrom = dateTime(new Date(1675107180000));
-    const firstTo = dateTime(new Date(1675107180000)).add(1, 'hours');
-    const firstRange: TimeRange = {
-      from: firstFrom,
-      to: firstTo,
-      raw: {
-        from: 'now-1h',
-        to: 'now',
-      },
-    };
-
-    // 30 seconds later
-    const secondNumberOfSamplesLater = 2;
-    const secondFrom = dateTime(new Date(1675107180000 + interval * secondNumberOfSamplesLater));
-    const secondTo = dateTime(new Date(1675107180000 + interval * secondNumberOfSamplesLater)).add(1, 'hours');
-    const secondRange: TimeRange = {
-      from: secondFrom,
-      to: secondTo,
-      raw: {
-        from: 'now-1h',
-        to: 'now',
-      },
-    };
-
-    // 1 minute + 30 seconds later, but 5 minute viewing window forces trimming
-    const thirdNumberOfSamplesLater = 6;
-    const thirdFrom = dateTime(new Date(1675107180000 + interval * thirdNumberOfSamplesLater));
-    const thirdTo = dateTime(new Date(1675107180000 + interval * thirdNumberOfSamplesLater)).add(5, 'minutes');
-    const thirdRange: TimeRange = {
-      from: thirdFrom,
-      to: thirdTo,
-      raw: {
-        from: 'now-5m',
-        to: 'now',
-      },
-    };
-
-    const dashboardId = `dashid`;
-    const panelId = 300;
-    const targetIdentity = `${dashboardId}|${panelId}|A`;
-
-    const request = mockPromRequest({
-      range: firstRange,
-      dashboardUID: dashboardId,
-      panelId: panelId,
-    });
-
-    const requestInfo: CacheRequestInfo<PromQuery> = {
-      requests: [], // unused
-      targetSignatures: cache,
-      shouldCache: true,
-    };
-    cache.set(targetIdentity, `1=1|${interval}|${JSON.stringify(request.rangeRaw ?? '')}`);
-
-    storage.procFrames(request, requestInfo, firstFrames);
-
-    storage.procFrames(
-      mockPromRequest({
-        range: secondRange,
-        dashboardUID: dashboardId,
-        panelId: panelId,
-      }),
-      {
-        requests: [], // unused
-        targetSignatures: cache,
-        shouldCache: true,
-      },
-      secondFrames
-    );
-
-    cache.set(targetIdentity, `'1=1'|${interval}|${JSON.stringify(thirdRange.raw)}`);
-
-    // The 5 minute window forces trimTable to drop the many leading points that
-    // were merged in over the previous 1 hour window.
-    const thirdQueryResult = storage.procFrames(
-      mockPromRequest({
-        range: thirdRange,
-        dashboardUID: dashboardId,
-        panelId: panelId,
-      }),
-      {
-        requests: [], // unused
-        targetSignatures: cache,
-        shouldCache: true,
-      },
-      thirdFrames
-    );
-
-    // Every emitted frame must be internally consistent: its declared length has
-    // to match the actual number of values in each field.
-    thirdQueryResult.forEach((frame) => {
-      expect(frame.length).toBe(frame.fields[0].values.length);
+    // The invariant must hold for every emitted frame across all three queries.
+    for (const frame of [...firstResult, ...secondResult, ...thirdResult]) {
       frame.fields.forEach((field) => {
         expect(field.values.length).toBe(frame.length);
       });
-    });
+    }
   });
 
   it('Will build signature using target overrides', () => {
