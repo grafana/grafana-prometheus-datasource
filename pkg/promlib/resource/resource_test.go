@@ -2,15 +2,18 @@ package resource_test
 
 import (
 	"bytes"
+	"compress/flate"
 	"compress/gzip"
 	"context"
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strconv"
 	"testing"
 
+	"github.com/andybalholm/brotli"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 	scope "github.com/grafana/grafana/apps/scope/pkg/apis/scope/v0alpha1"
@@ -154,6 +157,144 @@ func TestResource_ExecuteStripsEncodingHeadersAfterDecode(t *testing.T) {
 
 	// Unrelated headers must be preserved.
 	require.Equal(t, "application/json", headers.Get("Content-Type"))
+}
+
+// TestResource_ExecuteStripsFramingHeadersAcrossEncodings pins the invariant that
+// motivated the fix: whenever Execute decodes a body, the framing headers that
+// described the *original* payload (Content-Encoding, Content-Length,
+// Transfer-Encoding) must not survive onto the now-plaintext response, while
+// unrelated headers (Content-Type) must. It runs across every encoding Decode
+// understands plus the identity ("") case, so no single codec can regress and the
+// plaintext path can't be over-pruned.
+func TestResource_ExecuteStripsFramingHeadersAcrossEncodings(t *testing.T) {
+	body := []byte(`{"status":"success","data":["job","instance","__name__"]}`)
+
+	testCases := []struct {
+		name     string
+		encoding string
+	}{
+		{name: "gzip", encoding: "gzip"},
+		{name: "deflate", encoding: "deflate"},
+		{name: "brotli", encoding: "br"},
+		{name: "identity", encoding: ""},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			payload := compress(t, tc.encoding, body)
+
+			header := http.Header{
+				"Content-Type":      []string{"application/json"},
+				"Content-Length":    []string{strconv.Itoa(len(payload))},
+				"Transfer-Encoding": []string{"chunked"},
+			}
+			if tc.encoding != "" {
+				header.Set("Content-Encoding", tc.encoding)
+			}
+
+			mockClient := &http.Client{
+				Transport: &mockRoundTripper{
+					Response: &http.Response{
+						StatusCode: 200,
+						Body:       io.NopCloser(bytes.NewReader(payload)),
+						Header:     header,
+					},
+				},
+			}
+			settings := backend.DataSourceInstanceSettings{
+				ID:       1,
+				URL:      "http://mock-server",
+				JSONData: []byte(`{}`),
+			}
+			res, err := resource.New(mockClient, settings, log.DefaultLogger)
+			require.NoError(t, err)
+
+			resp, err := res.Execute(context.Background(), &backend.CallResourceRequest{URL: "/api/v1/labels"})
+			require.NoError(t, err)
+
+			require.Equal(t, body, resp.Body, "body must be decoded to plaintext")
+
+			h := http.Header(resp.Headers)
+			require.Empty(t, h.Get("Content-Encoding"), "Content-Encoding must be stripped after decode")
+			require.Empty(t, h.Get("Content-Length"), "Content-Length must be stripped after decode")
+			require.Empty(t, h.Get("Transfer-Encoding"), "Transfer-Encoding must be stripped after decode")
+			require.Equal(t, "application/json", h.Get("Content-Type"), "unrelated headers must be preserved")
+		})
+	}
+}
+
+// TestResource_ExecuteResponseSurvivesHTTPBoundary reproduces the production
+// failure mode end-to-end at the HTTP layer, without needing Grafana. The unit
+// tests above assert on the returned struct in memory; this one additionally
+// crosses the serialize -> HTTP write -> read boundary that the externalized
+// plugin's response actually traverses (gRPC -> Grafana proxy -> browser), which
+// is the only place a header/body framing mismatch turns into a real error.
+//
+// The upstream returns a gzip body with an explicit Content-Length for the
+// *compressed* bytes — exactly the shape that produced the HTTP 500. With the
+// stale framing headers relayed (the bug), replaying the CallResourceResponse
+// over a real http.Server truncates to the short Content-Length and/or leaves
+// Content-Encoding: gzip on plaintext, so a real client fails to read it. With
+// the headers stripped, the body round-trips cleanly.
+func TestResource_ExecuteResponseSurvivesHTTPBoundary(t *testing.T) {
+	// A comfortably compressible payload so the gzipped bytes are strictly
+	// smaller than the plaintext; that size gap is what makes a relayed,
+	// too-short Content-Length corrupt the downstream write.
+	labels := make([]string, 0, 200)
+	for i := 0; i < 200; i++ {
+		labels = append(labels, "label_name_"+strconv.Itoa(i))
+	}
+	plaintext, err := json.Marshal(map[string]any{"status": "success", "data": labels})
+	require.NoError(t, err)
+	gzipped := gzipBody(t, plaintext)
+	require.Less(t, len(gzipped), len(plaintext), "sanity: gzipped payload must be smaller than plaintext")
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Encoding", "gzip")
+		w.Header().Set("Content-Length", strconv.Itoa(len(gzipped)))
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(gzipped)
+	}))
+	defer upstream.Close()
+
+	settings := backend.DataSourceInstanceSettings{
+		ID:       1,
+		URL:      upstream.URL,
+		JSONData: []byte(`{}`),
+	}
+	// DisableCompression makes the client hand the *compressed* bytes to the
+	// plugin instead of transparently decoding them. This mirrors production,
+	// where utils.Decode (not the transport) owns decompression — the whole
+	// reason the stale-header bug is reachable in the first place.
+	pluginClient := &http.Client{Transport: &http.Transport{DisableCompression: true}}
+	res, err := resource.New(pluginClient, settings, log.DefaultLogger)
+	require.NoError(t, err)
+
+	callResp, err := res.Execute(context.Background(), &backend.CallResourceRequest{URL: "/api/v1/labels"})
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, callResp.Status)
+
+	// Replay the plugin's response the way Grafana's proxy writes it back out.
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		for name, values := range callResp.Headers {
+			for _, v := range values {
+				w.Header().Add(name, v)
+			}
+		}
+		w.WriteHeader(callResp.Status)
+		_, _ = w.Write(callResp.Body)
+	}))
+	defer proxy.Close()
+
+	// Default transport transparently negotiates and decodes gzip, mirroring a browser.
+	httpResp, err := http.Get(proxy.URL) //nolint:noctx
+	require.NoError(t, err)
+	defer func() { _ = httpResp.Body.Close() }()
+
+	got, err := io.ReadAll(httpResp.Body)
+	require.NoError(t, err, "reading the proxied body must not fail on a framing/decoding mismatch")
+	require.Equal(t, plaintext, got, "body must survive the HTTP boundary intact")
 }
 
 func TestResource_GetSuggestions(t *testing.T) {
@@ -343,11 +484,57 @@ func TestSchemaProvider_ColumnsDecodesCompressedResponses(t *testing.T) {
 	require.Equal(t, "short", resp.TableMetadata["up"].Unit)
 }
 
+// compress encodes body with the given Content-Encoding, mirroring what an
+// upstream Prometheus would send. An empty encoding returns the body unchanged
+// (identity), matching utils.Decode's handling of the "" case.
+func compress(t *testing.T, encoding string, body []byte) []byte {
+	t.Helper()
+
+	switch encoding {
+	case "gzip":
+		return gzipBody(t, body)
+	case "deflate":
+		return deflateBody(t, body)
+	case "br":
+		return brotliBody(t, body)
+	case "":
+		return body
+	default:
+		t.Fatalf("unsupported encoding %q", encoding)
+		return nil
+	}
+}
+
 func gzipBody(t *testing.T, body []byte) []byte {
 	t.Helper()
 
 	var buf bytes.Buffer
 	writer := gzip.NewWriter(&buf)
+	_, err := writer.Write(body)
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+
+	return buf.Bytes()
+}
+
+func deflateBody(t *testing.T, body []byte) []byte {
+	t.Helper()
+
+	var buf bytes.Buffer
+	writer, err := flate.NewWriter(&buf, flate.DefaultCompression)
+	require.NoError(t, err)
+	_, err = writer.Write(body)
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+
+	return buf.Bytes()
+}
+
+func brotliBody(t *testing.T, body []byte) []byte {
+	t.Helper()
+
+	var buf bytes.Buffer
+	writer := brotli.NewWriter(&buf)
 	_, err := writer.Write(body)
 	require.NoError(t, err)
 	require.NoError(t, writer.Close())
