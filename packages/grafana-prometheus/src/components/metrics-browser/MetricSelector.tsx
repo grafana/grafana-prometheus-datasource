@@ -22,6 +22,10 @@ export function MetricSelector() {
   // supported) we fall back to client-side substring filtering of the browse list.
   const { results: serverResults } = useStreamingSearch(hasServerSideSearch, metricSearchTerm, searchMetricsStream);
 
+  const [localSeriesLimit, setLocalSeriesLimit] = useState<string>(
+    Number.isNaN(seriesLimit) ? '' : String(seriesLimit)
+  );
+
   const filteredMetrics = useMemo(() => {
     if (hasServerSideSearch && serverResults !== null) {
       return serverResults.map((name): Metric => ({ name }));
@@ -61,12 +65,16 @@ export function MetricSelector() {
         </Label>
         <div>
           <Input
-            onChange={(e) => setSeriesLimit(parseInt(e.currentTarget.value.trim(), 10))}
+            onChange={(e) => setLocalSeriesLimit(e.currentTarget.value)}
+            onBlur={(e) => {
+              const parsed = parseInt(e.currentTarget.value.trim(), 10);
+              setSeriesLimit(Number.isNaN(parsed) ? NaN : parsed);
+            }}
             aria-label={t(
               'grafana-prometheus.components.metric-selector.aria-label-limit-results-from-series-endpoint',
               'Limit results from series endpoint'
             )}
-            value={seriesLimit}
+            value={localSeriesLimit}
             data-testid={selectors.components.DataSource.Prometheus.queryEditor.code.metricsBrowser.seriesLimit}
           />
         </div>

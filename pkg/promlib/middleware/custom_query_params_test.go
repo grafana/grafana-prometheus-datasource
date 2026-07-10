@@ -9,21 +9,20 @@ import (
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/httpclient"
 	"github.com/stretchr/testify/require"
+
+	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/models"
 )
 
 func TestCustomQueryParametersMiddleware(t *testing.T) {
-	require.Equal(t, "customQueryParameters", customQueryParametersKey)
 	require.Equal(t, "max_samples_processed_warning_threshold", warningThresholdKey)
 	require.Equal(t, "max_samples_processed_error_threshold", errorThresholdKey)
-	require.Equal(t, "maxSamplesProcessedWarningThreshold", maxSamplesProcessedWarningThresholdKey)
-	require.Equal(t, "maxSamplesProcessedErrorThreshold", maxSamplesProcessedErrorThresholdKey)
 
 	finalRoundTripper := httpclient.RoundTripperFunc(func(req *http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: http.StatusOK}, nil
 	})
 
-	t.Run("Without custom query parameters set should not apply middleware", func(t *testing.T) {
-		mw := CustomQueryParameters(backend.NewLoggerWith("logger", "test"))
+	t.Run("With nil jsonData should not apply middleware", func(t *testing.T) {
+		mw := CustomQueryParameters(backend.NewLoggerWith("logger", "test"), nil)
 		rt := mw.CreateMiddleware(httpclient.Options{}, finalRoundTripper)
 		require.NotNil(t, rt)
 		middlewareName, ok := mw.(httpclient.MiddlewareName)
@@ -42,17 +41,10 @@ func TestCustomQueryParametersMiddleware(t *testing.T) {
 		require.Equal(t, "http://test.com/query?hello=name", req.URL.String())
 	})
 
-	t.Run("Without custom query parameters set as string should not apply middleware", func(t *testing.T) {
-		mw := CustomQueryParameters(backend.NewLoggerWith("logger", "test"))
-		rt := mw.CreateMiddleware(httpclient.Options{
-			CustomOptions: map[string]any{
-				customQueryParametersKey: 64,
-			},
-		}, finalRoundTripper)
+	t.Run("Without custom query parameters set should not apply middleware", func(t *testing.T) {
+		mw := CustomQueryParameters(backend.NewLoggerWith("logger", "test"), &models.PromOptions{})
+		rt := mw.CreateMiddleware(httpclient.Options{}, finalRoundTripper)
 		require.NotNil(t, rt)
-		middlewareName, ok := mw.(httpclient.MiddlewareName)
-		require.True(t, ok)
-		require.Equal(t, customQueryParametersMiddlewareName, middlewareName.MiddlewareName())
 
 		req, err := http.NewRequest(http.MethodGet, "http://test.com/query?hello=name", nil)
 		require.NoError(t, err)
@@ -67,16 +59,9 @@ func TestCustomQueryParametersMiddleware(t *testing.T) {
 	})
 
 	t.Run("With custom query parameters set as empty string should not apply middleware", func(t *testing.T) {
-		mw := CustomQueryParameters(backend.NewLoggerWith("logger", "test"))
-		rt := mw.CreateMiddleware(httpclient.Options{
-			CustomOptions: map[string]any{
-				customQueryParametersKey: "",
-			},
-		}, finalRoundTripper)
+		mw := CustomQueryParameters(backend.NewLoggerWith("logger", "test"), &models.PromOptions{CustomQueryParameters: ""})
+		rt := mw.CreateMiddleware(httpclient.Options{}, finalRoundTripper)
 		require.NotNil(t, rt)
-		middlewareName, ok := mw.(httpclient.MiddlewareName)
-		require.True(t, ok)
-		require.Equal(t, customQueryParametersMiddlewareName, middlewareName.MiddlewareName())
 
 		req, err := http.NewRequest(http.MethodGet, "http://test.com/query?hello=name", nil)
 		require.NoError(t, err)
@@ -91,16 +76,9 @@ func TestCustomQueryParametersMiddleware(t *testing.T) {
 	})
 
 	t.Run("With custom query parameters set as invalid query string should not apply middleware", func(t *testing.T) {
-		mw := CustomQueryParameters(backend.NewLoggerWith("logger", "test"))
-		rt := mw.CreateMiddleware(httpclient.Options{
-			CustomOptions: map[string]any{
-				customQueryParametersKey: "custom=%%abc&test=abc",
-			},
-		}, finalRoundTripper)
+		mw := CustomQueryParameters(backend.NewLoggerWith("logger", "test"), &models.PromOptions{CustomQueryParameters: "custom=%%abc&test=abc"})
+		rt := mw.CreateMiddleware(httpclient.Options{}, finalRoundTripper)
 		require.NotNil(t, rt)
-		middlewareName, ok := mw.(httpclient.MiddlewareName)
-		require.True(t, ok)
-		require.Equal(t, customQueryParametersMiddlewareName, middlewareName.MiddlewareName())
 
 		req, err := http.NewRequest(http.MethodGet, "http://test.com/query?hello=name", nil)
 		require.NoError(t, err)
@@ -115,18 +93,9 @@ func TestCustomQueryParametersMiddleware(t *testing.T) {
 	})
 
 	t.Run("With custom query parameters set should apply middleware for request URL containing query parameters ", func(t *testing.T) {
-		mw := CustomQueryParameters(backend.NewLoggerWith("logger", "test"))
-		rt := mw.CreateMiddleware(httpclient.Options{
-			CustomOptions: map[string]any{
-				grafanaDataKey: map[string]any{
-					customQueryParametersKey: "custom=par/am&second=f oo",
-				},
-			},
-		}, finalRoundTripper)
+		mw := CustomQueryParameters(backend.NewLoggerWith("logger", "test"), &models.PromOptions{CustomQueryParameters: "custom=par/am&second=f oo"})
+		rt := mw.CreateMiddleware(httpclient.Options{}, finalRoundTripper)
 		require.NotNil(t, rt)
-		middlewareName, ok := mw.(httpclient.MiddlewareName)
-		require.True(t, ok)
-		require.Equal(t, customQueryParametersMiddlewareName, middlewareName.MiddlewareName())
 
 		req, err := http.NewRequest(http.MethodGet, "http://test.com/query?hello=name", nil)
 		require.NoError(t, err)
@@ -147,18 +116,9 @@ func TestCustomQueryParametersMiddleware(t *testing.T) {
 	})
 
 	t.Run("With custom query parameters set should apply middleware for request URL not containing query parameters", func(t *testing.T) {
-		mw := CustomQueryParameters(backend.NewLoggerWith("logger", "test"))
-		rt := mw.CreateMiddleware(httpclient.Options{
-			CustomOptions: map[string]any{
-				grafanaDataKey: map[string]any{
-					customQueryParametersKey: "custom=par/am&second=f oo",
-				},
-			},
-		}, finalRoundTripper)
+		mw := CustomQueryParameters(backend.NewLoggerWith("logger", "test"), &models.PromOptions{CustomQueryParameters: "custom=par/am&second=f oo"})
+		rt := mw.CreateMiddleware(httpclient.Options{}, finalRoundTripper)
 		require.NotNil(t, rt)
-		middlewareName, ok := mw.(httpclient.MiddlewareName)
-		require.True(t, ok)
-		require.Equal(t, customQueryParametersMiddlewareName, middlewareName.MiddlewareName())
 
 		req, err := http.NewRequest(http.MethodGet, "http://test.com/query", nil)
 		require.NoError(t, err)
@@ -173,15 +133,11 @@ func TestCustomQueryParametersMiddleware(t *testing.T) {
 	})
 
 	t.Run("With sample thresholds only should apply middleware", func(t *testing.T) {
-		mw := CustomQueryParameters(backend.NewLoggerWith("logger", "test"))
-		rt := mw.CreateMiddleware(httpclient.Options{
-			CustomOptions: map[string]any{
-				grafanaDataKey: map[string]any{
-					maxSamplesProcessedWarningThresholdKey: float64(500),
-					maxSamplesProcessedErrorThresholdKey:   float64(1000),
-				},
-			},
-		}, finalRoundTripper)
+		mw := CustomQueryParameters(backend.NewLoggerWith("logger", "test"), &models.PromOptions{
+			MaxSamplesProcessedWarningThreshold: 500,
+			MaxSamplesProcessedErrorThreshold:   1000,
+		})
+		rt := mw.CreateMiddleware(httpclient.Options{}, finalRoundTripper)
 		require.NotNil(t, rt)
 
 		req, err := http.NewRequest(http.MethodGet, "http://test.com/api/v1/query_range?query=up", nil)
@@ -200,16 +156,12 @@ func TestCustomQueryParametersMiddleware(t *testing.T) {
 	})
 
 	t.Run("With zero sample thresholds should not add threshold query params", func(t *testing.T) {
-		mw := CustomQueryParameters(backend.NewLoggerWith("logger", "test"))
-		rt := mw.CreateMiddleware(httpclient.Options{
-			CustomOptions: map[string]any{
-				grafanaDataKey: map[string]any{
-					customQueryParametersKey:               "custom=value",
-					maxSamplesProcessedWarningThresholdKey: float64(0),
-					maxSamplesProcessedErrorThresholdKey:   float64(0),
-				},
-			},
-		}, finalRoundTripper)
+		mw := CustomQueryParameters(backend.NewLoggerWith("logger", "test"), &models.PromOptions{
+			CustomQueryParameters:               "custom=value",
+			MaxSamplesProcessedWarningThreshold: 0,
+			MaxSamplesProcessedErrorThreshold:   0,
+		})
+		rt := mw.CreateMiddleware(httpclient.Options{}, finalRoundTripper)
 		require.NotNil(t, rt)
 
 		req, err := http.NewRequest(http.MethodGet, "http://test.com/query?hello=name", nil)
@@ -229,15 +181,11 @@ func TestCustomQueryParametersMiddleware(t *testing.T) {
 	})
 
 	t.Run("With custom query parameters and sample thresholds should merge query string", func(t *testing.T) {
-		mw := CustomQueryParameters(backend.NewLoggerWith("logger", "test"))
-		rt := mw.CreateMiddleware(httpclient.Options{
-			CustomOptions: map[string]any{
-				grafanaDataKey: map[string]any{
-					customQueryParametersKey:               "timeout=30s",
-					maxSamplesProcessedWarningThresholdKey: float64(42),
-				},
-			},
-		}, finalRoundTripper)
+		mw := CustomQueryParameters(backend.NewLoggerWith("logger", "test"), &models.PromOptions{
+			CustomQueryParameters:               "timeout=30s",
+			MaxSamplesProcessedWarningThreshold: 42,
+		})
+		rt := mw.CreateMiddleware(httpclient.Options{}, finalRoundTripper)
 		require.NotNil(t, rt)
 
 		req, err := http.NewRequest(http.MethodGet, "http://test.com/query", nil)
@@ -256,16 +204,12 @@ func TestCustomQueryParametersMiddleware(t *testing.T) {
 	})
 
 	t.Run("With explicit threshold fields and matching custom query parameters should prefer threshold fields", func(t *testing.T) {
-		mw := CustomQueryParameters(backend.NewLoggerWith("logger", "test"))
-		rt := mw.CreateMiddleware(httpclient.Options{
-			CustomOptions: map[string]any{
-				grafanaDataKey: map[string]any{
-					customQueryParametersKey:               "max_samples_processed_warning_threshold=9&max_samples_processed_error_threshold=17",
-					maxSamplesProcessedWarningThresholdKey: float64(42),
-					maxSamplesProcessedErrorThresholdKey:   float64(88),
-				},
-			},
-		}, finalRoundTripper)
+		mw := CustomQueryParameters(backend.NewLoggerWith("logger", "test"), &models.PromOptions{
+			CustomQueryParameters:               "max_samples_processed_warning_threshold=9&max_samples_processed_error_threshold=17",
+			MaxSamplesProcessedWarningThreshold: 42,
+			MaxSamplesProcessedErrorThreshold:   88,
+		})
+		rt := mw.CreateMiddleware(httpclient.Options{}, finalRoundTripper)
 		require.NotNil(t, rt)
 
 		req, err := http.NewRequest(http.MethodGet, "http://test.com/query", nil)
@@ -281,5 +225,4 @@ func TestCustomQueryParametersMiddleware(t *testing.T) {
 		require.Equal(t, "42", q.Get(warningThresholdKey))
 		require.Equal(t, "88", q.Get(errorThresholdKey))
 	})
-
 }
