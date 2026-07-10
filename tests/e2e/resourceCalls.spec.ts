@@ -16,6 +16,12 @@ import { expect, test } from '@grafana/plugin-e2e';
 const DATASOURCE_UID = 'prometheus';
 const resourcePath = (p: string) => `/api/datasources/uid/${DATASOURCE_UID}/resources${p}`;
 
+// Deliberately assert only on the framing/decoding contract (200 + a
+// well-formed, decoded JSON envelope), NOT on the presence of specific labels
+// or metric names. The latter depends on Prometheus having completed at least
+// one scrape, which is a startup race the test must not couple to. If the
+// header-framing bug regresses, the proxy returns a 500 or the body fails to
+// decode into JSON here regardless of whether any series exist yet.
 test.describe('Resource calls (externalized plugin, gzip upstream)', () => {
   test('label names resource call returns 200 with a decoded JSON body', { tag: '@plugins' }, async ({ request }) => {
     const res = await request.get(resourcePath('/api/v1/labels'));
@@ -25,8 +31,6 @@ test.describe('Resource calls (externalized plugin, gzip upstream)', () => {
     const json = await res.json();
     expect(json.status).toBe('success');
     expect(Array.isArray(json.data)).toBe(true);
-    // Prometheus always exposes at least the __name__ label for its own metrics.
-    expect(json.data).toContain('__name__');
   });
 
   test('label values resource call returns 200 with a decoded JSON body', { tag: '@plugins' }, async ({ request }) => {
@@ -37,6 +41,5 @@ test.describe('Resource calls (externalized plugin, gzip upstream)', () => {
     const json = await res.json();
     expect(json.status).toBe('success');
     expect(Array.isArray(json.data)).toBe(true);
-    expect(json.data.length).toBeGreaterThan(0);
   });
 });
