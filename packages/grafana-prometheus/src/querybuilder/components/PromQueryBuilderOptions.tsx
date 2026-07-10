@@ -30,6 +30,7 @@ export interface PromQueryBuilderUIOptions {
   minStep?: boolean;
   format?: boolean;
   type?: boolean;
+  disableTypeBoth?: boolean;
   exemplars?: boolean;
   resolution?: boolean;
 }
@@ -86,7 +87,8 @@ export const PromQueryBuilderOptions = React.memo<PromQueryBuilderOptionsProps>(
     };
 
     const queryTypeOptions = getQueryTypeOptions(
-      app === CoreApp.Explore || app === CoreApp.Correlations || app === CoreApp.PanelEditor
+      !uiOptions?.disableTypeBoth &&
+        (app === CoreApp.Explore || app === CoreApp.Correlations || app === CoreApp.PanelEditor)
     );
 
     const onQueryTypeChange = getQueryTypeChangeHandler(query, onChange);

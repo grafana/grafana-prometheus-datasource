@@ -8,37 +8,29 @@ import (
 	sdkhttpclient "github.com/grafana/grafana-plugin-sdk-go/backend/httpclient"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
+
+	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/models"
 )
 
 const (
 	customQueryParametersMiddlewareName = "prom-custom-query-parameters"
-	customQueryParametersKey            = "customQueryParameters"
-	grafanaDataKey                      = "grafanaData"
 	warningThresholdKey                 = "max_samples_processed_warning_threshold"
 	errorThresholdKey                   = "max_samples_processed_error_threshold"
-	maxSamplesProcessedWarningThresholdKey = "maxSamplesProcessedWarningThreshold"
-	maxSamplesProcessedErrorThresholdKey   = "maxSamplesProcessedErrorThreshold"
 )
 
-func CustomQueryParameters(logger log.Logger) sdkhttpclient.Middleware {
+// CustomQueryParameters returns a middleware that appends user-configured custom
+// query parameters and max-samples-processed thresholds to outgoing Prometheus
+// requests. Configuration is read from the typed PromOptions parsed from the
+// datasource jsonData.
+func CustomQueryParameters(logger log.Logger, jsonData *models.PromOptions) sdkhttpclient.Middleware {
 	return sdkhttpclient.NamedMiddlewareFunc(customQueryParametersMiddlewareName, func(opts sdkhttpclient.Options, next http.RoundTripper) http.RoundTripper {
-		grafanaData, exists := opts.CustomOptions[grafanaDataKey]
-		if !exists {
+		if jsonData == nil {
 			return next
 		}
 
-		data, ok := grafanaData.(map[string]any)
-		if !ok {
-			return next
-		}
-
-		customQueryParams := ""
-		if v, ok := data[customQueryParametersKey].(string); ok {
-			customQueryParams = v
-		}
-
-		warnVal, _ := data[maxSamplesProcessedWarningThresholdKey].(float64)
-		errVal, _ := data[maxSamplesProcessedErrorThresholdKey].(float64)
+		customQueryParams := jsonData.CustomQueryParameters
+		warnVal := jsonData.MaxSamplesProcessedWarningThreshold
+		errVal := jsonData.MaxSamplesProcessedErrorThreshold
 
 		if customQueryParams == "" && warnVal == 0 && errVal == 0 {
 			return next

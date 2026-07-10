@@ -24,8 +24,8 @@ type Service struct {
 }
 
 type instance struct {
-	queryData    *querydata.QueryData
-	resource     *resource.Resource
+	queryData        *querydata.QueryData
+	resource         *resource.Resource
 	schemaDatasource *schemas.SchemaDatasource
 }
 

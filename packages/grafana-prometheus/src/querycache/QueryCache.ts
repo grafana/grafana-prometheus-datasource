@@ -238,6 +238,8 @@ export class QueryCache<T extends SupportedQueryTypes> {
             for (let i = 0; i < trimmed.length; i++) {
               frame.fields[i].values = trimmed[i];
             }
+            // keep frame.length consistent with the (possibly shortened) field values
+            frame.length = trimmed[0].length;
             nonEmptyCachedFrames.push(frame);
           }
         });

@@ -2,16 +2,16 @@ apiVersion: 1
 
 datasources:
   - name: 'prometheus'
+    uid: 'prometheus'
     type: 'prometheus'
     access: proxy
+    url: 'http://prometheus:9090'
     isDefault: false
     orgId: 1
     version: 1
     editable: true
     jsonData:
-      path: '/resources'
-    secureJsonData:
-      apiKey: 'api-key'
+      httpMethod: 'GET'
 
   # PoC datasource for the experimental info() data-label autocomplete.
   # Point it at Arve's info-autocomplete demo Prometheus running on the host:
