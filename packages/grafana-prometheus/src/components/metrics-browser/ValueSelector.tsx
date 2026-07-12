@@ -50,13 +50,14 @@ export function ValueSelector() {
       return;
     }
     const keys = Object.keys(labelValues);
-    const acc: Record<string, string[]> = {};
+    const acc = Object.fromEntries(keys.map((key) => [key, [...(selectedLabelValues[key] ?? [])]]));
+    setFilteredLabelValues({ ...acc });
     const subs: Subscription[] = [];
     const handle = setTimeout(() => {
       keys.forEach((lk) => {
         const sub = searchLabelValuesStream(lk, valueSearchTerm).subscribe({
           next: (vals) => {
-            acc[lk] = vals;
+            acc[lk] = Array.from(new Set([...(selectedLabelValues[lk] ?? []), ...vals]));
             setFilteredLabelValues({ ...acc });
           },
         });
@@ -68,7 +69,7 @@ export function ValueSelector() {
       clearTimeout(handle);
       subs.forEach((sub) => sub.unsubscribe());
     };
-  }, [labelValues, valueSearchTerm, useServerSearch, searchLabelValuesStream]);
+  }, [labelValues, selectedLabelValues, valueSearchTerm, useServerSearch, searchLabelValuesStream]);
 
   return (
     <div className={styles.section}>

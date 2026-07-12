@@ -278,6 +278,33 @@ describe('MetricsModalContext', () => {
       expect(result.current.filteredMetricsData).toHaveLength(1);
       expect(result.current.filteredMetricsData[0].value).toBe('scored_metric');
     });
+
+    it('invalidates an in-flight search as soon as the input changes', async () => {
+      let resolveSearch!: (metrics: string[]) => void;
+      const searchProvider = {
+        ...mockLanguageProvider,
+        hasServerSideSearch: jest.fn().mockReturnValue(true),
+        searchMetrics: jest.fn().mockReturnValue(new Promise<string[]>((resolve) => (resolveSearch = resolve))),
+      } as unknown as PrometheusLanguageProviderInterface;
+      const { result } = renderHook(() => useMetricsModal(), {
+        wrapper: createWrapper(searchProvider),
+      });
+
+      let pending!: Promise<void>;
+      await act(async () => {
+        pending = result.current.debouncedBackendSearch(defaultTimeRange, 'old');
+        await new Promise((resolve) => setTimeout(resolve, 350));
+      });
+      act(() => result.current.setSearchedText('new'));
+      await act(async () => {
+        resolveSearch(['old_metric']);
+        await pending;
+      });
+
+      expect(result.current.filteredMetricsData).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ value: 'old_metric' })])
+      );
+    });
   });
 
   describe('Filtering logic', () => {

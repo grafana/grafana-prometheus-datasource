@@ -25,6 +25,7 @@ export function useStreamingSearch(
       return;
     }
 
+    setResults([]);
     setIsSearching(true);
     let sub: Subscription | undefined;
     const handle = setTimeout(() => {

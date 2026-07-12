@@ -28,7 +28,9 @@ export function MetricSelector() {
 
   const filteredMetrics = useMemo(() => {
     if (hasServerSideSearch && serverResults !== null) {
-      return serverResults.map((name): Metric => ({ name }));
+      const existingMetrics = new Map(metrics.map((metric) => [metric.name, metric]));
+      const names = new Set([...(selectedMetric ? [selectedMetric] : []), ...serverResults]);
+      return Array.from(names, (name): Metric => existingMetrics.get(name) ?? { name });
     }
     return metrics.filter((m) => m.name === selectedMetric || m.name.includes(metricSearchTerm));
   }, [hasServerSideSearch, serverResults, metrics, selectedMetric, metricSearchTerm]);

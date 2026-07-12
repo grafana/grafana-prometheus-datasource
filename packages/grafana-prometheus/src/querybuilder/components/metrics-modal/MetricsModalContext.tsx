@@ -69,8 +69,13 @@ export const MetricsModalContextProvider: FC<PropsWithChildren<MetricsModalConte
     resultsPerPage: DEFAULT_RESULTS_PER_PAGE,
   });
   const [selectedTypes, setSelectedTypes] = useState<Array<SelectableValue<string>>>([]);
-  const [searchedText, setSearchedText] = useState('');
+  const [searchedText, setSearchedTextState] = useState('');
   const searchSlotId = useRef(createSearchSlotId('metrics-modal'));
+  const latestSearchIdRef = useRef<number>(0);
+  const setSearchedText = useCallback((value: string) => {
+    latestSearchIdRef.current++;
+    setSearchedTextState(value);
+  }, []);
 
   const filteredMetricsData = useMemo(() => {
     if (selectedTypes.length === 0) {
@@ -106,9 +111,6 @@ export const MetricsModalContextProvider: FC<PropsWithChildren<MetricsModalConte
       pageNum,
     }));
   }, [filteredMetricsData.length, pagination.resultsPerPage, pagination.pageNum]);
-
-  // Track the latest search ID to handle race conditions
-  const latestSearchIdRef = useRef<number>(0);
 
   const fetchMetadata = useCallback(async () => {
     try {
