@@ -1,6 +1,13 @@
 import { Observable, Subject, type Subscription, filter } from 'rxjs';
 
-import { isLiveChannelMessageEvent, type LiveChannelAddress, LiveChannelScope, type TimeRange } from '@grafana/data';
+import {
+  isLiveChannelMessageEvent,
+  isLiveChannelStatusEvent,
+  type LiveChannelAddress,
+  LiveChannelConnectionState,
+  LiveChannelScope,
+  type TimeRange,
+} from '@grafana/data';
 import { type BackendSrvRequest, getGrafanaLiveSrv } from '@grafana/runtime';
 
 import { getDefaultCacheHeaders } from './caching';
@@ -322,6 +329,7 @@ export class SeriesApiClient extends BaseResourceClient implements ResourceApiCl
 
 /** How long a drop-in search promise waits before resolving with the partial snapshot. */
 const SEARCH_DROP_IN_TIMEOUT_MS = 15000;
+const SEARCH_LIVE_READY_TIMEOUT_MS = 5000;
 
 function genSecureId(): string | undefined {
   if (typeof crypto === 'undefined') {
@@ -389,6 +397,8 @@ export class SearchApiClient extends BaseResourceClient implements SearchCapable
   private readonly messages$ = new Subject<SearchFrame>();
   private liveSub?: Subscription;
   private useFallback = false;
+  private connected = false;
+  private readonly connectionWaiters = new Set<(connected: boolean) => void>();
 
   public histogramMetrics: string[] = [];
   public metrics: string[] = [];
@@ -428,10 +438,22 @@ export class SearchApiClient extends BaseResourceClient implements SearchCapable
         next: (event) => {
           if (isLiveChannelMessageEvent(event)) {
             this.messages$.next(event.message);
+          } else if (isLiveChannelStatusEvent(event)) {
+            this.connected = event.state === LiveChannelConnectionState.Connected;
+            if (this.connected) {
+              this.resolveConnectionWaiters(true);
+            } else if (
+              event.state === LiveChannelConnectionState.Invalid ||
+              event.state === LiveChannelConnectionState.Shutdown
+            ) {
+              this.useFallback = true;
+              this.resolveConnectionWaiters(false);
+            }
           }
         },
         error: () => {
           this.useFallback = true;
+          this.resolveConnectionWaiters(false);
         },
       });
     } catch {
@@ -442,7 +464,38 @@ export class SearchApiClient extends BaseResourceClient implements SearchCapable
   /** Tears down the Live subscription. */
   public dispose(): void {
     this.liveSub?.unsubscribe();
+    this.resolveConnectionWaiters(false);
     this.messages$.complete();
+  }
+
+  private resolveConnectionWaiters(connected: boolean): void {
+    for (const resolve of this.connectionWaiters) {
+      resolve(connected);
+    }
+    this.connectionWaiters.clear();
+  }
+
+  private waitUntilConnected(): Promise<boolean> {
+    if (this.connected) {
+      return Promise.resolve(true);
+    }
+    if (this.useFallback) {
+      return Promise.resolve(false);
+    }
+    return new Promise<boolean>((resolve) => {
+      let settled = false;
+      const finish = (connected: boolean) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        this.connectionWaiters.delete(finish);
+        resolve(connected);
+      };
+      const timer = setTimeout(() => finish(false), SEARCH_LIVE_READY_TIMEOUT_MS);
+      this.connectionWaiters.add(finish);
+    });
   }
 
   private publish(payload: {
@@ -450,8 +503,26 @@ export class SearchApiClient extends BaseResourceClient implements SearchCapable
     slotId: string;
     endpoint: SearchEndpoint;
     params: Record<string, string[]>;
-  }) {
-    getGrafanaLiveSrv()?.publish(this.channelAddr, payload, { useSocket: true });
+  }): Promise<boolean> {
+    const live = getGrafanaLiveSrv();
+    if (!live) {
+      return Promise.resolve(false);
+    }
+    if (this.connected) {
+      return live
+        .publish(this.channelAddr, payload, { useSocket: true })
+        .then(() => true)
+        .catch(() => false);
+    }
+    return this.waitUntilConnected().then((connected) => {
+      if (!connected) {
+        return false;
+      }
+      return live
+        .publish(this.channelAddr, payload, { useSocket: true })
+        .then(() => true)
+        .catch(() => false);
+    });
   }
 
   /**

@@ -1,6 +1,12 @@
-import { Subject } from 'rxjs';
+import { BehaviorSubject, Subject } from 'rxjs';
 
-import { dateTime, LiveChannelEventType, type LiveChannelEvent, type TimeRange } from '@grafana/data';
+import {
+  dateTime,
+  LiveChannelConnectionState,
+  LiveChannelEventType,
+  type LiveChannelEvent,
+  type TimeRange,
+} from '@grafana/data';
 import { getGrafanaLiveSrv } from '@grafana/runtime';
 
 import { DEFAULT_SERIES_LIMIT } from './constants';
@@ -35,6 +41,15 @@ function messageEvent(frame: Frame): LiveChannelEvent<Frame> {
   return { type: LiveChannelEventType.Message, message: frame };
 }
 
+function connectedEvent(): LiveChannelEvent<Frame> {
+  return {
+    type: LiveChannelEventType.Status,
+    id: 'ds/ds-uid/search/test',
+    timestamp: Date.now(),
+    state: LiveChannelConnectionState.Connected,
+  };
+}
+
 function makeDatasource(overrides: Partial<PrometheusDatasource> = {}): PrometheusDatasource {
   return {
     uid: 'ds-uid',
@@ -56,9 +71,9 @@ describe('SearchApiClient', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    stream$ = new Subject<LiveChannelEvent<Frame>>();
+    stream$ = new BehaviorSubject<LiveChannelEvent<Frame>>(connectedEvent());
     publish = jest.fn().mockResolvedValue(undefined);
-    getStream = jest.fn().mockReturnValue(stream$.asObservable());
+    getStream = jest.fn().mockImplementation(() => stream$.asObservable());
     mockGetGrafanaLiveSrv.mockReturnValue({ getStream, publish });
   });
 
@@ -128,6 +143,35 @@ describe('SearchApiClient', () => {
     client.searchMetricNames(mockTimeRange, { search: 'up' }).subscribe();
 
     expect(publish).toHaveBeenCalledWith(expect.anything(), expect.anything(), { useSocket: true });
+  });
+
+  it('waits for the Live channel to connect before the first publish', async () => {
+    stream$ = new Subject<LiveChannelEvent<Frame>>();
+    const client = new SearchApiClient(mockRequest, makeDatasource());
+
+    client.searchMetricNames(mockTimeRange, { search: 'up' }).subscribe();
+    expect(publish).not.toHaveBeenCalled();
+
+    stream$.next(connectedEvent());
+    await Promise.resolve();
+
+    expect(publish).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops waiting when the Live channel does not become ready', async () => {
+    jest.useFakeTimers();
+    try {
+      stream$ = new Subject<LiveChannelEvent<Frame>>();
+      const client = new SearchApiClient(mockRequest, makeDatasource());
+
+      client.searchMetricNames(mockTimeRange, { search: 'up' }).subscribe();
+      await jest.advanceTimersByTimeAsync(5000);
+
+      expect(publish).not.toHaveBeenCalled();
+      client.dispose();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('clamps the streaming limit to the search default (never the 40k series limit)', () => {
