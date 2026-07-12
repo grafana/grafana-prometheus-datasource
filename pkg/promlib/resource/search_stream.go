@@ -128,7 +128,7 @@ func (r *Resource) StreamSearch(ctx context.Context, endpoint string, params url
 		default:
 		}
 
-		chunk, readErr := reader.ReadBytes('\n')
+		chunk, readErr := reader.ReadSlice('\n')
 		if len(chunk) > 0 {
 			pending = append(pending, chunk...)
 			if len(pending) > maxSearchLineSize {
@@ -149,6 +149,9 @@ func (r *Resource) StreamSearch(ctx context.Context, endpoint string, params url
 			}
 		}
 
+		if readErr == bufio.ErrBufferFull {
+			continue
+		}
 		if readErr != nil {
 			if readErr == io.EOF {
 				// Process any trailing line without a newline, then treat the abrupt

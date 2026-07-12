@@ -3,6 +3,7 @@ package resource_test
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -28,6 +29,12 @@ func newSearchResource(t *testing.T, serverURL string) *resource.Resource {
 	r, err := resource.New(http.DefaultClient, settings, log.DefaultLogger)
 	require.NoError(t, err)
 	return r
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
 }
 
 func collectLines(t *testing.T, r *resource.Resource, ctx context.Context, endpoint string, params url.Values) ([]resource.SearchLine, error) {
@@ -236,6 +243,46 @@ func TestStreamSearch_LargeLineAndBlankLines(t *testing.T) {
 	require.Len(t, lines, 2) // blank lines skipped
 	assert.Len(t, lines[0].Results, 5000)
 	assert.True(t, lines[1].IsTerminal())
+}
+
+func TestStreamSearch_RejectsOversizedUnterminatedLineBeforeEOF(t *testing.T) {
+	reader, writer := io.Pipe()
+	release := make(chan struct{})
+	go func() {
+		_, _ = io.WriteString(writer, strings.Repeat("x", 8*1024*1024+64*1024))
+		<-release
+		_ = writer.Close()
+	}()
+
+	httpClient := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       reader,
+			Header:     make(http.Header),
+		}, nil
+	})}
+	r, err := resource.New(httpClient, backend.DataSourceInstanceSettings{
+		URL:      "http://example.test",
+		JSONData: []byte(`{"httpMethod":"GET"}`),
+	}, log.DefaultLogger)
+	require.NoError(t, err)
+
+	errCh := make(chan error, 1)
+	go func() {
+		_, err := collectLines(t, r, context.Background(), resource.SearchMetricNames, url.Values{})
+		errCh <- err
+	}()
+
+	select {
+	case err := <-errCh:
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "exceeded")
+	case <-time.After(2 * time.Second):
+		close(release)
+		t.Fatal("StreamSearch waited for EOF before rejecting an oversized line")
+	}
+
+	close(release)
 }
 
 func TestStreamSearch_ContextCancel(t *testing.T) {
