@@ -84,6 +84,46 @@ type publishPayload struct {
 	Params    map[string][]string `json:"params"`
 }
 
+type slotEntry struct {
+	cancel     context.CancelCauseFunc
+	generation uint64
+}
+
+type slotCompletion struct {
+	key        string
+	generation uint64
+}
+
+type slotRegistry struct {
+	entries        map[string]slotEntry
+	nextGeneration uint64
+}
+
+func newSlotRegistry() *slotRegistry {
+	return &slotRegistry{entries: make(map[string]slotEntry)}
+}
+
+func (r *slotRegistry) replace(key string, cancel context.CancelCauseFunc) uint64 {
+	r.nextGeneration++
+	if current, ok := r.entries[key]; ok {
+		current.cancel(errSearchSuperseded)
+	}
+	r.entries[key] = slotEntry{cancel: cancel, generation: r.nextGeneration}
+	return r.nextGeneration
+}
+
+func (r *slotRegistry) finish(completion slotCompletion) {
+	if current, ok := r.entries[completion.key]; ok && current.generation == completion.generation {
+		delete(r.entries, completion.key)
+	}
+}
+
+func (r *slotRegistry) cancelAll(cause error) {
+	for _, entry := range r.entries {
+		entry.cancel(cause)
+	}
+}
+
 type searchMailbox struct {
 	mu       sync.Mutex
 	owner    requesterIdentity
@@ -462,15 +502,15 @@ func (s *Service) RunStream(ctx context.Context, req *backend.RunStreamRequest, 
 		}
 	}()
 
-	// slotCancels tracks the in-flight cancel func per slot. Only the RunStream loop
-	// reads/writes it, so no extra locking is needed.
-	slotCancels := make(map[string]context.CancelCauseFunc)
+	// Only the RunStream loop touches slots, so registration and generation-aware
+	// cleanup remain lock-free. The buffer covers active workers plus mailbox work;
+	// sends also observe runCtx so shutdown cannot strand a worker.
+	slots := newSlotRegistry()
+	slotDone := make(chan slotCompletion, maxConcurrentSlots+mailboxBuffer)
 
 	defer func() {
 		cancelRun()
-		for _, cancel := range slotCancels {
-			cancel(context.Canceled)
-		}
+		slots.cancelAll(context.Canceled)
 		wg.Wait()
 		close(output)
 		<-writerDone
@@ -480,6 +520,8 @@ func (s *Service) RunStream(ctx context.Context, req *backend.RunStreamRequest, 
 		select {
 		case err := <-writerErr:
 			return err
+		case completion := <-slotDone:
+			slots.finish(completion)
 		case <-runCtx.Done():
 			select {
 			case err := <-writerErr:
@@ -501,17 +543,25 @@ func (s *Service) RunStream(ctx context.Context, req *backend.RunStreamRequest, 
 				}
 			}
 			slotKey := publishSlotKey(msg)
-			if cancel, ok := slotCancels[slotKey]; ok {
-				// cancel-previous, scoped to this slot only.
-				cancel(errSearchSuperseded)
-			}
-
 			reqCtx, cancel := context.WithCancelCause(runCtx)
-			slotCancels[slotKey] = cancel
+			generation := slots.replace(slotKey, cancel)
 
 			wg.Add(1)
-			go func(m publishMsg, rctx context.Context, cancel context.CancelCauseFunc) {
+			go func(
+				m publishMsg,
+				rctx context.Context,
+				cancel context.CancelCauseFunc,
+				key string,
+				generation uint64,
+			) {
 				defer wg.Done()
+				defer func() {
+					select {
+					case slotDone <- slotCompletion{key: key, generation: generation}:
+					case <-runCtx.Done():
+					}
+				}()
+				defer cancel(context.Canceled)
 				emitCanceledWaiter := func() {
 					if errors.Is(context.Cause(rctx), errSearchSuperseded) {
 						select {
@@ -534,7 +584,6 @@ func (s *Service) RunStream(ctx context.Context, req *backend.RunStreamRequest, 
 					return
 				}
 				defer func() { <-sem }()
-				defer cancel(context.Canceled)
 				searchCtx, cancelSearch := context.WithTimeout(rctx, searchRequestTimeout)
 				defer cancelSearch()
 				s.runSearch(searchCtx, req.PluginContext, m, func(env responseEnvelope) error {
@@ -545,7 +594,7 @@ func (s *Service) RunStream(ctx context.Context, req *backend.RunStreamRequest, 
 						return runCtx.Err()
 					}
 				})
-			}(msg, reqCtx, cancel)
+			}(msg, reqCtx, cancel, slotKey, generation)
 		}
 	}
 }

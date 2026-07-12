@@ -785,6 +785,25 @@ func TestRunStream_CancelPrevious(t *testing.T) {
 	doRelease()
 }
 
+func TestRunStream_SettledSlotsAreForgotten(t *testing.T) {
+	slots := newSlotRegistry()
+	var canceled []string
+
+	firstGeneration := slots.replace("metric-names|monaco", func(error) {
+		canceled = append(canceled, "first")
+	})
+	secondGeneration := slots.replace("metric-names|monaco", func(error) {
+		canceled = append(canceled, "second")
+	})
+
+	assert.Equal(t, []string{"first"}, canceled)
+	slots.finish(slotCompletion{key: "metric-names|monaco", generation: firstGeneration})
+	assert.Len(t, slots.entries, 1, "stale completion removed the replacement")
+
+	slots.finish(slotCompletion{key: "metric-names|monaco", generation: secondGeneration})
+	assert.Empty(t, slots.entries, "settled slot retained its cancel function")
+}
+
 func TestRunStream_CoalescedRequestReceivesCancellation(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		_, _ = w.Write([]byte(`{"status":"success"}` + "\n"))
