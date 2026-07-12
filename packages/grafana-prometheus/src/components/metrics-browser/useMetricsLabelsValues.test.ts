@@ -1,4 +1,5 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
+import { of } from 'rxjs';
 
 import { type TimeRange } from '@grafana/data';
 
@@ -48,6 +49,7 @@ const setupMocks = () => {
   });
   mockLanguageProvider.queryLabelValues = jest.fn();
   mockLanguageProvider.queryLabelKeys = jest.fn();
+  mockLanguageProvider.streamLabelValues = jest.fn().mockReturnValue(of([]));
 
   // Mock standard responses
   (mockLanguageProvider.queryLabelValues as jest.Mock).mockImplementation((_timeRange: TimeRange, label: string) => {
@@ -304,6 +306,20 @@ describe('useMetricsLabelsValues', () => {
 
       expect(result.current.selectedLabelValues['job']).toContain('grafana');
       expect(mocks.mockLanguageProvider.queryLabelValues).toHaveBeenCalled();
+    });
+
+    it('excludes the active label matcher when searching alternative values', async () => {
+      const { result } = await renderHookWithInit(mocks);
+      jest.mocked(selectorBuilderModule.buildSelector).mockClear();
+
+      await act(async () => {
+        await result.current.handleSelectedLabelKeyChange('job');
+        await result.current.handleSelectedLabelValueChange('job', 'grafana', true);
+      });
+
+      result.current.searchLabelValuesStream('job', 'prom');
+
+      expect(selectorBuilderModule.buildSelector).toHaveBeenLastCalledWith('', {});
     });
 
     it('should handle label value deselection', async () => {

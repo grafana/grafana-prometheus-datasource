@@ -407,7 +407,10 @@ export const useMetricsLabelsValues = (timeRange: TimeRange, languageProvider: P
   // selections. A per-key slotId lets independent value lists stream concurrently.
   const searchLabelValuesStream = useCallback(
     (labelKey: string, term: string): Observable<string[]> => {
-      const selector = buildSafeSelector(selectedMetric, selectedLabelValues);
+      const otherSelectedLabelValues = Object.fromEntries(
+        Object.entries(selectedLabelValues).filter(([key]) => key !== labelKey)
+      );
+      const selector = buildSafeSelector(selectedMetric, otherSelectedLabelValues);
       return languageProvider.streamLabelValues(
         timeRangeRef.current,
         labelKey,
