@@ -110,9 +110,28 @@ describe('DataProvider', () => {
         'requests',
         undefined,
         DEFAULT_COMPLETION_LIMIT,
-        'monaco-metrics'
+        expect.stringMatching(/^monaco-/)
       );
       expect(languageProvider.queryLabelValues).not.toHaveBeenCalled();
+    });
+
+    it('uses a distinct search slot for each data provider instance', async () => {
+      const languageProvider = {
+        ...createLanguageProviderMock(),
+        hasServerSideSearch: jest.fn().mockReturnValue(true),
+        streamMetrics: jest.fn().mockReturnValue(of([])),
+      };
+      const firstProvider = createDataProvider(languageProvider);
+      const secondProvider = createDataProvider(languageProvider);
+
+      await firstProvider.queryMetricNames(timeRange, 'first');
+      await secondProvider.queryMetricNames(timeRange, 'second');
+
+      const firstSlot = languageProvider.streamMetrics.mock.calls[0][4];
+      const secondSlot = languageProvider.streamMetrics.mock.calls[1][4];
+      expect(firstSlot).toMatch(/^monaco-/);
+      expect(secondSlot).toMatch(/^monaco-/);
+      expect(firstSlot).not.toBe(secondSlot);
     });
 
     it('returns an empty array when the language provider rejects', async () => {

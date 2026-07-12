@@ -5,6 +5,7 @@ import { type HistoryItem, type TimeRange } from '@grafana/data';
 import { DEFAULT_COMPLETION_LIMIT, METRIC_LABEL } from '../../../constants';
 import { type PrometheusLanguageProviderInterface } from '../../../language_provider';
 import { removeQuotesIfExist } from '../../../language_utils';
+import { createSearchSlotId } from '../../../resource_clients';
 import { type PromQuery } from '../../../types';
 import { escapeForUtf8Support, isValidLegacyName } from '../../../utf8_support';
 
@@ -23,6 +24,7 @@ export interface DataProviderParams {
 export class DataProvider {
   readonly languageProvider: PrometheusLanguageProviderInterface;
   readonly historyProvider: Array<HistoryItem<PromQuery>>;
+  private readonly searchSlotId = createSearchSlotId('monaco');
 
   readonly queryLabelKeys: typeof this.languageProvider.queryLabelKeys;
   readonly queryLabelValues: typeof this.languageProvider.queryLabelValues;
@@ -54,7 +56,13 @@ export class DataProvider {
       // terminal frame via lastValueFrom.
       if (this.languageProvider.hasServerSideSearch?.()) {
         const result = await lastValueFrom(
-          this.languageProvider.streamMetrics(timeRange, searchTerm ?? '', undefined, DEFAULT_COMPLETION_LIMIT, 'monaco-metrics'),
+          this.languageProvider.streamMetrics(
+            timeRange,
+            searchTerm ?? '',
+            undefined,
+            DEFAULT_COMPLETION_LIMIT,
+            this.searchSlotId
+          ),
           { defaultValue: [] }
         );
         return Array.isArray(result) ? result : [];
