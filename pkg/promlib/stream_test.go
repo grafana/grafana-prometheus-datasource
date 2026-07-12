@@ -34,10 +34,19 @@ func newTestService() *Service {
 
 func enabledPluginContext() backend.PluginContext {
 	return backend.PluginContext{
+		User: &backend.User{Login: "test-user", Email: "test@example.com", Name: "Test User", Role: "Editor"},
 		DataSourceInstanceSettings: &backend.DataSourceInstanceSettings{
 			JSONData: []byte(`{"enableSearchApi":true}`),
 		},
 	}
+}
+
+func testRequesterIdentity() requesterIdentity {
+	identity, ok := requesterIdentityFromPluginContext(enabledPluginContext())
+	if !ok {
+		panic("test requester identity is unavailable")
+	}
+	return identity
 }
 
 // recordingSender captures every JSON packet sent down the stream.
@@ -138,7 +147,7 @@ func TestStreamHandlers_RejectMalformedSearchChannelPaths(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, backend.SubscribeStreamStatusNotFound, subscribe.Status)
 
-			svc.createMailbox(path)
+			svc.createMailbox(path, testRequesterIdentity())
 			publish, err := svc.PublishStream(context.Background(), &backend.PublishStreamRequest{
 				Path: path, Data: validPayload, PluginContext: pluginContext,
 			})
@@ -163,7 +172,7 @@ func TestStreamHandlers_RejectRequestsWhenSearchAPIIsDisabled(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, backend.SubscribeStreamStatusNotFound, subscribe.Status)
 
-	svc.createMailbox("search/disabled")
+	svc.createMailbox("search/disabled", requesterIdentity{})
 	publish, err := svc.PublishStream(context.Background(), &backend.PublishStreamRequest{
 		Path:          "search/disabled",
 		PluginContext: pluginContext,
@@ -192,7 +201,7 @@ func TestStreamHandlers_RejectRequestsWhenSearchAPIIsDisabled(t *testing.T) {
 
 func TestPublishStream_Validation(t *testing.T) {
 	svc := newTestService()
-	svc.createMailbox(validSearchPath)
+	svc.createMailbox(validSearchPath, testRequesterIdentity())
 	pluginContext := enabledPluginContext()
 
 	// wrong channel namespace
@@ -241,7 +250,7 @@ func TestPublishStream_Validation(t *testing.T) {
 
 func TestPublishStream_BoundsClientControlledWork(t *testing.T) {
 	svc := newTestService()
-	svc.createMailbox(validSearchPath)
+	svc.createMailbox(validSearchPath, testRequesterIdentity())
 	pluginContext := enabledPluginContext()
 
 	tests := []struct {
@@ -307,8 +316,30 @@ func TestPublishStream_BoundsClientControlledWork(t *testing.T) {
 	assert.Equal(t, strconv.FormatInt(1+int64((24*time.Hour)/time.Second), 10), msg.params.Get("start"))
 }
 
+func TestPublishStream_RejectsMismatchedMailboxOwner(t *testing.T) {
+	svc := newTestService()
+	ownerContext := enabledPluginContext()
+	ownerContext.User = &backend.User{Login: "alice", Email: "alice@example.com", Name: "Alice", Role: "Editor"}
+	resp, err := svc.SubscribeStream(context.Background(), &backend.SubscribeStreamRequest{
+		Path: validSearchPath, PluginContext: ownerContext,
+	})
+	require.NoError(t, err)
+	require.Equal(t, backend.SubscribeStreamStatusOK, resp.Status)
+
+	publisherContext := enabledPluginContext()
+	publisherContext.User = &backend.User{Login: "bob", Email: "bob@example.com", Name: "Bob", Role: "Editor"}
+	publish, err := svc.PublishStream(context.Background(), &backend.PublishStreamRequest{
+		Path: validSearchPath, PluginContext: publisherContext,
+		Data: mustJSON(publishPayload{
+			RequestID: "request-1", SlotID: "slot-1", Endpoint: resource.SearchMetricNames,
+		}),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, backend.PublishStreamStatusPermissionDenied, publish.Status)
+}
+
 func TestEnqueue_CoalescesWithoutEvictingOtherSlots(t *testing.T) {
-	mb := newSearchMailbox()
+	mb := newSearchMailbox(testRequesterIdentity())
 	enqueue(mb, publishMsg{requestID: "unrelated", slotID: "other"})
 	for i := 0; i < mailboxBuffer+5; i++ {
 		enqueue(mb, publishMsg{requestID: fmt.Sprintf("hot-%d", i), slotID: "hot"})
@@ -358,6 +389,7 @@ func mustJSON(v interface{}) json.RawMessage {
 func testPluginContext(serverURL string) backend.PluginContext {
 	return backend.PluginContext{
 		OrgID: 1,
+		User:  &backend.User{Login: "test-user", Email: "test@example.com", Name: "Test User", Role: "Editor"},
 		DataSourceInstanceSettings: &backend.DataSourceInstanceSettings{
 			UID:      "uid-1",
 			URL:      serverURL,
@@ -393,7 +425,7 @@ func TestRunStream_EndToEnd_RequestIdTagging(t *testing.T) {
 
 	svc := newTestService()
 	const path = otherValidSearchPath
-	svc.createMailbox(path)
+	svc.createMailbox(path, testRequesterIdentity())
 
 	sender := &recordingSender{}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -435,7 +467,7 @@ func TestRunStream_WriterFailureCancelsUpstreamAndReturns(t *testing.T) {
 	defer srv.Close()
 
 	svc := newTestService()
-	svc.createMailbox(validSearchPath)
+	svc.createMailbox(validSearchPath, testRequesterIdentity())
 	senderErr := errors.New("stream send failed")
 	sender := &failingSender{err: senderErr, entered: make(chan struct{})}
 	runResult := make(chan error, 1)
@@ -481,7 +513,7 @@ func TestRunStream_ControlLoopRemainsResponsiveAtConcurrencyLimit(t *testing.T) 
 	defer srv.Close()
 
 	svc := newTestService()
-	svc.createMailbox(validSearchPath)
+	svc.createMailbox(validSearchPath, testRequesterIdentity())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go func() {
@@ -546,7 +578,7 @@ func TestRunStream_EnforcesDatasourceUpstreamBudget(t *testing.T) {
 	defer cancel()
 	for channel := 0; channel < 3; channel++ {
 		path := fmt.Sprintf("search/550e8400-e29b-41d4-a716-%012x", 100+channel)
-		svc.createMailbox(path)
+		svc.createMailbox(path, testRequesterIdentity())
 		go func() {
 			_ = svc.RunStream(ctx, &backend.RunStreamRequest{
 				Path: path, PluginContext: testPluginContext(srv.URL),
@@ -604,7 +636,7 @@ func TestRunStream_CancelPrevious(t *testing.T) {
 
 	svc := newTestService()
 	const path = cancelValidSearchPath
-	svc.createMailbox(path)
+	svc.createMailbox(path, testRequesterIdentity())
 
 	sender := &recordingSender{}
 	ctx, cancel := context.WithCancel(context.Background())

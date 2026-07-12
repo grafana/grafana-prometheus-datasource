@@ -81,16 +81,38 @@ type publishPayload struct {
 
 type searchMailbox struct {
 	mu      sync.Mutex
+	owner   requesterIdentity
 	pending map[string]publishMsg
 	order   []string
 	wake    chan struct{}
 }
 
-func newSearchMailbox() *searchMailbox {
+type requesterIdentity struct {
+	login string
+	email string
+	name  string
+	role  string
+}
+
+func requesterIdentityFromPluginContext(pluginContext backend.PluginContext) (requesterIdentity, bool) {
+	if pluginContext.User == nil {
+		return requesterIdentity{}, false
+	}
+	identity := requesterIdentity{
+		login: strings.TrimSpace(pluginContext.User.Login),
+		email: strings.TrimSpace(pluginContext.User.Email),
+		name:  strings.TrimSpace(pluginContext.User.Name),
+		role:  strings.TrimSpace(pluginContext.User.Role),
+	}
+	return identity, identity != (requesterIdentity{})
+}
+
+func newSearchMailbox(owner requesterIdentity) *searchMailbox {
 	return &searchMailbox{
 		pending: make(map[string]publishMsg),
 		order:   make([]string, 0, mailboxBuffer),
 		wake:    make(chan struct{}, 1),
+		owner:   owner,
 	}
 }
 
@@ -116,16 +138,19 @@ type responseEnvelope struct {
 
 // createMailbox returns the buffered mailbox for path, creating it if necessary. It is
 // idempotent so reconnects (Subscribe again) reuse the existing channel.
-func (s *Service) createMailbox(path string) *searchMailbox {
+func (s *Service) createMailbox(path string, owner requesterIdentity) *searchMailbox {
 	s.mailboxesMu.Lock()
 	defer s.mailboxesMu.Unlock()
 	if mb, ok := s.mailboxes[path]; ok {
+		if mb.owner != owner {
+			return nil
+		}
 		return mb
 	}
 	if len(s.mailboxes) >= maxActiveChannels {
 		return nil
 	}
-	mb := newSearchMailbox()
+	mb := newSearchMailbox(owner)
 	s.mailboxes[path] = mb
 	return mb
 }
@@ -158,7 +183,8 @@ func (s *Service) SubscribeStream(_ context.Context, req *backend.SubscribeStrea
 	if !searchChannelPattern.MatchString(req.Path) {
 		return &backend.SubscribeStreamResponse{Status: backend.SubscribeStreamStatusNotFound}, nil
 	}
-	if s.createMailbox(req.Path) == nil {
+	owner, ok := requesterIdentityFromPluginContext(req.PluginContext)
+	if !ok || s.createMailbox(req.Path, owner) == nil {
 		return &backend.SubscribeStreamResponse{Status: backend.SubscribeStreamStatusNotFound}, nil
 	}
 	return &backend.SubscribeStreamResponse{Status: backend.SubscribeStreamStatusOK}, nil
@@ -189,6 +215,10 @@ func (s *Service) PublishStream(_ context.Context, req *backend.PublishStreamReq
 	if !ok {
 		// No active subscription/mailbox for this channel.
 		return &backend.PublishStreamResponse{Status: backend.PublishStreamStatusNotFound}, nil
+	}
+	owner, ok := requesterIdentityFromPluginContext(req.PluginContext)
+	if !ok || mb.owner != owner {
+		return &backend.PublishStreamResponse{Status: backend.PublishStreamStatusPermissionDenied}, nil
 	}
 
 	msg := publishMsg{
@@ -381,7 +411,11 @@ func (s *Service) RunStream(ctx context.Context, req *backend.RunStreamRequest, 
 	if !searchChannelPattern.MatchString(req.Path) {
 		return errors.New("invalid search stream channel path")
 	}
-	mb := s.createMailbox(req.Path)
+	owner, ok := requesterIdentityFromPluginContext(req.PluginContext)
+	if !ok {
+		return errors.New("search stream requester identity is unavailable")
+	}
+	mb := s.createMailbox(req.Path, owner)
 	if mb == nil {
 		return errors.New("search stream channel budget exceeded")
 	}
