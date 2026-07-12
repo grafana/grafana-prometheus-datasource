@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"net/url"
 	"regexp"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -36,6 +39,27 @@ const maxConcurrentSlots = 8
 
 // searchRequestTimeout bounds a single upstream NDJSON read.
 const searchRequestTimeout = 30 * time.Second
+
+const (
+	maxIdentifierLength   = 128
+	maxParamValues        = 20
+	maxSearchTerms        = 5
+	maxParamValueLength   = 4096
+	maxSearchTermLength   = 256
+	maxSearchLimit        = 10000
+	maxSearchBatchSize    = 1000
+	maxSearchTimeRange    = 90 * 24 * time.Hour
+	maxActiveChannels     = 32
+	maxConcurrentSearches = 16
+)
+
+var searchIdentifierPattern = regexp.MustCompile(`^[A-Za-z0-9._:-]+$`)
+
+var allowedSearchParams = map[string]struct{}{
+	"start": {}, "end": {}, "case_sensitive": {}, "batch_size": {}, "limit": {},
+	"search[]": {}, "sort_by": {}, "fuzz_alg": {}, "fuzz_threshold": {},
+	"match[]": {}, "label": {},
+}
 
 // publishMsg is the in-process message carried over a mailbox from PublishStream to
 // RunStream.
@@ -98,6 +122,9 @@ func (s *Service) createMailbox(path string) *searchMailbox {
 	if mb, ok := s.mailboxes[path]; ok {
 		return mb
 	}
+	if len(s.mailboxes) >= maxActiveChannels {
+		return nil
+	}
 	mb := newSearchMailbox()
 	s.mailboxes[path] = mb
 	return mb
@@ -131,7 +158,9 @@ func (s *Service) SubscribeStream(_ context.Context, req *backend.SubscribeStrea
 	if !searchChannelPattern.MatchString(req.Path) {
 		return &backend.SubscribeStreamResponse{Status: backend.SubscribeStreamStatusNotFound}, nil
 	}
-	s.createMailbox(req.Path)
+	if s.createMailbox(req.Path) == nil {
+		return &backend.SubscribeStreamResponse{Status: backend.SubscribeStreamStatusNotFound}, nil
+	}
 	return &backend.SubscribeStreamResponse{Status: backend.SubscribeStreamStatusOK}, nil
 }
 
@@ -152,7 +181,7 @@ func (s *Service) PublishStream(_ context.Context, req *backend.PublishStreamReq
 	if err := json.Unmarshal(req.Data, &payload); err != nil {
 		return &backend.PublishStreamResponse{Status: backend.PublishStreamStatusPermissionDenied}, nil
 	}
-	if !resource.IsValidSearchEndpoint(payload.Endpoint) || payload.RequestID == "" {
+	if !resource.IsValidSearchEndpoint(payload.Endpoint) || !validatePublishPayload(&payload) {
 		return &backend.PublishStreamResponse{Status: backend.PublishStreamStatusPermissionDenied}, nil
 	}
 
@@ -173,6 +202,131 @@ func (s *Service) PublishStream(_ context.Context, req *backend.PublishStreamReq
 		return &backend.PublishStreamResponse{Status: backend.PublishStreamStatusPermissionDenied}, nil
 	}
 	return &backend.PublishStreamResponse{Status: backend.PublishStreamStatusOK}, nil
+}
+
+func validatePublishPayload(payload *publishPayload) bool {
+	if !validSearchIdentifier(payload.RequestID) || !validSearchIdentifier(payload.SlotID) {
+		return false
+	}
+	for name, values := range payload.Params {
+		if _, ok := allowedSearchParams[name]; !ok || len(values) == 0 || len(values) > maxParamValues {
+			return false
+		}
+		if name != "search[]" && name != "match[]" && len(values) != 1 {
+			return false
+		}
+		if name == "search[]" && len(values) > maxSearchTerms {
+			return false
+		}
+		for _, value := range values {
+			maxLength := maxParamValueLength
+			if name == "search[]" {
+				maxLength = maxSearchTermLength
+			}
+			if len(value) == 0 || len(value) > maxLength {
+				return false
+			}
+		}
+	}
+	if !validateEnumParam(payload.Params, "case_sensitive", "true", "false") ||
+		!validateEnumParam(payload.Params, "sort_by", "alpha", "score") ||
+		!validateEnumParam(payload.Params, "fuzz_alg", "subsequence") {
+		return false
+	}
+	if !clampPositiveInt(payload.Params, "limit", maxSearchLimit, true) ||
+		!clampPositiveInt(payload.Params, "batch_size", maxSearchBatchSize, false) ||
+		!clampIntRange(payload.Params, "fuzz_threshold", 0, 100) {
+		return false
+	}
+	return clampTimeRange(payload.Params)
+}
+
+func validSearchIdentifier(value string) bool {
+	return value != "" && len(value) <= maxIdentifierLength && searchIdentifierPattern.MatchString(value)
+}
+
+func validateEnumParam(params map[string][]string, name string, allowed ...string) bool {
+	values, ok := params[name]
+	if !ok {
+		return true
+	}
+	for _, candidate := range allowed {
+		if values[0] == candidate {
+			return true
+		}
+	}
+	return false
+}
+
+func clampPositiveInt(params map[string][]string, name string, maximum int, rejectZero bool) bool {
+	values, ok := params[name]
+	if !ok {
+		return true
+	}
+	value, err := strconv.Atoi(values[0])
+	if err != nil || value < 0 || (rejectZero && value == 0) || (!rejectZero && value < 1) {
+		return false
+	}
+	if value > maximum {
+		params[name] = []string{strconv.Itoa(maximum)}
+	}
+	return true
+}
+
+func clampIntRange(params map[string][]string, name string, minimum, maximum int) bool {
+	values, ok := params[name]
+	if !ok {
+		return true
+	}
+	value, err := strconv.Atoi(values[0])
+	if err != nil || value < minimum {
+		return false
+	}
+	if value > maximum {
+		params[name] = []string{strconv.Itoa(maximum)}
+	}
+	return true
+}
+
+func clampTimeRange(params map[string][]string) bool {
+	startValues, hasStart := params["start"]
+	endValues, hasEnd := params["end"]
+	if !hasStart && !hasEnd {
+		return true
+	}
+	var start, end float64
+	var ok bool
+	if hasStart {
+		if start, ok = parseSearchTimestamp(startValues[0]); !ok {
+			return false
+		}
+	}
+	if hasEnd {
+		if end, ok = parseSearchTimestamp(endValues[0]); !ok {
+			return false
+		}
+	}
+	if hasStart && hasEnd {
+		if end < start {
+			return false
+		}
+		maxSeconds := maxSearchTimeRange.Seconds()
+		if end-start > maxSeconds {
+			params["start"] = []string{strconv.FormatFloat(end-maxSeconds, 'f', -1, 64)}
+		}
+	}
+	return true
+}
+
+func parseSearchTimestamp(value string) (float64, bool) {
+	if timestamp, err := strconv.ParseFloat(value, 64); err == nil {
+		return timestamp, !math.IsNaN(timestamp) && !math.IsInf(timestamp, 0)
+	}
+	timestamp, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(value))
+	if err != nil {
+		return 0, false
+	}
+	return float64(timestamp.UnixNano()) / float64(time.Second), true
 }
 
 // enqueue keeps at most one pending request per slot. A hot slot replaces only its own
@@ -228,6 +382,9 @@ func (s *Service) RunStream(ctx context.Context, req *backend.RunStreamRequest, 
 		return errors.New("invalid search stream channel path")
 	}
 	mb := s.createMailbox(req.Path)
+	if mb == nil {
+		return errors.New("search stream channel budget exceeded")
+	}
 	defer s.removeMailbox(req.Path)
 
 	runCtx, cancelRun := context.WithCancel(ctx)
@@ -288,6 +445,12 @@ func (s *Service) RunStream(ctx context.Context, req *backend.RunStreamRequest, 
 			wg.Add(1)
 			go func(m publishMsg, rctx context.Context, cancel context.CancelFunc) {
 				defer wg.Done()
+				select {
+				case s.searchPermits <- struct{}{}:
+				case <-rctx.Done():
+					return
+				}
+				defer func() { <-s.searchPermits }()
 				select {
 				case sem <- struct{}{}:
 				case <-rctx.Done():

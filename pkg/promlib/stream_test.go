@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -96,6 +98,26 @@ func TestSubscribeStream_AllowlistAndMailbox(t *testing.T) {
 	assert.Equal(t, backend.SubscribeStreamStatusNotFound, resp.Status)
 	_, ok = svc.getMailbox("other/x")
 	assert.False(t, ok)
+}
+
+func TestSubscribeStream_EnforcesDatasourceChannelBudget(t *testing.T) {
+	svc := newTestService()
+	pluginContext := enabledPluginContext()
+	for i := 0; i < 32; i++ {
+		resp, err := svc.SubscribeStream(context.Background(), &backend.SubscribeStreamRequest{
+			Path:          fmt.Sprintf("search/550e8400-e29b-41d4-a716-%012x", i),
+			PluginContext: pluginContext,
+		})
+		require.NoError(t, err)
+		require.Equal(t, backend.SubscribeStreamStatusOK, resp.Status)
+	}
+
+	resp, err := svc.SubscribeStream(context.Background(), &backend.SubscribeStreamRequest{
+		Path:          "search/550e8400-e29b-41d4-a716-ffffffffffff",
+		PluginContext: pluginContext,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, backend.SubscribeStreamStatusNotFound, resp.Status)
 }
 
 func TestStreamHandlers_RejectMalformedSearchChannelPaths(t *testing.T) {
@@ -194,7 +216,7 @@ func TestPublishStream_Validation(t *testing.T) {
 	assert.Equal(t, backend.PublishStreamStatusPermissionDenied, resp.Status)
 
 	// no mailbox for path
-	good := mustJSON(publishPayload{RequestID: "r1", Endpoint: resource.SearchMetricNames})
+	good := mustJSON(publishPayload{RequestID: "r1", SlotID: "s1", Endpoint: resource.SearchMetricNames})
 	resp, _ = svc.PublishStream(context.Background(), &backend.PublishStreamRequest{
 		Path: otherValidSearchPath, Data: good, PluginContext: pluginContext,
 	})
@@ -215,6 +237,74 @@ func TestPublishStream_Validation(t *testing.T) {
 	} else {
 		t.Fatal("expected message in mailbox")
 	}
+}
+
+func TestPublishStream_BoundsClientControlledWork(t *testing.T) {
+	svc := newTestService()
+	svc.createMailbox(validSearchPath)
+	pluginContext := enabledPluginContext()
+
+	tests := []struct {
+		name    string
+		payload publishPayload
+	}{
+		{name: "invalid request ID", payload: publishPayload{
+			RequestID: strings.Repeat("r", 129), SlotID: "slot-1", Endpoint: resource.SearchMetricNames,
+		}},
+		{name: "invalid slot ID", payload: publishPayload{
+			RequestID: "request-1", SlotID: "../slot", Endpoint: resource.SearchMetricNames,
+		}},
+		{name: "unknown parameter", payload: publishPayload{
+			RequestID: "request-1", SlotID: "slot-1", Endpoint: resource.SearchMetricNames,
+			Params: map[string][]string{"redirect": {"https://example.com"}},
+		}},
+		{name: "too many search terms", payload: publishPayload{
+			RequestID: "request-1", SlotID: "slot-1", Endpoint: resource.SearchMetricNames,
+			Params: map[string][]string{"search[]": {"1", "2", "3", "4", "5", "6"}},
+		}},
+		{name: "oversized parameter value", payload: publishPayload{
+			RequestID: "request-1", SlotID: "slot-1", Endpoint: resource.SearchMetricNames,
+			Params: map[string][]string{"match[]": {strings.Repeat("x", 4097)}},
+		}},
+		{name: "invalid time range", payload: publishPayload{
+			RequestID: "request-1", SlotID: "slot-1", Endpoint: resource.SearchMetricNames,
+			Params: map[string][]string{"start": {"200"}, "end": {"100"}},
+		}},
+		{name: "unlimited results", payload: publishPayload{
+			RequestID: "request-1", SlotID: "slot-1", Endpoint: resource.SearchMetricNames,
+			Params: map[string][]string{"limit": {"0"}},
+		}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			resp, err := svc.PublishStream(context.Background(), &backend.PublishStreamRequest{
+				Path: validSearchPath, PluginContext: pluginContext, Data: mustJSON(tc.payload),
+			})
+			require.NoError(t, err)
+			assert.Equal(t, backend.PublishStreamStatusPermissionDenied, resp.Status)
+		})
+	}
+
+	resp, err := svc.PublishStream(context.Background(), &backend.PublishStreamRequest{
+		Path: validSearchPath, PluginContext: pluginContext,
+		Data: mustJSON(publishPayload{
+			RequestID: "request-clamped", SlotID: "slot-clamped", Endpoint: resource.SearchMetricNames,
+			Params: map[string][]string{
+				"start":      {"1"},
+				"end":        {strconv.FormatInt(1+int64((91*24*time.Hour)/time.Second), 10)},
+				"batch_size": {"999999"},
+				"limit":      {"999999"},
+			},
+		}),
+	})
+	require.NoError(t, err)
+	require.Equal(t, backend.PublishStreamStatusOK, resp.Status)
+	mb, _ := svc.getMailbox(validSearchPath)
+	msg, ok := mb.next()
+	require.True(t, ok)
+	assert.Equal(t, "10000", msg.params.Get("limit"))
+	assert.Equal(t, "1000", msg.params.Get("batch_size"))
+	assert.Equal(t, strconv.FormatInt(1+int64((24*time.Hour)/time.Second), 10), msg.params.Get("start"))
 }
 
 func TestEnqueue_CoalescesWithoutEvictingOtherSlots(t *testing.T) {
@@ -383,7 +473,7 @@ func TestRunStream_ControlLoopRemainsResponsiveAtConcurrencyLimit(t *testing.T) 
 	started := make(chan string, maxConcurrentSlots+1)
 	canceled := make(chan string, maxConcurrentSlots+1)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		requestID := req.URL.Query().Get("rid")
+		requestID := req.URL.Query().Get("search[]")
 		started <- requestID
 		<-req.Context().Done()
 		canceled <- requestID
@@ -406,7 +496,7 @@ func TestRunStream_ControlLoopRemainsResponsiveAtConcurrencyLimit(t *testing.T) 
 			Path: validSearchPath, PluginContext: testPluginContext(srv.URL),
 			Data: mustJSON(publishPayload{
 				RequestID: id, SlotID: fmt.Sprintf("slot-%d", i), Endpoint: resource.SearchMetricNames,
-				Params: map[string][]string{"rid": {id}},
+				Params: map[string][]string{"search[]": {id}},
 			}),
 		})
 	}
@@ -424,14 +514,14 @@ func TestRunStream_ControlLoopRemainsResponsiveAtConcurrencyLimit(t *testing.T) 
 		Path: validSearchPath, PluginContext: testPluginContext(srv.URL),
 		Data: mustJSON(publishPayload{
 			RequestID: "waiting", SlotID: "slot-waiting", Endpoint: resource.SearchMetricNames,
-			Params: map[string][]string{"rid": {"waiting"}},
+			Params: map[string][]string{"search[]": {"waiting"}},
 		}),
 	})
 	_, _ = svc.PublishStream(ctx, &backend.PublishStreamRequest{
 		Path: validSearchPath, PluginContext: testPluginContext(srv.URL),
 		Data: mustJSON(publishPayload{
 			RequestID: "replacement", SlotID: "slot-0", Endpoint: resource.SearchMetricNames,
-			Params: map[string][]string{"rid": {"replacement"}},
+			Params: map[string][]string{"search[]": {"replacement"}},
 		}),
 	})
 
@@ -443,6 +533,51 @@ func TestRunStream_ControlLoopRemainsResponsiveAtConcurrencyLimit(t *testing.T) 
 	}
 }
 
+func TestRunStream_EnforcesDatasourceUpstreamBudget(t *testing.T) {
+	started := make(chan struct{}, 24)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		started <- struct{}{}
+		<-req.Context().Done()
+	}))
+	defer srv.Close()
+
+	svc := newTestService()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	for channel := 0; channel < 3; channel++ {
+		path := fmt.Sprintf("search/550e8400-e29b-41d4-a716-%012x", 100+channel)
+		svc.createMailbox(path)
+		go func() {
+			_ = svc.RunStream(ctx, &backend.RunStreamRequest{
+				Path: path, PluginContext: testPluginContext(srv.URL),
+			}, backend.NewStreamSender(&recordingSender{}))
+		}()
+		for slot := 0; slot < maxConcurrentSlots; slot++ {
+			id := fmt.Sprintf("request-%d-%d", channel, slot)
+			_, _ = svc.PublishStream(ctx, &backend.PublishStreamRequest{
+				Path: path, PluginContext: testPluginContext(srv.URL),
+				Data: mustJSON(publishPayload{
+					RequestID: id, SlotID: fmt.Sprintf("slot-%d", slot), Endpoint: resource.SearchMetricNames,
+					Params: map[string][]string{"search[]": {id}},
+				}),
+			})
+		}
+	}
+
+	for i := 0; i < 16; i++ {
+		select {
+		case <-started:
+		case <-time.After(time.Second):
+			t.Fatal("datasource did not use its available upstream budget")
+		}
+	}
+	select {
+	case <-started:
+		t.Fatal("datasource exceeded its upstream concurrency budget")
+	case <-time.After(200 * time.Millisecond):
+	}
+}
+
 func TestRunStream_CancelPrevious(t *testing.T) {
 	release := make(chan struct{})
 	var releaseOnce sync.Once
@@ -451,7 +586,7 @@ func TestRunStream_CancelPrevious(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		fl, _ := w.(http.Flusher)
-		switch req.URL.Query().Get("rid") {
+		switch req.URL.Query().Get("search[]") {
 		case "slow":
 			_, _ = w.Write([]byte(`{"results":[{"name":"slow"}]}` + "\n"))
 			if fl != nil {
@@ -482,7 +617,7 @@ func TestRunStream_CancelPrevious(t *testing.T) {
 	_, _ = svc.PublishStream(ctx, &backend.PublishStreamRequest{
 		Path:          path,
 		PluginContext: testPluginContext(srv.URL),
-		Data:          mustJSON(publishPayload{RequestID: "req-slow", SlotID: "slot-1", Endpoint: resource.SearchMetricNames, Params: map[string][]string{"rid": {"slow"}}}),
+		Data:          mustJSON(publishPayload{RequestID: "req-slow", SlotID: "slot-1", Endpoint: resource.SearchMetricNames, Params: map[string][]string{"search[]": {"slow"}}}),
 	})
 	// Wait until the slow batch is in-flight.
 	waitForEnvelope(t, sender, func(e responseEnvelope) bool { return e.RequestID == "req-slow" && e.Type == "batch" })
@@ -491,7 +626,7 @@ func TestRunStream_CancelPrevious(t *testing.T) {
 	_, _ = svc.PublishStream(ctx, &backend.PublishStreamRequest{
 		Path:          path,
 		PluginContext: testPluginContext(srv.URL),
-		Data:          mustJSON(publishPayload{RequestID: "req-fast", SlotID: "slot-1", Endpoint: resource.SearchMetricNames, Params: map[string][]string{"rid": {"fast"}}}),
+		Data:          mustJSON(publishPayload{RequestID: "req-fast", SlotID: "slot-1", Endpoint: resource.SearchMetricNames, Params: map[string][]string{"search[]": {"fast"}}}),
 	})
 
 	// req-fast completes with a terminal.

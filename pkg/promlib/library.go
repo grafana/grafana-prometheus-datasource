@@ -31,6 +31,8 @@ type Service struct {
 	// datasource instance, so this map is already isolated by datasource and tenant.
 	mailboxesMu sync.Mutex
 	mailboxes   map[string]*searchMailbox
+
+	searchPermits chan struct{}
 }
 
 type instance struct {
@@ -46,9 +48,10 @@ func NewService(httpClientProvider *sdkhttpclient.Provider, plog log.Logger, ext
 		httpClientProvider = sdkhttpclient.NewProvider()
 	}
 	return &Service{
-		im:        datasource.NewInstanceManager(newInstanceSettings(httpClientProvider, plog, extendOptions)),
-		logger:    plog,
-		mailboxes: make(map[string]*searchMailbox),
+		im:            datasource.NewInstanceManager(newInstanceSettings(httpClientProvider, plog, extendOptions)),
+		logger:        plog,
+		mailboxes:     make(map[string]*searchMailbox),
+		searchPermits: make(chan struct{}, maxConcurrentSearches),
 	}
 }
 
