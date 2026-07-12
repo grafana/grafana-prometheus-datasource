@@ -95,6 +95,7 @@ export class PrometheusDatasource
   seriesEndpoint: boolean;
   seriesLimit: number;
   enableSearchApi: boolean;
+  usesForwardedAuth: boolean;
   type: string;
   url: string;
   withCredentials: boolean;
@@ -130,6 +131,8 @@ export class PrometheusDatasource
     this.seriesEndpoint = instanceSettings.jsonData.seriesEndpoint ?? false;
     this.seriesLimit = instanceSettings.jsonData.seriesLimit ?? DEFAULT_SERIES_LIMIT;
     this.enableSearchApi = instanceSettings.jsonData.enableSearchApi ?? false;
+    this.usesForwardedAuth =
+      Boolean(instanceSettings.jsonData.oauthPassThru) || Boolean(instanceSettings.jsonData.keepCookies?.length);
     this.type = 'prometheus';
     this.url = instanceSettings.url!;
     this.withCredentials = Boolean(instanceSettings.withCredentials);
@@ -253,7 +256,7 @@ export class PrometheusDatasource
    * never break autocomplete.
    */
   hasSearchApiSupport(): boolean {
-    return this.enableSearchApi;
+    return this.enableSearchApi && !this.usesForwardedAuth;
   }
 
   _isDatasourceVersionGreaterOrEqualTo(targetVersion: string, targetFlavor: PromApplication): boolean {

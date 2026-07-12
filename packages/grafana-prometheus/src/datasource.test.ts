@@ -103,6 +103,27 @@ describe('PrometheusDatasource', () => {
     });
   });
 
+  it('disables Live search when OAuth identity is forwarded', () => {
+    const forwardedAuthSettings = cloneDeep(instanceSettings);
+    forwardedAuthSettings.jsonData.enableSearchApi = true;
+    forwardedAuthSettings.jsonData.oauthPassThru = true;
+
+    const forwardedAuthDatasource = new PrometheusDatasource(forwardedAuthSettings, templateSrvStub);
+
+    expect(forwardedAuthDatasource.hasSearchApiSupport()).toBe(false);
+  });
+
+  it('detects forwarded cookies and keeps autocomplete on authenticated HTTP', () => {
+    const forwardedCookieSettings = cloneDeep(instanceSettings);
+    forwardedCookieSettings.jsonData.enableSearchApi = true;
+    forwardedCookieSettings.jsonData.keepCookies = ['session'];
+
+    const forwardedCookieDatasource = new PrometheusDatasource(forwardedCookieSettings, templateSrvStub);
+
+    expect(forwardedCookieDatasource.usesForwardedAuth).toBe(true);
+    expect(forwardedCookieDatasource.hasSearchApiSupport()).toBe(false);
+  });
+
   describe('Query', () => {
     it('throws if using direct access', async () => {
       const instanceSettings = {
