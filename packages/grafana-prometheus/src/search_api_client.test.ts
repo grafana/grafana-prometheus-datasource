@@ -273,4 +273,27 @@ describe('SearchApiClient', () => {
     expect(keys).toEqual(['l1', 'l2']);
     expect(publish).not.toHaveBeenCalled();
   });
+
+  it('settles a Promise search through authenticated HTTP when publish rejects', async () => {
+    publish.mockRejectedValueOnce(new Error('socket closed'));
+    mockRequest.mockResolvedValueOnce(['fallback-label']);
+    const client = new SearchApiClient(mockRequest, makeDatasource());
+
+    await expect(client.queryLabelKeys(mockTimeRange)).resolves.toEqual(['fallback-label']);
+    expect(mockRequest).toHaveBeenCalledWith('/api/v1/labels', expect.anything(), undefined);
+  });
+
+  it('completes a progressive search through HTTP when publish rejects', async () => {
+    publish.mockRejectedValueOnce(new Error('socket closed'));
+    mockRequest.mockResolvedValueOnce(['fallback-value']);
+    const client = new SearchApiClient(mockRequest, makeDatasource());
+
+    await expect(
+      new Promise<string[]>((resolve) => {
+        client.searchLabelValues(mockTimeRange, 'job', { search: 'graf' }).subscribe({
+          next: resolve,
+        });
+      })
+    ).resolves.toEqual(['fallback-value']);
+  });
 });

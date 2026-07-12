@@ -395,6 +395,7 @@ export class SearchApiClient extends BaseResourceClient implements SearchCapable
 
   private readonly channelAddr: LiveChannelAddress;
   private readonly messages$ = new Subject<SearchFrame>();
+  private readonly transportFailures$ = new Subject<void>();
   private liveSub?: Subscription;
   private useFallback = false;
   private connected = false;
@@ -443,17 +444,20 @@ export class SearchApiClient extends BaseResourceClient implements SearchCapable
             if (this.connected) {
               this.resolveConnectionWaiters(true);
             } else if (
+              event.error ||
               event.state === LiveChannelConnectionState.Invalid ||
               event.state === LiveChannelConnectionState.Shutdown
             ) {
               this.useFallback = true;
               this.resolveConnectionWaiters(false);
+              this.transportFailures$.next();
             }
           }
         },
         error: () => {
           this.useFallback = true;
           this.resolveConnectionWaiters(false);
+          this.transportFailures$.next();
         },
       });
     } catch {
@@ -465,6 +469,8 @@ export class SearchApiClient extends BaseResourceClient implements SearchCapable
   public dispose(): void {
     this.liveSub?.unsubscribe();
     this.resolveConnectionWaiters(false);
+    this.transportFailures$.next();
+    this.transportFailures$.complete();
     this.messages$.complete();
   }
 
@@ -598,7 +604,8 @@ export class SearchApiClient extends BaseResourceClient implements SearchCapable
   private runSearchPromise(
     endpoint: SearchEndpoint,
     params: Record<string, string[]>,
-    slotId: string
+    slotId: string,
+    fallback: () => Promise<string[]>
   ): Promise<string[]> {
     return new Promise<string[]>((resolve) => {
       const requestId = genId();
@@ -606,27 +613,42 @@ export class SearchApiClient extends BaseResourceClient implements SearchCapable
       const seen = new Set<string>();
       let settled = false;
 
-      const finish = () => {
+      const finish = (values = acc) => {
         if (settled) {
           return;
         }
         settled = true;
         clearTimeout(timer);
         sub.unsubscribe();
-        resolve(acc);
+        failureSub.unsubscribe();
+        resolve(values);
+      };
+      const fallbackAndFinish = () => {
+        if (settled) {
+          return;
+        }
+        fallback()
+          .then(finish)
+          .catch(() => finish([]));
       };
 
       const sub = this.messages$.pipe(filter((f) => f.requestId === requestId)).subscribe((frame) => {
         if (frame.type === 'batch') {
           extractSearchValues(endpoint, frame.results, acc, seen);
+        } else if (frame.type === 'terminal') {
+          finish();
         } else {
-          // terminal or error -> resolve with whatever was collected
           finish();
         }
       });
+      const failureSub = this.transportFailures$.subscribe(fallbackAndFinish);
 
-      const timer = setTimeout(finish, SEARCH_DROP_IN_TIMEOUT_MS);
-      this.publish({ requestId, slotId, endpoint, params });
+      const timer = setTimeout(fallbackAndFinish, SEARCH_DROP_IN_TIMEOUT_MS);
+      this.publish({ requestId, slotId, endpoint, params }).then((published) => {
+        if (!published) {
+          fallbackAndFinish();
+        }
+      });
     });
   }
 
@@ -637,25 +659,73 @@ export class SearchApiClient extends BaseResourceClient implements SearchCapable
   private runSearchObservable(
     endpoint: SearchEndpoint,
     params: Record<string, string[]>,
-    slotId: string
+    slotId: string,
+    fallback: () => Promise<string[]>
   ): Observable<string[]> {
     return new Observable<string[]>((subscriber) => {
       const requestId = genId();
       const acc: string[] = [];
       const seen = new Set<string>();
+      let settled = false;
+      let fallbackStarted = false;
+
+      const completeWithFallback = () => {
+        if (settled || fallbackStarted) {
+          return;
+        }
+        fallbackStarted = true;
+        sub.unsubscribe();
+        failureSub.unsubscribe();
+        clearTimeout(timer);
+        fallback()
+          .then((values) => {
+            if (!settled && !subscriber.closed) {
+              settled = true;
+              subscriber.next(values);
+              subscriber.complete();
+            }
+          })
+          .catch(() => {
+            if (!settled && !subscriber.closed) {
+              settled = true;
+              subscriber.next([]);
+              subscriber.complete();
+            }
+          });
+      };
 
       const sub = this.messages$.pipe(filter((f) => f.requestId === requestId)).subscribe((frame) => {
         if (frame.type === 'batch') {
           extractSearchValues(endpoint, frame.results, acc, seen);
           subscriber.next(acc.slice());
+        } else if (frame.type === 'terminal') {
+          settled = true;
+          clearTimeout(timer);
+          failureSub.unsubscribe();
+          subscriber.next(acc.slice());
+          subscriber.complete();
         } else {
+          settled = true;
+          clearTimeout(timer);
+          failureSub.unsubscribe();
           subscriber.next(acc.slice());
           subscriber.complete();
         }
       });
+      const failureSub = this.transportFailures$.subscribe(completeWithFallback);
+      const timer = setTimeout(completeWithFallback, SEARCH_DROP_IN_TIMEOUT_MS);
 
-      this.publish({ requestId, slotId, endpoint, params });
-      return () => sub.unsubscribe();
+      this.publish({ requestId, slotId, endpoint, params }).then((published) => {
+        if (!published) {
+          completeWithFallback();
+        }
+      });
+      return () => {
+        settled = true;
+        clearTimeout(timer);
+        sub.unsubscribe();
+        failureSub.unsubscribe();
+      };
     });
   }
 
@@ -682,7 +752,9 @@ export class SearchApiClient extends BaseResourceClient implements SearchCapable
       return res;
     }
     const params = this.buildParams({ timeParams: getRangeSnapInterval(this.datasource.cacheLevel, timeRange), limit });
-    this.metrics = await this.runSearchPromise(SEARCH_ENDPOINTS.metricNames, params, 'metrics');
+    this.metrics = await this.runSearchPromise(SEARCH_ENDPOINTS.metricNames, params, 'metrics', () =>
+      this._fallback.queryMetrics(timeRange).then((result) => result.metrics)
+    );
     this.histogramMetrics = processHistogramMetrics(this.metrics);
     return { metrics: this.metrics, histogramMetrics: this.histogramMetrics };
   };
@@ -702,7 +774,9 @@ export class SearchApiClient extends BaseResourceClient implements SearchCapable
       match,
       limit,
     });
-    const keys = await this.runSearchPromise(SEARCH_ENDPOINTS.labelNames, params, 'labelKeys');
+    const keys = await this.runSearchPromise(SEARCH_ENDPOINTS.labelNames, params, 'labelKeys', () =>
+      this._fallback.queryLabelKeys(timeRange, match, limit)
+    );
     this.labelKeys = keys.slice();
     this._cache.setLabelKeys(timeRange, effectiveMatch, effectiveLimit, this.labelKeys);
     return keys;
@@ -730,7 +804,9 @@ export class SearchApiClient extends BaseResourceClient implements SearchCapable
       label,
       limit,
     });
-    const values = await this.runSearchPromise(SEARCH_ENDPOINTS.labelValues, params, `labelValues-${label}`);
+    const values = await this.runSearchPromise(SEARCH_ENDPOINTS.labelValues, params, `labelValues-${label}`, () =>
+      this._fallback.queryLabelValues(timeRange, labelKey, match, limit)
+    );
     this._cache.setLabelValues(timeRange, effectiveMatch, effectiveLimit, values);
     return values;
   };
@@ -742,7 +818,9 @@ export class SearchApiClient extends BaseResourceClient implements SearchCapable
       match: options.match,
       limit: options.limit,
     });
-    return this.runSearchObservable(SEARCH_ENDPOINTS.metricNames, params, options.slotId ?? 'metrics-search');
+    return this.runSearchObservable(SEARCH_ENDPOINTS.metricNames, params, options.slotId ?? 'metrics-search', () =>
+      this._fallback.queryMetrics(timeRange).then((result) => result.metrics)
+    );
   };
 
   public searchLabelNames = (timeRange: TimeRange, options: SearchOptions): Observable<string[]> => {
@@ -752,7 +830,9 @@ export class SearchApiClient extends BaseResourceClient implements SearchCapable
       match: options.match,
       limit: options.limit,
     });
-    return this.runSearchObservable(SEARCH_ENDPOINTS.labelNames, params, options.slotId ?? 'labelKeys-search');
+    return this.runSearchObservable(SEARCH_ENDPOINTS.labelNames, params, options.slotId ?? 'labelKeys-search', () =>
+      this._fallback.queryLabelKeys(timeRange, options.match, options.limit)
+    );
   };
 
   public searchLabelValues = (timeRange: TimeRange, labelKey: string, options: SearchOptions): Observable<string[]> => {
@@ -767,7 +847,8 @@ export class SearchApiClient extends BaseResourceClient implements SearchCapable
     return this.runSearchObservable(
       SEARCH_ENDPOINTS.labelValues,
       params,
-      options.slotId ?? `labelValues-search-${label}`
+      options.slotId ?? `labelValues-search-${label}`,
+      () => this._fallback.queryLabelValues(timeRange, labelKey, options.match, options.limit)
     );
   };
 }
