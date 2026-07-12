@@ -18,7 +18,7 @@ import { type PrometheusLanguageProviderInterface } from '../../../language_prov
 import { createSearchSlotId } from '../../../resource_clients';
 import { regexifyLabelValuesQueryString } from '../../parsingUtils';
 import { type QueryBuilderLabelFilter } from '../../shared/types';
-import { formatPrometheusLabelFilters } from '../formatter';
+import { formatLabelFiltersToString, formatPrometheusLabelFilters } from '../formatter';
 
 import { generateMetricData } from './helpers';
 import { type MetricData, type MetricsData } from './types';
@@ -156,7 +156,7 @@ export const MetricsModalContextProvider: FC<PropsWithChildren<MetricsModalConte
           if (languageProvider.hasServerSideSearch?.()) {
             // Server-side fuzzy/scored search: route the typed text to `search[]` and let
             // the upstream do ranking — no regex `match[]` injection, no client-side fuzzy.
-            const match = filterArray.length ? `{${filterArray.join('').replace(/^,/, '')}}` : undefined;
+            const match = formatLabelFiltersToString(queryLabels) || undefined;
             const results = await languageProvider.searchMetrics(
               timeRange,
               metricText,

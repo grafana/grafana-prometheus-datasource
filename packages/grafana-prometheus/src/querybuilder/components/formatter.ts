@@ -1,6 +1,7 @@
 import { regexifyLabelValuesQueryString } from '../parsingUtils';
+import { promQueryModeller } from '../shared/modeller_instance';
+import { renderLabelsWithoutBrackets } from '../shared/rendering/labels';
 import { type QueryBuilderLabelFilter } from '../shared/types';
-import { utf8Support } from './../../utf8_support';
 
 const formatPrometheusLabelFiltersToString = (
   queryString: string,
@@ -12,9 +13,7 @@ const formatPrometheusLabelFiltersToString = (
 };
 
 export const formatPrometheusLabelFilters = (labelsFilters: QueryBuilderLabelFilter[]): string[] => {
-  return labelsFilters.map((label) => {
-    return `,${utf8Support(label.label)}="${label.value}"`;
-  });
+  return renderLabelsWithoutBrackets(labelsFilters).map((label) => `,${label}`);
 };
 
 /**
@@ -32,9 +31,8 @@ export const formatKeyValueStrings = (query: string, labelsFilters?: QueryBuilde
  * regexified into `match[]`. Returns '' when there are no label filters.
  */
 export const formatLabelFiltersToString = (labelsFilters?: QueryBuilderLabelFilter[]): string => {
-  const filterArray = labelsFilters ? formatPrometheusLabelFilters(labelsFilters) : [];
-  if (filterArray.length === 0) {
+  if (!labelsFilters?.length) {
     return '';
   }
-  return `{${filterArray.join('').replace(/^,/, '')}}`;
+  return promQueryModeller.renderLabels(labelsFilters);
 };
