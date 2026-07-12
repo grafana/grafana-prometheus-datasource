@@ -1,4 +1,4 @@
-package datasource
+package promlib
 
 import (
 	"context"
@@ -69,30 +69,30 @@ type responseEnvelope struct {
 
 // createMailbox returns the buffered mailbox for path, creating it if necessary. It is
 // idempotent so reconnects (Subscribe again) reuse the existing channel.
-func (d *Datasource) createMailbox(path string) chan publishMsg {
-	d.mailboxesMu.Lock()
-	defer d.mailboxesMu.Unlock()
-	if mb, ok := d.mailboxes[path]; ok {
+func (s *Service) createMailbox(path string) chan publishMsg {
+	s.mailboxesMu.Lock()
+	defer s.mailboxesMu.Unlock()
+	if mb, ok := s.mailboxes[path]; ok {
 		return mb
 	}
 	mb := make(chan publishMsg, mailboxBuffer)
-	d.mailboxes[path] = mb
+	s.mailboxes[path] = mb
 	return mb
 }
 
 // getMailbox returns the mailbox for path if it exists.
-func (d *Datasource) getMailbox(path string) (chan publishMsg, bool) {
-	d.mailboxesMu.Lock()
-	defer d.mailboxesMu.Unlock()
-	mb, ok := d.mailboxes[path]
+func (s *Service) getMailbox(path string) (chan publishMsg, bool) {
+	s.mailboxesMu.Lock()
+	defer s.mailboxesMu.Unlock()
+	mb, ok := s.mailboxes[path]
 	return mb, ok
 }
 
 // removeMailbox drops the mailbox for path. Called on RunStream stop.
-func (d *Datasource) removeMailbox(path string) {
-	d.mailboxesMu.Lock()
-	defer d.mailboxesMu.Unlock()
-	delete(d.mailboxes, path)
+func (s *Service) removeMailbox(path string) {
+	s.mailboxesMu.Lock()
+	defer s.mailboxesMu.Unlock()
+	delete(s.mailboxes, path)
 }
 
 // --- backend.StreamHandler --------------------------------------------------
@@ -101,11 +101,11 @@ func (d *Datasource) removeMailbox(path string) {
 // validated org membership and datasource read permission before this is called, so we
 // only enforce the channel/endpoint allowlist (no arbitrary upstream paths -> no SSRF)
 // and create the buffered mailbox before the first publish can arrive.
-func (d *Datasource) SubscribeStream(_ context.Context, req *backend.SubscribeStreamRequest) (*backend.SubscribeStreamResponse, error) {
+func (s *Service) SubscribeStream(_ context.Context, req *backend.SubscribeStreamRequest) (*backend.SubscribeStreamResponse, error) {
 	if !strings.HasPrefix(req.Path, searchChannelPrefix) {
 		return &backend.SubscribeStreamResponse{Status: backend.SubscribeStreamStatusNotFound}, nil
 	}
-	d.createMailbox(req.Path)
+	s.createMailbox(req.Path)
 	return &backend.SubscribeStreamResponse{Status: backend.SubscribeStreamStatusOK}, nil
 }
 
@@ -114,7 +114,7 @@ func (d *Datasource) SubscribeStream(_ context.Context, req *backend.SubscribeSt
 // payload validation are our responsibility. Sends are non-blocking with latest-wins
 // drop: if the buffer is full the oldest pending request is discarded in favor of the
 // newest, matching the "supersede stale params" intent.
-func (d *Datasource) PublishStream(_ context.Context, req *backend.PublishStreamRequest) (*backend.PublishStreamResponse, error) {
+func (s *Service) PublishStream(_ context.Context, req *backend.PublishStreamRequest) (*backend.PublishStreamResponse, error) {
 	if !strings.HasPrefix(req.Path, searchChannelPrefix) {
 		return &backend.PublishStreamResponse{Status: backend.PublishStreamStatusPermissionDenied}, nil
 	}
@@ -127,7 +127,7 @@ func (d *Datasource) PublishStream(_ context.Context, req *backend.PublishStream
 		return &backend.PublishStreamResponse{Status: backend.PublishStreamStatusPermissionDenied}, nil
 	}
 
-	mb, ok := d.getMailbox(req.Path)
+	mb, ok := s.getMailbox(req.Path)
 	if !ok {
 		// No active subscription/mailbox for this channel.
 		return &backend.PublishStreamResponse{Status: backend.PublishStreamStatusNotFound}, nil
@@ -168,9 +168,9 @@ func enqueue(mb chan publishMsg, msg publishMsg) {
 // published request it cancels any previous in-flight request for the SAME slot
 // (endpoint + slotId), then runs the upstream NDJSON read in a bounded goroutine,
 // forwarding requestId-tagged frames. Independent slots run concurrently.
-func (d *Datasource) RunStream(ctx context.Context, req *backend.RunStreamRequest, sender *backend.StreamSender) error {
-	mb := d.createMailbox(req.Path)
-	defer d.removeMailbox(req.Path)
+func (s *Service) RunStream(ctx context.Context, req *backend.RunStreamRequest, sender *backend.StreamSender) error {
+	mb := s.createMailbox(req.Path)
+	defer s.removeMailbox(req.Path)
 
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, maxConcurrentSlots)
@@ -205,7 +205,7 @@ func (d *Datasource) RunStream(ctx context.Context, req *backend.RunStreamReques
 				defer wg.Done()
 				defer func() { <-sem }()
 				defer cancel()
-				d.runSearch(rctx, req.PluginContext, m, sender)
+				s.runSearch(rctx, req.PluginContext, m, sender)
 			}(msg, reqCtx, cancel)
 		}
 	}
@@ -215,10 +215,10 @@ func (d *Datasource) RunStream(ctx context.Context, req *backend.RunStreamReques
 // single terminal frame per requestId: if the upstream omitted a trailer (abrupt EOF) a
 // synthetic terminal frame is sent so the frontend promise/observable always settles.
 // A cancelled request (superseded by a newer one for the same slot) sends nothing.
-func (d *Datasource) runSearch(ctx context.Context, pCtx backend.PluginContext, m publishMsg, sender *backend.StreamSender) {
+func (s *Service) runSearch(ctx context.Context, pCtx backend.PluginContext, m publishMsg, sender *backend.StreamSender) {
 	sawTerminal := false
 
-	err := d.Service.StreamSearch(ctx, pCtx, m.endpoint, m.params, func(line resource.SearchLine) error {
+	err := s.StreamSearch(ctx, pCtx, m.endpoint, m.params, func(line resource.SearchLine) error {
 		env := envelopeFromLine(m, line)
 		if env.Type == "terminal" || env.Type == "error" {
 			sawTerminal = true
@@ -237,8 +237,8 @@ func (d *Datasource) runSearch(ctx context.Context, pCtx backend.PluginContext, 
 			})
 			return
 		}
-		if d.logger != nil {
-			d.logger.Warn("search stream read failed", "endpoint", m.endpoint, "error", err)
+		if s.logger != nil {
+			s.logger.Warn("search stream read failed", "endpoint", m.endpoint, "error", err)
 		}
 		_ = sendEnvelope(sender, responseEnvelope{
 			RequestID: m.requestID, SlotID: m.slotID, Type: "error", Error: err.Error(),

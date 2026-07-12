@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"sync"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/datasource"
@@ -22,6 +23,14 @@ import (
 type Service struct {
 	im     instancemgmt.InstanceManager
 	logger log.Logger
+
+	// mailboxes bridges PublishStream (producer) and RunStream (consumer) for the
+	// persistent per-session search channels. Keyed by channel path
+	// (search/<sessionNonce>); each value is a buffered Go channel so a publish that
+	// races ahead of RunStream's select loop is not lost. A Service is created per
+	// datasource instance, so this map is already isolated by datasource and tenant.
+	mailboxesMu sync.Mutex
+	mailboxes   map[string]chan publishMsg
 }
 
 type instance struct {
@@ -37,8 +46,9 @@ func NewService(httpClientProvider *sdkhttpclient.Provider, plog log.Logger, ext
 		httpClientProvider = sdkhttpclient.NewProvider()
 	}
 	return &Service{
-		im:     datasource.NewInstanceManager(newInstanceSettings(httpClientProvider, plog, extendOptions)),
-		logger: plog,
+		im:        datasource.NewInstanceManager(newInstanceSettings(httpClientProvider, plog, extendOptions)),
+		logger:    plog,
+		mailboxes: make(map[string]chan publishMsg),
 	}
 }
 
@@ -48,6 +58,10 @@ func NewService(httpClientProvider *sdkhttpclient.Provider, plog log.Logger, ext
 func (s *Service) Dispose() {
 	// Clean up datasource instance resources.
 	s.logger.Debug("Disposing the instance...")
+	// Drop any per-instance search mailbox state; the replacement instance gets a fresh map.
+	s.mailboxesMu.Lock()
+	s.mailboxes = make(map[string]chan publishMsg)
+	s.mailboxesMu.Unlock()
 }
 
 func newInstanceSettings(httpClientProvider *sdkhttpclient.Provider, log log.Logger, extendOptions ExtendOptions) datasource.InstanceFactoryFunc {

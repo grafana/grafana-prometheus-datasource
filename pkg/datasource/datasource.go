@@ -2,7 +2,6 @@ package datasource
 
 import (
 	"context"
-	"sync"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	sdkhttpclient "github.com/grafana/grafana-plugin-sdk-go/backend/httpclient"
@@ -24,9 +23,8 @@ func NewDatasource(ctx context.Context, dsInstanceSettings backend.DataSourceIns
 	plog := backend.NewLoggerWith("logger", "tsdb.prometheus")
 	plog.Debug("Initializing")
 	return &Datasource{
-		Service:   promlib.NewService(sdkhttpclient.NewProvider(), plog, nil),
-		logger:    plog,
-		mailboxes: make(map[string]chan publishMsg),
+		Service: promlib.NewService(sdkhttpclient.NewProvider(), plog, nil),
+		logger:  plog,
 	}, nil
 }
 
@@ -34,22 +32,13 @@ type Datasource struct {
 	Service *promlib.Service
 
 	logger log.Logger
-
-	// mailboxes bridges PublishStream (producer) and RunStream (consumer) for the
-	// persistent per-session search channels. Keyed by channel path
-	// (search/<sessionNonce>); each value is a buffered Go channel so a publish that
-	// races ahead of RunStream's select loop is not lost.
-	mailboxesMu sync.Mutex
-	mailboxes   map[string]chan publishMsg
 }
 
 // Dispose implements instancemgmt.InstanceDisposer. The SDK calls it when the
-// datasource settings change and this instance is replaced, so any per-instance
-// mailbox state is dropped (the replacement instance gets a fresh map).
+// datasource settings change and this instance is replaced. The per-instance search
+// mailbox state now lives on Service, so we delegate cleanup to it.
 func (d *Datasource) Dispose() {
-	d.mailboxesMu.Lock()
-	defer d.mailboxesMu.Unlock()
-	d.mailboxes = make(map[string]chan publishMsg)
+	d.Service.Dispose()
 }
 
 func (d *Datasource) QueryData(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
@@ -91,6 +80,22 @@ func (d *Datasource) MutateAdmission(ctx context.Context, req *backend.Admission
 func (d *Datasource) ConvertObjects(ctx context.Context, req *backend.ConversionRequest) (*backend.ConversionResponse, error) {
 	ctx = d.contextualMiddlewares(ctx)
 	return d.Service.ConvertObjects(ctx, req)
+}
+
+// SubscribeStream, PublishStream and RunStream implement backend.StreamHandler by
+// delegating to Service, mirroring the QueryData/CallResource pattern. The search
+// stream deliberately skips contextualMiddlewares so ResponseLimitMiddleware does not
+// cap the incremental NDJSON body.
+func (d *Datasource) SubscribeStream(ctx context.Context, req *backend.SubscribeStreamRequest) (*backend.SubscribeStreamResponse, error) {
+	return d.Service.SubscribeStream(ctx, req)
+}
+
+func (d *Datasource) PublishStream(ctx context.Context, req *backend.PublishStreamRequest) (*backend.PublishStreamResponse, error) {
+	return d.Service.PublishStream(ctx, req)
+}
+
+func (d *Datasource) RunStream(ctx context.Context, req *backend.RunStreamRequest, sender *backend.StreamSender) error {
+	return d.Service.RunStream(ctx, req, sender)
 }
 
 func (d *Datasource) contextualMiddlewares(ctx context.Context) context.Context {

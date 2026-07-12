@@ -1,4 +1,4 @@
-package datasource
+package promlib
 
 import (
 	"context"
@@ -15,16 +15,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib"
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/resource"
 )
 
-func newTestDatasource() *Datasource {
-	return &Datasource{
-		Service:   promlib.NewService(sdkhttpclient.NewProvider(), log.DefaultLogger, nil),
-		logger:    log.DefaultLogger,
-		mailboxes: make(map[string]chan publishMsg),
-	}
+func newTestService() *Service {
+	return NewService(sdkhttpclient.NewProvider(), log.DefaultLogger, nil)
 }
 
 // recordingSender captures every JSON packet sent down the stream.
@@ -56,50 +51,50 @@ func (s *recordingSender) envelopes() []responseEnvelope {
 }
 
 func TestSubscribeStream_AllowlistAndMailbox(t *testing.T) {
-	d := newTestDatasource()
+	svc := newTestService()
 
-	resp, err := d.SubscribeStream(context.Background(), &backend.SubscribeStreamRequest{Path: "search/sess-1"})
+	resp, err := svc.SubscribeStream(context.Background(), &backend.SubscribeStreamRequest{Path: "search/sess-1"})
 	require.NoError(t, err)
 	assert.Equal(t, backend.SubscribeStreamStatusOK, resp.Status)
-	_, ok := d.getMailbox("search/sess-1")
+	_, ok := svc.getMailbox("search/sess-1")
 	assert.True(t, ok, "mailbox should be created on subscribe")
 
-	resp, err = d.SubscribeStream(context.Background(), &backend.SubscribeStreamRequest{Path: "other/x"})
+	resp, err = svc.SubscribeStream(context.Background(), &backend.SubscribeStreamRequest{Path: "other/x"})
 	require.NoError(t, err)
 	assert.Equal(t, backend.SubscribeStreamStatusNotFound, resp.Status)
-	_, ok = d.getMailbox("other/x")
+	_, ok = svc.getMailbox("other/x")
 	assert.False(t, ok)
 }
 
 func TestPublishStream_Validation(t *testing.T) {
-	d := newTestDatasource()
-	d.createMailbox("search/sess-1")
+	svc := newTestService()
+	svc.createMailbox("search/sess-1")
 
 	// wrong channel namespace
-	resp, _ := d.PublishStream(context.Background(), &backend.PublishStreamRequest{Path: "other/x", Data: []byte(`{}`)})
+	resp, _ := svc.PublishStream(context.Background(), &backend.PublishStreamRequest{Path: "other/x", Data: []byte(`{}`)})
 	assert.Equal(t, backend.PublishStreamStatusPermissionDenied, resp.Status)
 
 	// invalid endpoint
 	bad := mustJSON(publishPayload{RequestID: "r1", Endpoint: "series"})
-	resp, _ = d.PublishStream(context.Background(), &backend.PublishStreamRequest{Path: "search/sess-1", Data: bad})
+	resp, _ = svc.PublishStream(context.Background(), &backend.PublishStreamRequest{Path: "search/sess-1", Data: bad})
 	assert.Equal(t, backend.PublishStreamStatusPermissionDenied, resp.Status)
 
 	// missing requestId
 	noReq := mustJSON(publishPayload{Endpoint: resource.SearchMetricNames})
-	resp, _ = d.PublishStream(context.Background(), &backend.PublishStreamRequest{Path: "search/sess-1", Data: noReq})
+	resp, _ = svc.PublishStream(context.Background(), &backend.PublishStreamRequest{Path: "search/sess-1", Data: noReq})
 	assert.Equal(t, backend.PublishStreamStatusPermissionDenied, resp.Status)
 
 	// no mailbox for path
 	good := mustJSON(publishPayload{RequestID: "r1", Endpoint: resource.SearchMetricNames})
-	resp, _ = d.PublishStream(context.Background(), &backend.PublishStreamRequest{Path: "search/no-mailbox", Data: good})
+	resp, _ = svc.PublishStream(context.Background(), &backend.PublishStreamRequest{Path: "search/no-mailbox", Data: good})
 	assert.Equal(t, backend.PublishStreamStatusNotFound, resp.Status)
 
 	// valid publish routes to the mailbox
 	valid := mustJSON(publishPayload{RequestID: "r1", SlotID: "s1", Endpoint: resource.SearchMetricNames, Params: map[string][]string{"search[]": {"up"}}})
-	resp, _ = d.PublishStream(context.Background(), &backend.PublishStreamRequest{Path: "search/sess-1", Data: valid})
+	resp, _ = svc.PublishStream(context.Background(), &backend.PublishStreamRequest{Path: "search/sess-1", Data: valid})
 	assert.Equal(t, backend.PublishStreamStatusOK, resp.Status)
 
-	mb, _ := d.getMailbox("search/sess-1")
+	mb, _ := svc.getMailbox("search/sess-1")
 	select {
 	case msg := <-mb:
 		assert.Equal(t, "r1", msg.requestID)
@@ -196,19 +191,19 @@ func TestRunStream_EndToEnd_RequestIdTagging(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	d := newTestDatasource()
+	svc := newTestService()
 	const path = "search/sess-e2e"
-	d.createMailbox(path)
+	svc.createMailbox(path)
 
 	sender := &recordingSender{}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	go func() {
-		_ = d.RunStream(ctx, &backend.RunStreamRequest{Path: path, PluginContext: testPluginContext(srv.URL)}, backend.NewStreamSender(sender))
+		_ = svc.RunStream(ctx, &backend.RunStreamRequest{Path: path, PluginContext: testPluginContext(srv.URL)}, backend.NewStreamSender(sender))
 	}()
 
-	_, err := d.PublishStream(ctx, &backend.PublishStreamRequest{
+	_, err := svc.PublishStream(ctx, &backend.PublishStreamRequest{
 		Path: path,
 		Data: mustJSON(publishPayload{RequestID: "req-A", SlotID: "slot-1", Endpoint: resource.SearchMetricNames, Params: map[string][]string{"search[]": {"up"}}}),
 	})
@@ -250,19 +245,19 @@ func TestRunStream_CancelPrevious(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	d := newTestDatasource()
+	svc := newTestService()
 	const path = "search/sess-cancel"
-	d.createMailbox(path)
+	svc.createMailbox(path)
 
 	sender := &recordingSender{}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go func() {
-		_ = d.RunStream(ctx, &backend.RunStreamRequest{Path: path, PluginContext: testPluginContext(srv.URL)}, backend.NewStreamSender(sender))
+		_ = svc.RunStream(ctx, &backend.RunStreamRequest{Path: path, PluginContext: testPluginContext(srv.URL)}, backend.NewStreamSender(sender))
 	}()
 
 	// First request on slot-1: slow, will block upstream.
-	_, _ = d.PublishStream(ctx, &backend.PublishStreamRequest{
+	_, _ = svc.PublishStream(ctx, &backend.PublishStreamRequest{
 		Path: path,
 		Data: mustJSON(publishPayload{RequestID: "req-slow", SlotID: "slot-1", Endpoint: resource.SearchMetricNames, Params: map[string][]string{"rid": {"slow"}}}),
 	})
@@ -270,7 +265,7 @@ func TestRunStream_CancelPrevious(t *testing.T) {
 	waitForEnvelope(t, sender, func(e responseEnvelope) bool { return e.RequestID == "req-slow" && e.Type == "batch" })
 
 	// Second request on the SAME slot supersedes the first -> cancel-previous.
-	_, _ = d.PublishStream(ctx, &backend.PublishStreamRequest{
+	_, _ = svc.PublishStream(ctx, &backend.PublishStreamRequest{
 		Path: path,
 		Data: mustJSON(publishPayload{RequestID: "req-fast", SlotID: "slot-1", Endpoint: resource.SearchMetricNames, Params: map[string][]string{"rid": {"fast"}}}),
 	})
