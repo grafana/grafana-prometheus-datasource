@@ -323,11 +323,25 @@ export class SeriesApiClient extends BaseResourceClient implements ResourceApiCl
 /** How long a drop-in search promise waits before resolving with the partial snapshot. */
 const SEARCH_DROP_IN_TIMEOUT_MS = 15000;
 
-function genId(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+function genSecureId(): string | undefined {
+  if (typeof crypto === 'undefined') {
+    return undefined;
+  }
+  if (typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
   }
-  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  if (typeof crypto.getRandomValues === 'function') {
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('');
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  }
+  return undefined;
+}
+
+function genId(): string {
+  return genSecureId() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 /**
@@ -387,13 +401,18 @@ export class SearchApiClient extends BaseResourceClient implements SearchCapable
       ? new LabelsApiClient(request, datasource)
       : new SeriesApiClient(request, datasource);
 
+    const channelNonce = genSecureId();
     this.channelAddr = {
       scope: LiveChannelScope.DataSource,
       // `stream` is the channel namespace; for DataSource scope it is the datasource uid.
       stream: datasource.uid,
       namespace: datasource.uid,
-      path: `search/${genId()}`,
+      path: `search/${channelNonce ?? 'unavailable'}`,
     };
+    if (!channelNonce) {
+      this.useFallback = true;
+      return;
+    }
     this.subscribeOnce();
   }
 

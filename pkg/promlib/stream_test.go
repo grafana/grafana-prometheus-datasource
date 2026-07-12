@@ -18,6 +18,12 @@ import (
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/resource"
 )
 
+const (
+	validSearchPath       = "search/550e8400-e29b-41d4-a716-446655440000"
+	otherValidSearchPath  = "search/550e8400-e29b-41d4-a716-446655440001"
+	cancelValidSearchPath = "search/550e8400-e29b-41d4-a716-446655440002"
+)
+
 func newTestService() *Service {
 	return NewService(sdkhttpclient.NewProvider(), log.DefaultLogger, nil)
 }
@@ -63,11 +69,11 @@ func TestSubscribeStream_AllowlistAndMailbox(t *testing.T) {
 	pluginContext := enabledPluginContext()
 
 	resp, err := svc.SubscribeStream(context.Background(), &backend.SubscribeStreamRequest{
-		Path: "search/sess-1", PluginContext: pluginContext,
+		Path: validSearchPath, PluginContext: pluginContext,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, backend.SubscribeStreamStatusOK, resp.Status)
-	_, ok := svc.getMailbox("search/sess-1")
+	_, ok := svc.getMailbox(validSearchPath)
 	assert.True(t, ok, "mailbox should be created on subscribe")
 
 	resp, err = svc.SubscribeStream(context.Background(), &backend.SubscribeStreamRequest{
@@ -77,6 +83,34 @@ func TestSubscribeStream_AllowlistAndMailbox(t *testing.T) {
 	assert.Equal(t, backend.SubscribeStreamStatusNotFound, resp.Status)
 	_, ok = svc.getMailbox("other/x")
 	assert.False(t, ok)
+}
+
+func TestStreamHandlers_RejectMalformedSearchChannelPaths(t *testing.T) {
+	svc := newTestService()
+	pluginContext := enabledPluginContext()
+	validPayload := mustJSON(publishPayload{RequestID: "r1", Endpoint: resource.SearchMetricNames})
+
+	for _, path := range []string{
+		"search/",
+		"search/not-a-uuid",
+		"search/550e8400-e29b-41d4-a716-446655440000/extra",
+		"search/../550e8400-e29b-41d4-a716-446655440000",
+	} {
+		t.Run(path, func(t *testing.T) {
+			subscribe, err := svc.SubscribeStream(context.Background(), &backend.SubscribeStreamRequest{
+				Path: path, PluginContext: pluginContext,
+			})
+			require.NoError(t, err)
+			assert.Equal(t, backend.SubscribeStreamStatusNotFound, subscribe.Status)
+
+			svc.createMailbox(path)
+			publish, err := svc.PublishStream(context.Background(), &backend.PublishStreamRequest{
+				Path: path, Data: validPayload, PluginContext: pluginContext,
+			})
+			require.NoError(t, err)
+			assert.Equal(t, backend.PublishStreamStatusPermissionDenied, publish.Status)
+		})
+	}
 }
 
 func TestStreamHandlers_RejectRequestsWhenSearchAPIIsDisabled(t *testing.T) {
@@ -123,7 +157,7 @@ func TestStreamHandlers_RejectRequestsWhenSearchAPIIsDisabled(t *testing.T) {
 
 func TestPublishStream_Validation(t *testing.T) {
 	svc := newTestService()
-	svc.createMailbox("search/sess-1")
+	svc.createMailbox(validSearchPath)
 	pluginContext := enabledPluginContext()
 
 	// wrong channel namespace
@@ -135,32 +169,32 @@ func TestPublishStream_Validation(t *testing.T) {
 	// invalid endpoint
 	bad := mustJSON(publishPayload{RequestID: "r1", Endpoint: "series"})
 	resp, _ = svc.PublishStream(context.Background(), &backend.PublishStreamRequest{
-		Path: "search/sess-1", Data: bad, PluginContext: pluginContext,
+		Path: validSearchPath, Data: bad, PluginContext: pluginContext,
 	})
 	assert.Equal(t, backend.PublishStreamStatusPermissionDenied, resp.Status)
 
 	// missing requestId
 	noReq := mustJSON(publishPayload{Endpoint: resource.SearchMetricNames})
 	resp, _ = svc.PublishStream(context.Background(), &backend.PublishStreamRequest{
-		Path: "search/sess-1", Data: noReq, PluginContext: pluginContext,
+		Path: validSearchPath, Data: noReq, PluginContext: pluginContext,
 	})
 	assert.Equal(t, backend.PublishStreamStatusPermissionDenied, resp.Status)
 
 	// no mailbox for path
 	good := mustJSON(publishPayload{RequestID: "r1", Endpoint: resource.SearchMetricNames})
 	resp, _ = svc.PublishStream(context.Background(), &backend.PublishStreamRequest{
-		Path: "search/no-mailbox", Data: good, PluginContext: pluginContext,
+		Path: otherValidSearchPath, Data: good, PluginContext: pluginContext,
 	})
 	assert.Equal(t, backend.PublishStreamStatusNotFound, resp.Status)
 
 	// valid publish routes to the mailbox
 	valid := mustJSON(publishPayload{RequestID: "r1", SlotID: "s1", Endpoint: resource.SearchMetricNames, Params: map[string][]string{"search[]": {"up"}}})
 	resp, _ = svc.PublishStream(context.Background(), &backend.PublishStreamRequest{
-		Path: "search/sess-1", Data: valid, PluginContext: pluginContext,
+		Path: validSearchPath, Data: valid, PluginContext: pluginContext,
 	})
 	assert.Equal(t, backend.PublishStreamStatusOK, resp.Status)
 
-	mb, _ := svc.getMailbox("search/sess-1")
+	mb, _ := svc.getMailbox(validSearchPath)
 	select {
 	case msg := <-mb:
 		assert.Equal(t, "r1", msg.requestID)
@@ -258,7 +292,7 @@ func TestRunStream_EndToEnd_RequestIdTagging(t *testing.T) {
 	defer srv.Close()
 
 	svc := newTestService()
-	const path = "search/sess-e2e"
+	const path = otherValidSearchPath
 	svc.createMailbox(path)
 
 	sender := &recordingSender{}
@@ -313,7 +347,7 @@ func TestRunStream_CancelPrevious(t *testing.T) {
 	defer srv.Close()
 
 	svc := newTestService()
-	const path = "search/sess-cancel"
+	const path = cancelValidSearchPath
 	svc.createMailbox(path)
 
 	sender := &recordingSender{}

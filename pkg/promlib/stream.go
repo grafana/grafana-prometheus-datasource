@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/url"
-	"strings"
+	"regexp"
 	"sync"
 	"time"
 
@@ -15,10 +15,10 @@ import (
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/resource"
 )
 
-// searchChannelPrefix is the only channel namespace the search stream handler serves.
+// searchChannelPattern is the only channel shape the search stream handler serves.
 // Channels look like "search/<sessionNonce>" — one persistent channel per browser
 // session/datasource-client so frames never leak between org-mates.
-const searchChannelPrefix = "search/"
+var searchChannelPattern = regexp.MustCompile(`^search/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
 // mailboxBuffer is the buffered capacity of each per-channel mailbox. A small buffer
 // absorbs the startup race (a publish arriving before RunStream's select loop is ready)
@@ -106,7 +106,7 @@ func (s *Service) SubscribeStream(_ context.Context, req *backend.SubscribeStrea
 	if !searchAPIEnabled(req.PluginContext) {
 		return &backend.SubscribeStreamResponse{Status: backend.SubscribeStreamStatusNotFound}, nil
 	}
-	if !strings.HasPrefix(req.Path, searchChannelPrefix) {
+	if !searchChannelPattern.MatchString(req.Path) {
 		return &backend.SubscribeStreamResponse{Status: backend.SubscribeStreamStatusNotFound}, nil
 	}
 	s.createMailbox(req.Path)
@@ -122,7 +122,7 @@ func (s *Service) PublishStream(_ context.Context, req *backend.PublishStreamReq
 	if !searchAPIEnabled(req.PluginContext) {
 		return &backend.PublishStreamResponse{Status: backend.PublishStreamStatusPermissionDenied}, nil
 	}
-	if !strings.HasPrefix(req.Path, searchChannelPrefix) {
+	if !searchChannelPattern.MatchString(req.Path) {
 		return &backend.PublishStreamResponse{Status: backend.PublishStreamStatusPermissionDenied}, nil
 	}
 
@@ -178,6 +178,9 @@ func enqueue(mb chan publishMsg, msg publishMsg) {
 func (s *Service) RunStream(ctx context.Context, req *backend.RunStreamRequest, sender *backend.StreamSender) error {
 	if !searchAPIEnabled(req.PluginContext) {
 		return errors.New("search API streaming is disabled for this datasource")
+	}
+	if !searchChannelPattern.MatchString(req.Path) {
+		return errors.New("invalid search stream channel path")
 	}
 	mb := s.createMailbox(req.Path)
 	defer s.removeMailbox(req.Path)

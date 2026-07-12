@@ -69,7 +69,9 @@ describe('SearchApiClient', () => {
     expect(getStream).toHaveBeenCalledTimes(1);
     const addr = getStream.mock.calls[0][0];
     expect(addr.scope).toBe('ds');
-    expect(addr.path).toMatch(/^search\//);
+    expect(addr.path).toMatch(
+      /^search\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    );
 
     const p1 = client.queryLabelKeys(mockTimeRange);
     const r1 = lastPayload().requestId;
@@ -83,6 +85,25 @@ describe('SearchApiClient', () => {
 
     // Still only one subscription despite two searches.
     expect(getStream).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses the authenticated HTTP fallback when a secure channel nonce is unavailable', async () => {
+    const cryptoDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+    Object.defineProperty(globalThis, 'crypto', { configurable: true, value: undefined });
+    try {
+      mockRequest.mockResolvedValueOnce(['label']);
+      const client = new SearchApiClient(mockRequest, makeDatasource());
+
+      expect(getStream).not.toHaveBeenCalled();
+      await expect(client.queryLabelKeys(mockTimeRange)).resolves.toEqual(['label']);
+      expect(publish).not.toHaveBeenCalled();
+    } finally {
+      if (cryptoDescriptor) {
+        Object.defineProperty(globalThis, 'crypto', cryptoDescriptor);
+      } else {
+        Reflect.deleteProperty(globalThis, 'crypto');
+      }
+    }
   });
 
   it('publishes a well-formed payload for label values (label + alpha sort, case-insensitive)', async () => {
