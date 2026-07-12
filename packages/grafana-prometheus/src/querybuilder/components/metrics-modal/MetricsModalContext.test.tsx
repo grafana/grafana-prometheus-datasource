@@ -262,7 +262,13 @@ describe('MetricsModalContext', () => {
       });
 
       // Typed text goes to search[] (3rd arg); label filters become the match selector.
-      expect(searchProvider.searchMetrics).toHaveBeenCalledWith(defaultTimeRange, 'test', '{job="grafana"}');
+      expect(searchProvider.searchMetrics).toHaveBeenCalledWith(
+        defaultTimeRange,
+        'test',
+        '{job="grafana"}',
+        undefined,
+        expect.stringMatching(/^metrics-modal-/)
+      );
       // The legacy regex `__name__=~` match path must not be used for the search term.
       expect(searchProvider.queryLabelValues).not.toHaveBeenCalledWith(
         defaultTimeRange,

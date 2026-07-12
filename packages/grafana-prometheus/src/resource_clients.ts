@@ -352,6 +352,11 @@ function genId(): string {
   return genSecureId() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+/** Creates a stable caller-owned slot ID; call once per mounted autocomplete source. */
+export function createSearchSlotId(prefix: string): string {
+  return `${prefix}-${genId()}`;
+}
+
 /**
  * Extracts the string identifier (`value` for label_values, `name` otherwise) from the
  * raw result records, preserving server order (score/alpha) and de-duplicating.

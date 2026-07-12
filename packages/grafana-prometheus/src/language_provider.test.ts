@@ -383,6 +383,21 @@ describe('PrometheusLanguageProvider', () => {
       Object.defineProperty(provider, '_resourceClient', { value: client, writable: true });
     };
 
+    it('forwards a Promise caller slot ID to isolate mounted widgets', async () => {
+      const provider = new PrometheusLanguageProvider(defaultDatasource);
+      const searchMetricNames = jest.fn().mockReturnValue(of(['up']));
+      setResourceClient(provider, { searchMetricNames });
+
+      await provider.searchMetrics(getMockTimeRange(), 'up', undefined, 25, 'combobox-uuid');
+
+      expect(searchMetricNames).toHaveBeenCalledWith(expect.anything(), {
+        search: 'up',
+        match: undefined,
+        limit: 25,
+        slotId: 'combobox-uuid',
+      });
+    });
+
     it('streamMetrics delegates to a search-capable client and forwards slotId', async () => {
       const provider = new PrometheusLanguageProvider(defaultDatasource);
       const searchMetricNames = jest.fn().mockReturnValue(of(['up', 'go_goroutines']));

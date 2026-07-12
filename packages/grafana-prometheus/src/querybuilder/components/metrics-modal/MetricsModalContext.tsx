@@ -15,6 +15,7 @@ import { type SelectableValue, type TimeRange } from '@grafana/data';
 
 import { METRIC_LABEL, PROMETHEUS_QUERY_BUILDER_MAX_RESULTS } from '../../../constants';
 import { type PrometheusLanguageProviderInterface } from '../../../language_provider';
+import { createSearchSlotId } from '../../../resource_clients';
 import { regexifyLabelValuesQueryString } from '../../parsingUtils';
 import { type QueryBuilderLabelFilter } from '../../shared/types';
 import { formatPrometheusLabelFilters } from '../formatter';
@@ -69,6 +70,7 @@ export const MetricsModalContextProvider: FC<PropsWithChildren<MetricsModalConte
   });
   const [selectedTypes, setSelectedTypes] = useState<Array<SelectableValue<string>>>([]);
   const [searchedText, setSearchedText] = useState('');
+  const searchSlotId = useRef(createSearchSlotId('metrics-modal'));
 
   const filteredMetricsData = useMemo(() => {
     if (selectedTypes.length === 0) {
@@ -155,7 +157,13 @@ export const MetricsModalContextProvider: FC<PropsWithChildren<MetricsModalConte
             // Server-side fuzzy/scored search: route the typed text to `search[]` and let
             // the upstream do ranking — no regex `match[]` injection, no client-side fuzzy.
             const match = filterArray.length ? `{${filterArray.join('').replace(/^,/, '')}}` : undefined;
-            const results = await languageProvider.searchMetrics(timeRange, metricText, match);
+            const results = await languageProvider.searchMetrics(
+              timeRange,
+              metricText,
+              match,
+              undefined,
+              searchSlotId.current
+            );
 
             if (searchId !== latestSearchIdRef.current) {
               return; // Ignore outdated results

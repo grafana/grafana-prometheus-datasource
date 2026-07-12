@@ -6,6 +6,7 @@ import { type TimeRange } from '@grafana/data';
 
 import { EMPTY_SELECTOR, LAST_USED_LABELS_KEY, METRIC_LABEL } from '../../constants';
 import { type PrometheusLanguageProviderInterface } from '../../language_provider';
+import { createSearchSlotId } from '../../resource_clients';
 
 import { type Metric } from './MetricsBrowserContext';
 import { buildSelector } from './selectorBuilder';
@@ -14,6 +15,7 @@ export const useMetricsLabelsValues = (timeRange: TimeRange, languageProvider: P
   const timeRangeRef = useRef<TimeRange>(timeRange);
   const lastSeriesLimitRef = useRef(languageProvider.datasource.seriesLimit);
   const isInitializedRef = useRef(false);
+  const searchSlotIdRef = useRef(createSearchSlotId('metrics-browser'));
 
   const [seriesLimit, setSeriesLimit] = useState(languageProvider.datasource.seriesLimit);
   const [err, setErr] = useState('');
@@ -380,7 +382,7 @@ export const useMetricsLabelsValues = (timeRange: TimeRange, languageProvider: P
         term,
         selector,
         effectiveLimit,
-        'metrics-browser-metrics'
+        `${searchSlotIdRef.current}-metrics`
       );
     },
     [languageProvider, buildSafeSelector, selectedLabelValues, effectiveLimit]
@@ -395,7 +397,7 @@ export const useMetricsLabelsValues = (timeRange: TimeRange, languageProvider: P
         term,
         selector,
         effectiveLimit,
-        'metrics-browser-labelkeys'
+        `${searchSlotIdRef.current}-labelkeys`
       );
     },
     [languageProvider, buildSafeSelector, selectedMetric, selectedLabelValues, effectiveLimit]
@@ -412,7 +414,7 @@ export const useMetricsLabelsValues = (timeRange: TimeRange, languageProvider: P
         term,
         selector,
         effectiveLimit,
-        `metrics-browser-labelvalues-${labelKey}`
+        `${searchSlotIdRef.current}-labelvalues-${labelKey}`
       );
     },
     [languageProvider, buildSafeSelector, selectedMetric, selectedLabelValues, effectiveLimit]

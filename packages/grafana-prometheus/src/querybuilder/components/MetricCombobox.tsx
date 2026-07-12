@@ -1,5 +1,5 @@
 import { css } from '@emotion/css';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 import { type GrafanaTheme2, type SelectableValue, type TimeRange } from '@grafana/data';
 import { selectors } from '@grafana/e2e-selectors';
@@ -9,6 +9,7 @@ import { Button, InlineField, InlineFieldRow, Combobox, type ComboboxOption, use
 
 import { METRIC_LABEL } from '../../constants';
 import { type PrometheusDatasource } from '../../datasource';
+import { createSearchSlotId } from '../../resource_clients';
 import { type QueryBuilderLabelFilter } from '../shared/types';
 import { type PromVisualQuery } from '../types';
 
@@ -37,6 +38,7 @@ export function MetricCombobox({
   timeRange,
 }: Readonly<MetricComboboxProps>) {
   const [metricsModalOpen, setMetricsModalOpen] = useState(false);
+  const searchSlotId = useRef(createSearchSlotId('metric-combobox'));
   const styles = getStyles(useTheme2());
 
   /**
@@ -51,7 +53,7 @@ export function MetricCombobox({
         // Route the typed text to the server-side fuzzy/scored `search[]` instead of
         // regexifying it into `match[]`; keep any label filters as the match context.
         const match = formatLabelFiltersToString(labelsFilters);
-        results = await languageProvider.searchMetrics(timeRange, query, match || undefined);
+        results = await languageProvider.searchMetrics(timeRange, query, match || undefined, undefined, searchSlotId.current);
       } else {
         const match = formatKeyValueStrings(query, labelsFilters);
         results = await languageProvider.queryLabelValues(timeRange, METRIC_LABEL, match);

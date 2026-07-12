@@ -138,10 +138,22 @@ export interface PrometheusLanguageProviderInterface extends PrometheusBaseLangu
    * Returns a Promise resolved with the final result set — suitable for the visual query
    * builder's Promise-based Selects/Comboboxes.
    */
-  searchMetrics: (timeRange: TimeRange, search: string, match?: string, limit?: number) => Promise<string[]>;
+  searchMetrics: (
+    timeRange: TimeRange,
+    search: string,
+    match?: string,
+    limit?: number,
+    slotId?: string
+  ) => Promise<string[]>;
 
   /** Server-side search for label names. See {@link searchMetrics}. */
-  searchLabelKeys: (timeRange: TimeRange, search: string, match?: string, limit?: number) => Promise<string[]>;
+  searchLabelKeys: (
+    timeRange: TimeRange,
+    search: string,
+    match?: string,
+    limit?: number,
+    slotId?: string
+  ) => Promise<string[]>;
 
   /** Server-side search for label values of a given key. See {@link searchMetrics}. */
   searchLabelValues: (
@@ -149,7 +161,8 @@ export interface PrometheusLanguageProviderInterface extends PrometheusBaseLangu
     labelKey: string,
     search: string,
     match?: string,
-    limit?: number
+    limit?: number,
+    slotId?: string
   ) => Promise<string[]>;
 
   /**
@@ -394,12 +407,13 @@ export class PrometheusLanguageProvider implements PrometheusLanguageProviderInt
     timeRange: TimeRange,
     search: string,
     match?: string,
-    limit?: number
+    limit?: number,
+    slotId?: string
   ): Promise<string[]> => {
     const client = this.resourceClient;
     const interpolatedMatch = match ? this.datasource.interpolateString(match) : match;
     if (isSearchCapableClient(client)) {
-      return lastValueFrom(client.searchMetricNames(timeRange, { search, match: interpolatedMatch, limit }), {
+      return lastValueFrom(client.searchMetricNames(timeRange, { search, match: interpolatedMatch, limit, slotId }), {
         defaultValue: [],
       });
     }
@@ -412,12 +426,13 @@ export class PrometheusLanguageProvider implements PrometheusLanguageProviderInt
     timeRange: TimeRange,
     search: string,
     match?: string,
-    limit?: number
+    limit?: number,
+    slotId?: string
   ): Promise<string[]> => {
     const client = this.resourceClient;
     const interpolatedMatch = match ? this.datasource.interpolateString(match) : match;
     if (isSearchCapableClient(client)) {
-      return lastValueFrom(client.searchLabelNames(timeRange, { search, match: interpolatedMatch, limit }), {
+      return lastValueFrom(client.searchLabelNames(timeRange, { search, match: interpolatedMatch, limit, slotId }), {
         defaultValue: [],
       });
     }
@@ -429,15 +444,17 @@ export class PrometheusLanguageProvider implements PrometheusLanguageProviderInt
     labelKey: string,
     search: string,
     match?: string,
-    limit?: number
+    limit?: number,
+    slotId?: string
   ): Promise<string[]> => {
     const client = this.resourceClient;
     const interpolatedMatch = match ? this.datasource.interpolateString(match) : match;
     const interpolatedKey = this.datasource.interpolateString(labelKey);
     if (isSearchCapableClient(client)) {
-      return lastValueFrom(client.searchLabelValues(timeRange, interpolatedKey, { search, match: interpolatedMatch, limit }), {
-        defaultValue: [],
-      });
+      return lastValueFrom(
+        client.searchLabelValues(timeRange, interpolatedKey, { search, match: interpolatedMatch, limit, slotId }),
+        { defaultValue: [] }
+      );
     }
     return client.queryLabelValues(timeRange, interpolatedKey, interpolatedMatch, limit);
   };
