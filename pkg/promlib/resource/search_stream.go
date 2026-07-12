@@ -138,8 +138,12 @@ func (r *Resource) StreamSearch(ctx context.Context, endpoint string, params url
 			// trailing bytes (if any) are processed below after the loop check.
 			if readErr == nil {
 				lineNumber++
-				if err := emitLine(pending, lineNumber, onLine); err != nil {
+				terminal, err := emitLine(pending, lineNumber, onLine)
+				if err != nil {
 					return err
+				}
+				if terminal {
+					return nil
 				}
 				pending = pending[:0]
 			}
@@ -151,7 +155,8 @@ func (r *Resource) StreamSearch(ctx context.Context, endpoint string, params url
 				// EOF (no trailer) as a clean completion.
 				if len(bytes.TrimSpace(pending)) > 0 {
 					lineNumber++
-					if err := emitLine(pending, lineNumber, onLine); err != nil {
+					_, err := emitLine(pending, lineNumber, onLine)
+					if err != nil {
 						return err
 					}
 				}
@@ -165,14 +170,17 @@ func (r *Resource) StreamSearch(ctx context.Context, endpoint string, params url
 // emitLine decodes a single NDJSON line and forwards it to onLine. Blank lines are
 // skipped; malformed JSON terminates the read with its physical line number so callers
 // can retain already-delivered batches while surfacing incomplete results.
-func emitLine(line []byte, lineNumber int, onLine func(SearchLine) error) error {
+func emitLine(line []byte, lineNumber int, onLine func(SearchLine) error) (bool, error) {
 	trimmed := bytes.TrimSpace(line)
 	if len(trimmed) == 0 {
-		return nil
+		return false, nil
 	}
 	var sl SearchLine
 	if err := json.Unmarshal(trimmed, &sl); err != nil {
-		return fmt.Errorf("invalid search NDJSON at line %d: %w", lineNumber, err)
+		return false, fmt.Errorf("invalid search NDJSON at line %d: %w", lineNumber, err)
 	}
-	return onLine(sl)
+	if err := onLine(sl); err != nil {
+		return false, err
+	}
+	return sl.IsTerminal(), nil
 }

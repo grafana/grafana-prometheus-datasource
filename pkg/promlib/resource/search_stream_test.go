@@ -112,6 +112,44 @@ func TestStreamSearch_MidStreamError(t *testing.T) {
 	assert.Equal(t, "internal", lines[1].ErrType)
 }
 
+func TestStreamSearch_ReturnsImmediatelyAfterTerminalLine(t *testing.T) {
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		flusher := w.(http.Flusher)
+		_, _ = w.Write([]byte(`{"status":"success"}` + "\n"))
+		flusher.Flush()
+		<-release
+		_, _ = w.Write([]byte(`{"results":[{"name":"too-late"}]}` + "\n"))
+	}))
+
+	r := newSearchResource(t, srv.URL)
+	result := make(chan struct {
+		lines []resource.SearchLine
+		err   error
+	}, 1)
+	go func() {
+		lines, err := collectLines(t, r, context.Background(), resource.SearchMetricNames, url.Values{})
+		result <- struct {
+			lines []resource.SearchLine
+			err   error
+		}{lines: lines, err: err}
+	}()
+
+	select {
+	case got := <-result:
+		require.NoError(t, got.err)
+		require.Len(t, got.lines, 1)
+		assert.True(t, got.lines[0].IsTerminal())
+	case <-time.After(time.Second):
+		close(release)
+		srv.Close()
+		t.Fatal("StreamSearch waited for data after the terminal line")
+	}
+
+	close(release)
+	srv.Close()
+}
+
 func TestStreamSearch_PreStreamHTTPError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
