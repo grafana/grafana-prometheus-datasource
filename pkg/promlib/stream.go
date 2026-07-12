@@ -23,9 +23,8 @@ import (
 // session/datasource-client so frames never leak between org-mates.
 var searchChannelPattern = regexp.MustCompile(`^search/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
-// mailboxBuffer is the buffered capacity of each per-channel mailbox. A small buffer
-// absorbs the startup race (a publish arriving before RunStream's select loop is ready)
-// without unbounded growth; under fast typing PublishStream applies latest-wins drop.
+// mailboxBuffer bounds distinct slots pending in each channel. A small buffer absorbs
+// the startup race without unbounded growth; repeated work for one slot is coalesced.
 const mailboxBuffer = 8
 
 // streamOutputBuffer bounds responses waiting for the single StreamSender writer.
@@ -200,9 +199,8 @@ func (s *Service) SubscribeStream(_ context.Context, req *backend.SubscribeStrea
 
 // PublishStream validates a client->server publish and pushes it to the channel's
 // mailbox. Core applies no admin gate on this path, so the endpoint allowlist and
-// payload validation are our responsibility. Sends are non-blocking with latest-wins
-// drop: if the buffer is full the oldest pending request is discarded in favor of the
-// newest, matching the "supersede stale params" intent.
+// payload validation are our responsibility. Sends are non-blocking and pending work is
+// coalesced only within the same slot, so one hot widget cannot evict another.
 func (s *Service) PublishStream(_ context.Context, req *backend.PublishStreamRequest) (*backend.PublishStreamResponse, error) {
 	if !searchAPIEnabled(req.PluginContext) {
 		return &backend.PublishStreamResponse{Status: backend.PublishStreamStatusPermissionDenied}, nil

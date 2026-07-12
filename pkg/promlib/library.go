@@ -27,9 +27,9 @@ type Service struct {
 
 	// mailboxes bridges PublishStream (producer) and RunStream (consumer) for the
 	// persistent per-session search channels. Keyed by channel path
-	// (search/<sessionNonce>); each value is a buffered Go channel so a publish that
-	// races ahead of RunStream's select loop is not lost. A Service is created per
-	// datasource instance, so this map is already isolated by datasource and tenant.
+	// (search/<sessionNonce>); each value coalesces bounded pending work per slot. A
+	// Service is created per datasource instance, so this map is already isolated by
+	// datasource and tenant.
 	mailboxesMu sync.Mutex
 	mailboxes   map[string]*searchMailbox
 
