@@ -30,7 +30,7 @@ type Service struct {
 	// races ahead of RunStream's select loop is not lost. A Service is created per
 	// datasource instance, so this map is already isolated by datasource and tenant.
 	mailboxesMu sync.Mutex
-	mailboxes   map[string]chan publishMsg
+	mailboxes   map[string]*searchMailbox
 }
 
 type instance struct {
@@ -48,7 +48,7 @@ func NewService(httpClientProvider *sdkhttpclient.Provider, plog log.Logger, ext
 	return &Service{
 		im:        datasource.NewInstanceManager(newInstanceSettings(httpClientProvider, plog, extendOptions)),
 		logger:    plog,
-		mailboxes: make(map[string]chan publishMsg),
+		mailboxes: make(map[string]*searchMailbox),
 	}
 }
 
@@ -60,7 +60,7 @@ func (s *Service) Dispose() {
 	s.logger.Debug("Disposing the instance...")
 	// Drop any per-instance search mailbox state; the replacement instance gets a fresh map.
 	s.mailboxesMu.Lock()
-	s.mailboxes = make(map[string]chan publishMsg)
+	s.mailboxes = make(map[string]*searchMailbox)
 	s.mailboxesMu.Unlock()
 }
 

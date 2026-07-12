@@ -208,36 +208,33 @@ func TestPublishStream_Validation(t *testing.T) {
 	assert.Equal(t, backend.PublishStreamStatusOK, resp.Status)
 
 	mb, _ := svc.getMailbox(validSearchPath)
-	select {
-	case msg := <-mb:
+	if msg, ok := mb.next(); ok {
 		assert.Equal(t, "r1", msg.requestID)
 		assert.Equal(t, resource.SearchMetricNames, msg.endpoint)
 		assert.Equal(t, "up", msg.params.Get("search[]"))
-	default:
+	} else {
 		t.Fatal("expected message in mailbox")
 	}
 }
 
-func TestEnqueue_LatestWins(t *testing.T) {
-	mb := make(chan publishMsg, mailboxBuffer)
-	// Overfill the buffer.
+func TestEnqueue_CoalescesWithoutEvictingOtherSlots(t *testing.T) {
+	mb := newSearchMailbox()
+	enqueue(mb, publishMsg{requestID: "unrelated", slotID: "other"})
 	for i := 0; i < mailboxBuffer+5; i++ {
-		enqueue(mb, publishMsg{requestID: "old"})
+		enqueue(mb, publishMsg{requestID: fmt.Sprintf("hot-%d", i), slotID: "hot"})
 	}
-	enqueue(mb, publishMsg{requestID: "newest"})
 
-	// Drain and ensure the newest is present and we never blocked.
-	found := false
+	foundUnrelated := false
+	foundNewest := false
 	for {
-		select {
-		case msg := <-mb:
-			if msg.requestID == "newest" {
-				found = true
-			}
-		default:
-			assert.True(t, found, "newest message should survive latest-wins drop")
+		msg, ok := mb.next()
+		if !ok {
+			assert.True(t, foundUnrelated, "a hot slot must not evict another slot")
+			assert.True(t, foundNewest, "the hot slot should retain its newest request")
 			return
 		}
+		foundUnrelated = foundUnrelated || msg.requestID == "unrelated"
+		foundNewest = foundNewest || msg.requestID == fmt.Sprintf("hot-%d", mailboxBuffer+4)
 	}
 }
 

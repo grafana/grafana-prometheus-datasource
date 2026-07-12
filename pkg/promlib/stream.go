@@ -55,6 +55,25 @@ type publishPayload struct {
 	Params    map[string][]string `json:"params"`
 }
 
+type searchMailbox struct {
+	mu      sync.Mutex
+	pending map[string]publishMsg
+	order   []string
+	wake    chan struct{}
+}
+
+func newSearchMailbox() *searchMailbox {
+	return &searchMailbox{
+		pending: make(map[string]publishMsg),
+		order:   make([]string, 0, mailboxBuffer),
+		wake:    make(chan struct{}, 1),
+	}
+}
+
+func publishSlotKey(msg publishMsg) string {
+	return msg.endpoint + "|" + msg.slotID
+}
+
 // responseEnvelope is the wire shape sent back to the frontend for every line, tagged
 // with the originating requestId (and slotId) so the client can correlate and discard
 // stale frames.
@@ -73,19 +92,19 @@ type responseEnvelope struct {
 
 // createMailbox returns the buffered mailbox for path, creating it if necessary. It is
 // idempotent so reconnects (Subscribe again) reuse the existing channel.
-func (s *Service) createMailbox(path string) chan publishMsg {
+func (s *Service) createMailbox(path string) *searchMailbox {
 	s.mailboxesMu.Lock()
 	defer s.mailboxesMu.Unlock()
 	if mb, ok := s.mailboxes[path]; ok {
 		return mb
 	}
-	mb := make(chan publishMsg, mailboxBuffer)
+	mb := newSearchMailbox()
 	s.mailboxes[path] = mb
 	return mb
 }
 
 // getMailbox returns the mailbox for path if it exists.
-func (s *Service) getMailbox(path string) (chan publishMsg, bool) {
+func (s *Service) getMailbox(path string) (*searchMailbox, bool) {
 	s.mailboxesMu.Lock()
 	defer s.mailboxesMu.Unlock()
 	mb, ok := s.mailboxes[path]
@@ -150,28 +169,51 @@ func (s *Service) PublishStream(_ context.Context, req *backend.PublishStreamReq
 		params:    url.Values(payload.Params),
 	}
 
-	enqueue(mb, msg)
+	if !enqueue(mb, msg) {
+		return &backend.PublishStreamResponse{Status: backend.PublishStreamStatusPermissionDenied}, nil
+	}
 	return &backend.PublishStreamResponse{Status: backend.PublishStreamStatusOK}, nil
 }
 
-// enqueue pushes msg without blocking. If the mailbox is full it drops one buffered
-// message to make room (latest-wins), so a burst of keystrokes can never block the
-// publish path.
-func enqueue(mb chan publishMsg, msg publishMsg) {
+// enqueue keeps at most one pending request per slot. A hot slot replaces only its own
+// pending work and can never evict an unrelated slot.
+func enqueue(mb *searchMailbox, msg publishMsg) bool {
+	key := publishSlotKey(msg)
+	mb.mu.Lock()
+	if _, exists := mb.pending[key]; !exists {
+		if len(mb.pending) >= mailboxBuffer {
+			mb.mu.Unlock()
+			return false
+		}
+		mb.order = append(mb.order, key)
+	}
+	mb.pending[key] = msg
+	mb.mu.Unlock()
+
 	select {
-	case mb <- msg:
-		return
+	case mb.wake <- struct{}{}:
 	default:
 	}
-	// Full: drop one and retry once.
-	select {
-	case <-mb:
-	default:
+	return true
+}
+
+func (mb *searchMailbox) next() (publishMsg, bool) {
+	mb.mu.Lock()
+	defer mb.mu.Unlock()
+	if len(mb.order) == 0 {
+		return publishMsg{}, false
 	}
-	select {
-	case mb <- msg:
-	default:
+	key := mb.order[0]
+	mb.order = mb.order[1:]
+	msg := mb.pending[key]
+	delete(mb.pending, key)
+	if len(mb.order) > 0 {
+		select {
+		case mb.wake <- struct{}{}:
+		default:
+		}
 	}
+	return msg, true
 }
 
 // RunStream is the long-lived per-channel loop. It idles on the mailbox; for each
@@ -229,8 +271,12 @@ func (s *Service) RunStream(ctx context.Context, req *backend.RunStreamRequest, 
 			default:
 				return runCtx.Err()
 			}
-		case msg := <-mb:
-			slotKey := msg.endpoint + "|" + msg.slotID
+		case <-mb.wake:
+			msg, ok := mb.next()
+			if !ok {
+				continue
+			}
+			slotKey := publishSlotKey(msg)
 			if cancel, ok := slotCancels[slotKey]; ok {
 				// cancel-previous, scoped to this slot only.
 				cancel()
