@@ -101,6 +101,9 @@ export interface PrometheusLanguageProviderInterface extends PrometheusBaseLangu
    */
   retrieveLabelKeys: () => string[];
 
+  /** Releases owned Live subscriptions and cached transport clients. */
+  dispose: () => void;
+
   /**
    * Fetches fresh metrics metadata from Prometheus with optional limit.
    * Uses datasource's default limit if not specified.
@@ -324,6 +327,11 @@ export class PrometheusLanguageProvider implements PrometheusLanguageProviderInt
    */
   public retrieveLabelKeys = (): string[] => {
     return this.resourceClient?.labelKeys;
+  };
+
+  public dispose = (): void => {
+    this._resourceClient?.dispose?.();
+    this._resourceClient = undefined;
   };
 
   /**

@@ -36,6 +36,7 @@ export interface ResourceApiClient {
   cachedLabelValues: Record<string, string[]>;
 
   start: (timeRange: TimeRange) => Promise<void>;
+  dispose?: () => void;
 
   queryMetrics: (timeRange: TimeRange) => Promise<{ metrics: string[]; histogramMetrics: string[] }>;
   queryLabelKeys: (timeRange: TimeRange, match?: string, limit?: number) => Promise<string[]>;

@@ -160,6 +160,10 @@ export class PrometheusDatasource
     this.exemplarsAvailable = await this.areExemplarsAvailable();
   };
 
+  destroy(): void {
+    this.languageProvider.dispose();
+  }
+
   /**
    * Loads recording rules from the Prometheus API and extracts rule mappings.
    *

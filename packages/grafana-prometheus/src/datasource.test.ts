@@ -124,6 +124,17 @@ describe('PrometheusDatasource', () => {
     expect(forwardedCookieDatasource.hasSearchApiSupport()).toBe(false);
   });
 
+  it('disposes language-provider resources when the datasource is destroyed', () => {
+    const dispose = jest.fn();
+    const lifecycleDatasource = new PrometheusDatasource(instanceSettings, templateSrvStub, {
+      dispose,
+    } as unknown as PrometheusLanguageProviderInterface);
+
+    lifecycleDatasource.destroy();
+
+    expect(dispose).toHaveBeenCalledTimes(1);
+  });
+
   describe('Query', () => {
     it('throws if using direct access', async () => {
       const instanceSettings = {
