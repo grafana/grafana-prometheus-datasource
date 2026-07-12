@@ -188,9 +188,9 @@ describe('SearchApiClient', () => {
     client.searchMetricNames(mockTimeRange, { search: 'up' }).subscribe();
     expect(lastPayload().params.limit).toEqual(['10000']);
 
-    // 0 keeps its "unlimited" meaning.
+    // Unlimited semantics are rejected for interactive multi-tenant search.
     client.searchMetricNames(mockTimeRange, { search: 'up', limit: 0 }).subscribe();
-    expect(lastPayload().params.limit).toEqual(['0']);
+    expect(lastPayload().params.limit).toEqual(['10000']);
   });
 
   it('uses score sort + search[] + fuzz params when a search term is present', () => {
@@ -239,6 +239,21 @@ describe('SearchApiClient', () => {
 
     const result = await p;
     expect(result.metrics).toEqual(['partial_metric']);
+  });
+
+  it('does not cache a partial response terminated by an error', async () => {
+    const client = new SearchApiClient(mockRequest, makeDatasource());
+    const first = client.queryLabelKeys(mockTimeRange);
+    const firstRequestId = lastPayload().requestId;
+    stream$.next(messageEvent({ requestId: firstRequestId, type: 'batch', results: [{ name: 'partial' }] }));
+    stream$.next(messageEvent({ requestId: firstRequestId, type: 'error', error: 'failed' }));
+    await expect(first).resolves.toEqual(['partial']);
+
+    const second = client.queryLabelKeys(mockTimeRange);
+    const secondRequestId = lastPayload().requestId;
+    expect(secondRequestId).not.toBe(firstRequestId);
+    stream$.next(messageEvent({ requestId: secondRequestId, type: 'terminal' }));
+    await second;
   });
 
   it('emits accumulating results progressively then completes on the terminal frame', () => {

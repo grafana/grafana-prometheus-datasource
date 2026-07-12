@@ -534,15 +534,15 @@ export class SearchApiClient extends BaseResourceClient implements SearchCapable
   /**
    * Caps the limit sent to the streaming search API. Suggestions are scored/fuzzy, so we
    * never request more than SEARCH_API_DEFAULTS.limit (10000), even when a caller passes
-   * the larger series limit (DEFAULT_SERIES_LIMIT=40000). `0` means unlimited and is
-   * preserved; an explicit smaller limit is honored as-is.
+   * the larger series limit (DEFAULT_SERIES_LIMIT=40000). Unlimited (`0`) is replaced
+   * with the bounded default; an explicit smaller positive limit is honored as-is.
    */
   private clampSearchLimit(limit?: number): number {
     if (limit === undefined) {
       return SEARCH_API_DEFAULTS.limit;
     }
-    if (limit === 0) {
-      return 0;
+    if (limit <= 0) {
+      return SEARCH_API_DEFAULTS.limit;
     }
     return Math.min(limit, SEARCH_API_DEFAULTS.limit);
   }
@@ -574,8 +574,8 @@ export class SearchApiClient extends BaseResourceClient implements SearchCapable
     add('batch_size', SEARCH_API_DEFAULTS.batchSize);
     // Streaming search returns scored autocomplete suggestions, so it is clamped to
     // SEARCH_API_DEFAULTS.limit (10000) — it must never request the larger series limit
-    // (DEFAULT_SERIES_LIMIT=40000) that callers commonly pass. `0` keeps its "unlimited"
-    // meaning and is passed through unchanged.
+    // (DEFAULT_SERIES_LIMIT=40000) that callers commonly pass. Unlimited (`0`) is
+    // replaced with the bounded search default.
     add('limit', this.clampSearchLimit(opts.limit));
 
     const term = opts.search?.trim();
@@ -606,14 +606,14 @@ export class SearchApiClient extends BaseResourceClient implements SearchCapable
     params: Record<string, string[]>,
     slotId: string,
     fallback: () => Promise<string[]>
-  ): Promise<string[]> {
-    return new Promise<string[]>((resolve) => {
+  ): Promise<{ values: string[]; successfulTerminal: boolean }> {
+    return new Promise<{ values: string[]; successfulTerminal: boolean }>((resolve) => {
       const requestId = genId();
       const acc: string[] = [];
       const seen = new Set<string>();
       let settled = false;
 
-      const finish = (values = acc) => {
+      const finish = (values = acc, successfulTerminal = false) => {
         if (settled) {
           return;
         }
@@ -621,14 +621,14 @@ export class SearchApiClient extends BaseResourceClient implements SearchCapable
         clearTimeout(timer);
         sub.unsubscribe();
         failureSub.unsubscribe();
-        resolve(values);
+        resolve({ values, successfulTerminal });
       };
       const fallbackAndFinish = () => {
         if (settled) {
           return;
         }
         fallback()
-          .then(finish)
+          .then((values) => finish(values, true))
           .catch(() => finish([]));
       };
 
@@ -636,7 +636,7 @@ export class SearchApiClient extends BaseResourceClient implements SearchCapable
         if (frame.type === 'batch') {
           extractSearchValues(endpoint, frame.results, acc, seen);
         } else if (frame.type === 'terminal') {
-          finish();
+          finish(acc, true);
         } else {
           finish();
         }
@@ -752,9 +752,10 @@ export class SearchApiClient extends BaseResourceClient implements SearchCapable
       return res;
     }
     const params = this.buildParams({ timeParams: getRangeSnapInterval(this.datasource.cacheLevel, timeRange), limit });
-    this.metrics = await this.runSearchPromise(SEARCH_ENDPOINTS.metricNames, params, 'metrics', () =>
+    const result = await this.runSearchPromise(SEARCH_ENDPOINTS.metricNames, params, 'metrics', () =>
       this._fallback.queryMetrics(timeRange).then((result) => result.metrics)
     );
+    this.metrics = result.values;
     this.histogramMetrics = processHistogramMetrics(this.metrics);
     return { metrics: this.metrics, histogramMetrics: this.histogramMetrics };
   };
@@ -763,7 +764,7 @@ export class SearchApiClient extends BaseResourceClient implements SearchCapable
     if (this.useFallback) {
       return this._fallback.queryLabelKeys(timeRange, match, limit);
     }
-    const effectiveLimit = this.getEffectiveLimit(limit);
+    const effectiveLimit = this.clampSearchLimit(limit);
     const effectiveMatch = match ?? '';
     const cached = this._cache.getLabelKeys(timeRange, effectiveMatch, effectiveLimit);
     if (cached) {
@@ -774,11 +775,14 @@ export class SearchApiClient extends BaseResourceClient implements SearchCapable
       match,
       limit,
     });
-    const keys = await this.runSearchPromise(SEARCH_ENDPOINTS.labelNames, params, 'labelKeys', () =>
+    const result = await this.runSearchPromise(SEARCH_ENDPOINTS.labelNames, params, 'labelKeys', () =>
       this._fallback.queryLabelKeys(timeRange, match, limit)
     );
+    const keys = result.values;
     this.labelKeys = keys.slice();
-    this._cache.setLabelKeys(timeRange, effectiveMatch, effectiveLimit, this.labelKeys);
+    if (result.successfulTerminal) {
+      this._cache.setLabelKeys(timeRange, effectiveMatch, effectiveLimit, this.labelKeys);
+    }
     return keys;
   };
 
@@ -791,7 +795,7 @@ export class SearchApiClient extends BaseResourceClient implements SearchCapable
     if (this.useFallback) {
       return this._fallback.queryLabelValues(timeRange, labelKey, match, limit);
     }
-    const effectiveLimit = this.getEffectiveLimit(limit);
+    const effectiveLimit = this.clampSearchLimit(limit);
     const label = removeQuotesIfExist(this.datasource.interpolateString(labelKey));
     const effectiveMatch = `${match ?? ''}-${label}`;
     const cached = this._cache.getLabelValues(timeRange, effectiveMatch, effectiveLimit);
@@ -804,10 +808,13 @@ export class SearchApiClient extends BaseResourceClient implements SearchCapable
       label,
       limit,
     });
-    const values = await this.runSearchPromise(SEARCH_ENDPOINTS.labelValues, params, `labelValues-${label}`, () =>
+    const result = await this.runSearchPromise(SEARCH_ENDPOINTS.labelValues, params, `labelValues-${label}`, () =>
       this._fallback.queryLabelValues(timeRange, labelKey, match, limit)
     );
-    this._cache.setLabelValues(timeRange, effectiveMatch, effectiveLimit, values);
+    const values = result.values;
+    if (result.successfulTerminal) {
+      this._cache.setLabelValues(timeRange, effectiveMatch, effectiveLimit, values);
+    }
     return values;
   };
 
