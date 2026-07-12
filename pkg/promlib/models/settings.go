@@ -45,6 +45,7 @@ type PromOptions struct {
 	IncrementalQueryOverlapWindow string                       `json:"incrementalQueryOverlapWindow"`
 	DisableRecordingRules         bool                         `json:"disableRecordingRules"`
 	OauthPassThru                 bool                         `json:"oauthPassThru"`
+	KeepCookies                   []string                     `json:"keepCookies"`
 	EnableSearchAPI               bool                         `json:"enableSearchApi"`
 	SeriesEndpoint                bool                         `json:"seriesEndpoint"`
 	SeriesLimit                   *int64                       `json:"seriesLimit"`

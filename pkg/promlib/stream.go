@@ -555,7 +555,12 @@ func searchAPIEnabled(pluginContext backend.PluginContext) bool {
 		return false
 	}
 	options, err := models.ParsePromOptions(*pluginContext.DataSourceInstanceSettings)
-	return err == nil && options.EnableSearchAPI
+	if err != nil || !options.EnableSearchAPI {
+		return false
+	}
+	// Stream requests carry no per-user headers, so forwarded-auth datasources must
+	// stay on the authenticated HTTP path.
+	return !options.OauthPassThru && len(options.KeepCookies) == 0
 }
 
 // runSearch executes a single upstream search read and forwards frames. It guarantees a

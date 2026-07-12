@@ -199,6 +199,70 @@ func TestStreamHandlers_RejectRequestsWhenSearchAPIIsDisabled(t *testing.T) {
 	}
 }
 
+func TestStreamHandlers_RejectOAuthPassThruDatasource(t *testing.T) {
+	svc := newTestService()
+	pluginContext := backend.PluginContext{
+		DataSourceInstanceSettings: &backend.DataSourceInstanceSettings{
+			JSONData: []byte(`{"enableSearchApi":true,"oauthPassThru":true}`),
+		},
+	}
+
+	subscribe, err := svc.SubscribeStream(context.Background(), &backend.SubscribeStreamRequest{
+		Path:          validSearchPath,
+		PluginContext: pluginContext,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, backend.SubscribeStreamStatusNotFound, subscribe.Status)
+
+	svc.createMailbox(validSearchPath, testRequesterIdentity())
+	publish, err := svc.PublishStream(context.Background(), &backend.PublishStreamRequest{
+		Path:          validSearchPath,
+		PluginContext: pluginContext,
+		Data:          mustJSON(publishPayload{RequestID: "r1", Endpoint: resource.SearchMetricNames}),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, backend.PublishStreamStatusPermissionDenied, publish.Status)
+
+	runErr := svc.RunStream(context.Background(), &backend.RunStreamRequest{
+		Path:          validSearchPath,
+		PluginContext: pluginContext,
+	}, backend.NewStreamSender(&recordingSender{}))
+	require.Error(t, runErr)
+	assert.Contains(t, runErr.Error(), "disabled")
+}
+
+func TestStreamHandlers_RejectKeepCookiesDatasource(t *testing.T) {
+	svc := newTestService()
+	pluginContext := backend.PluginContext{
+		DataSourceInstanceSettings: &backend.DataSourceInstanceSettings{
+			JSONData: []byte(`{"enableSearchApi":true,"keepCookies":["session"]}`),
+		},
+	}
+
+	subscribe, err := svc.SubscribeStream(context.Background(), &backend.SubscribeStreamRequest{
+		Path:          validSearchPath,
+		PluginContext: pluginContext,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, backend.SubscribeStreamStatusNotFound, subscribe.Status)
+
+	svc.createMailbox(validSearchPath, testRequesterIdentity())
+	publish, err := svc.PublishStream(context.Background(), &backend.PublishStreamRequest{
+		Path:          validSearchPath,
+		PluginContext: pluginContext,
+		Data:          mustJSON(publishPayload{RequestID: "r1", Endpoint: resource.SearchMetricNames}),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, backend.PublishStreamStatusPermissionDenied, publish.Status)
+
+	runErr := svc.RunStream(context.Background(), &backend.RunStreamRequest{
+		Path:          validSearchPath,
+		PluginContext: pluginContext,
+	}, backend.NewStreamSender(&recordingSender{}))
+	require.Error(t, runErr)
+	assert.Contains(t, runErr.Error(), "disabled")
+}
+
 func TestPublishStream_Validation(t *testing.T) {
 	svc := newTestService()
 	svc.createMailbox(validSearchPath, testRequesterIdentity())
