@@ -157,6 +157,22 @@ func TestStreamSearch_TrailingLineWithoutNewline(t *testing.T) {
 	assert.True(t, lines[1].IsTerminal())
 }
 
+func TestStreamSearch_MalformedLineReturnsNumberedErrorAfterPartialResults(t *testing.T) {
+	body := `{"results":[{"name":"valid"}]}` + "\n" + `{"results":invalid}` + "\n"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(body))
+	}))
+	defer srv.Close()
+
+	r := newSearchResource(t, srv.URL)
+	lines, err := collectLines(t, r, context.Background(), resource.SearchMetricNames, url.Values{})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "line 2")
+	require.Len(t, lines, 1)
+	require.Len(t, lines[0].Results, 1)
+}
+
 func TestStreamSearch_LargeLineAndBlankLines(t *testing.T) {
 	// A single very large line (bigger than the 64KiB read buffer) plus blank lines
 	// that must be skipped.

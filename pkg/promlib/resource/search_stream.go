@@ -120,6 +120,7 @@ func (r *Resource) StreamSearch(ctx context.Context, endpoint string, params url
 
 	reader := bufio.NewReaderSize(resp.Body, 64*1024)
 	var pending []byte // accumulates a single (possibly chunked, possibly large) line
+	lineNumber := 0
 	for {
 		select {
 		case <-ctx.Done():
@@ -136,7 +137,8 @@ func (r *Resource) StreamSearch(ctx context.Context, endpoint string, params url
 			// A complete line is one terminated by '\n' (readErr == nil). On EOF the
 			// trailing bytes (if any) are processed below after the loop check.
 			if readErr == nil {
-				if err := emitLine(pending, onLine); err != nil {
+				lineNumber++
+				if err := emitLine(pending, lineNumber, onLine); err != nil {
 					return err
 				}
 				pending = pending[:0]
@@ -148,7 +150,8 @@ func (r *Resource) StreamSearch(ctx context.Context, endpoint string, params url
 				// Process any trailing line without a newline, then treat the abrupt
 				// EOF (no trailer) as a clean completion.
 				if len(bytes.TrimSpace(pending)) > 0 {
-					if err := emitLine(pending, onLine); err != nil {
+					lineNumber++
+					if err := emitLine(pending, lineNumber, onLine); err != nil {
 						return err
 					}
 				}
@@ -160,16 +163,16 @@ func (r *Resource) StreamSearch(ctx context.Context, endpoint string, params url
 }
 
 // emitLine decodes a single NDJSON line and forwards it to onLine. Blank lines are
-// skipped; malformed JSON lines are skipped silently so a single bad line cannot abort
-// an otherwise-valid stream.
-func emitLine(line []byte, onLine func(SearchLine) error) error {
+// skipped; malformed JSON terminates the read with its physical line number so callers
+// can retain already-delivered batches while surfacing incomplete results.
+func emitLine(line []byte, lineNumber int, onLine func(SearchLine) error) error {
 	trimmed := bytes.TrimSpace(line)
 	if len(trimmed) == 0 {
 		return nil
 	}
 	var sl SearchLine
 	if err := json.Unmarshal(trimmed, &sl); err != nil {
-		return nil
+		return fmt.Errorf("invalid search NDJSON at line %d: %w", lineNumber, err)
 	}
 	return onLine(sl)
 }
