@@ -11,6 +11,7 @@ import (
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 
+	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/models"
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/resource"
 )
 
@@ -102,6 +103,9 @@ func (s *Service) removeMailbox(path string) {
 // only enforce the channel/endpoint allowlist (no arbitrary upstream paths -> no SSRF)
 // and create the buffered mailbox before the first publish can arrive.
 func (s *Service) SubscribeStream(_ context.Context, req *backend.SubscribeStreamRequest) (*backend.SubscribeStreamResponse, error) {
+	if !searchAPIEnabled(req.PluginContext) {
+		return &backend.SubscribeStreamResponse{Status: backend.SubscribeStreamStatusNotFound}, nil
+	}
 	if !strings.HasPrefix(req.Path, searchChannelPrefix) {
 		return &backend.SubscribeStreamResponse{Status: backend.SubscribeStreamStatusNotFound}, nil
 	}
@@ -115,6 +119,9 @@ func (s *Service) SubscribeStream(_ context.Context, req *backend.SubscribeStrea
 // drop: if the buffer is full the oldest pending request is discarded in favor of the
 // newest, matching the "supersede stale params" intent.
 func (s *Service) PublishStream(_ context.Context, req *backend.PublishStreamRequest) (*backend.PublishStreamResponse, error) {
+	if !searchAPIEnabled(req.PluginContext) {
+		return &backend.PublishStreamResponse{Status: backend.PublishStreamStatusPermissionDenied}, nil
+	}
 	if !strings.HasPrefix(req.Path, searchChannelPrefix) {
 		return &backend.PublishStreamResponse{Status: backend.PublishStreamStatusPermissionDenied}, nil
 	}
@@ -169,6 +176,9 @@ func enqueue(mb chan publishMsg, msg publishMsg) {
 // (endpoint + slotId), then runs the upstream NDJSON read in a bounded goroutine,
 // forwarding requestId-tagged frames. Independent slots run concurrently.
 func (s *Service) RunStream(ctx context.Context, req *backend.RunStreamRequest, sender *backend.StreamSender) error {
+	if !searchAPIEnabled(req.PluginContext) {
+		return errors.New("search API streaming is disabled for this datasource")
+	}
 	mb := s.createMailbox(req.Path)
 	defer s.removeMailbox(req.Path)
 
@@ -209,6 +219,14 @@ func (s *Service) RunStream(ctx context.Context, req *backend.RunStreamRequest, 
 			}(msg, reqCtx, cancel)
 		}
 	}
+}
+
+func searchAPIEnabled(pluginContext backend.PluginContext) bool {
+	if pluginContext.DataSourceInstanceSettings == nil {
+		return false
+	}
+	options, err := models.ParsePromOptions(*pluginContext.DataSourceInstanceSettings)
+	return err == nil && options.EnableSearchAPI
 }
 
 // runSearch executes a single upstream search read and forwards frames. It guarantees a

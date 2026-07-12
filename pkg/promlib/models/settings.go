@@ -45,6 +45,7 @@ type PromOptions struct {
 	IncrementalQueryOverlapWindow string                       `json:"incrementalQueryOverlapWindow"`
 	DisableRecordingRules         bool                         `json:"disableRecordingRules"`
 	OauthPassThru                 bool                         `json:"oauthPassThru"`
+	EnableSearchAPI               bool                         `json:"enableSearchApi"`
 	SeriesEndpoint                bool                         `json:"seriesEndpoint"`
 	SeriesLimit                   *int64                       `json:"seriesLimit"`
 	ExemplarTraceIDDestinations   []ExemplarTraceIDDestination `json:"exemplarTraceIdDestinations"`
