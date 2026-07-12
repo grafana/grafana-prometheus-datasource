@@ -240,19 +240,27 @@ export class PrometheusLanguageProvider implements PrometheusLanguageProviderInt
    * @returns {ResourceApiClient} An instance of either LabelsApiClient or SeriesApiClient
    */
   private get resourceClient(): ResourceApiClient {
-    if (!this._resourceClient) {
-      if (this.datasource.hasSearchApiSupport?.()) {
-        // Experimental NDJSON streaming search API. The SearchApiClient itself falls
-        // back to labels/series at runtime if Grafana Live is unavailable.
-        this._resourceClient = new SearchApiClient(this.request, this.datasource);
-      } else if (this.datasource.hasLabelsMatchAPISupport()) {
-        this._resourceClient = new LabelsApiClient(this.request, this.datasource);
-      } else {
-        this._resourceClient = new SeriesApiClient(this.request, this.datasource);
-      }
+    if (this._resourceClient) {
+      return this._resourceClient;
     }
 
-    return this._resourceClient;
+    if (this.datasource.hasSearchApiSupport?.()) {
+      // Experimental NDJSON streaming search API. The SearchApiClient itself falls
+      // back to labels/series at runtime if Grafana Live is unavailable.
+      return this.setResourceClient(new SearchApiClient(this.request, this.datasource));
+    }
+    if (this.datasource.hasLabelsMatchAPISupport()) {
+      return this.setResourceClient(new LabelsApiClient(this.request, this.datasource));
+    }
+    return this.setResourceClient(new SeriesApiClient(this.request, this.datasource));
+  }
+
+  private setResourceClient(client: ResourceApiClient): ResourceApiClient {
+    if (this._resourceClient !== client) {
+      this._resourceClient?.dispose?.();
+      this._resourceClient = client;
+    }
+    return client;
   }
 
   /**

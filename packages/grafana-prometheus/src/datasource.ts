@@ -160,6 +160,11 @@ export class PrometheusDatasource
     this.exemplarsAvailable = await this.areExemplarsAvailable();
   };
 
+  /**
+   * Forward-compatible cleanup plumbing for a future DataSourceApi lifecycle hook.
+   * Grafana core does not call this today; effective page cleanup comes from the
+   * websocket closing during page unload.
+   */
   destroy(): void {
     this.languageProvider.dispose();
   }

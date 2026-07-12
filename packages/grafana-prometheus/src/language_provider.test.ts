@@ -13,6 +13,7 @@ import {
   PrometheusLanguageProvider,
 } from './language_provider';
 import { getPrometheusTime, getRangeSnapInterval } from './language_utils';
+import { type ResourceApiClient } from './resource_clients';
 import { PrometheusCacheLevel, type PromQuery } from './types';
 
 jest.mock('./language_utils', () => ({
@@ -85,6 +86,34 @@ describe('PrometheusLanguageProvider', () => {
       } as unknown as PrometheusDatasource;
       const provider = new PrometheusLanguageProvider(datasourceWithLabelsAPI);
       expect(provider).toBeInstanceOf(PrometheusLanguageProvider);
+    });
+  });
+
+  describe('resource client lifecycle', () => {
+    it('disposes the previous resource client when replacing it', () => {
+      const provider = new PrometheusLanguageProvider(defaultDatasource);
+      const dispose = jest.fn();
+      const previous = { dispose } as unknown as ResourceApiClient;
+      const replacement = {} as ResourceApiClient;
+      Object.defineProperty(provider, '_resourceClient', { value: previous, writable: true });
+
+      provider['setResourceClient'](replacement);
+
+      expect(dispose).toHaveBeenCalledTimes(1);
+      expect(provider['_resourceClient']).toBe(replacement);
+    });
+
+    it('constructs a fresh resource client after disposal', () => {
+      const provider = new PrometheusLanguageProvider(defaultDatasource);
+      const first = provider['resourceClient'];
+      const dispose = jest.fn();
+      Object.defineProperty(first, 'dispose', { value: dispose });
+
+      provider.dispose();
+      const second = provider['resourceClient'];
+
+      expect(dispose).toHaveBeenCalledTimes(1);
+      expect(second).not.toBe(first);
     });
   });
 
