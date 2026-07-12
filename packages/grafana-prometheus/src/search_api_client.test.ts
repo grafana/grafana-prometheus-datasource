@@ -122,6 +122,14 @@ describe('SearchApiClient', () => {
     await p;
   });
 
+  it('publishes requests over the subscribed websocket for HA node affinity', () => {
+    const client = new SearchApiClient(mockRequest, makeDatasource());
+
+    client.searchMetricNames(mockTimeRange, { search: 'up' }).subscribe();
+
+    expect(publish).toHaveBeenCalledWith(expect.anything(), expect.anything(), { useSocket: true });
+  });
+
   it('clamps the streaming limit to the search default (never the 40k series limit)', () => {
     const client = new SearchApiClient(mockRequest, makeDatasource());
     // Caller passes the large series limit (40000); streaming must cap it at 10000.

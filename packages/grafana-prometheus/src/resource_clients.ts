@@ -451,7 +451,7 @@ export class SearchApiClient extends BaseResourceClient implements SearchCapable
     endpoint: SearchEndpoint;
     params: Record<string, string[]>;
   }) {
-    getGrafanaLiveSrv()?.publish(this.channelAddr, payload);
+    getGrafanaLiveSrv()?.publish(this.channelAddr, payload, { useSocket: true });
   }
 
   /**
