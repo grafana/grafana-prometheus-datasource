@@ -610,6 +610,49 @@ func TestRunStream_EnforcesDatasourceUpstreamBudget(t *testing.T) {
 	}
 }
 
+func TestServiceDispose_CancelsActiveRunStreams(t *testing.T) {
+	upstreamStarted := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		close(upstreamStarted)
+		<-req.Context().Done()
+	}))
+	defer srv.Close()
+
+	svc := newTestService()
+	svc.createMailbox(validSearchPath, testRequesterIdentity())
+	parent, cancelParent := context.WithCancel(context.Background())
+	defer cancelParent()
+	runResult := make(chan error, 1)
+	go func() {
+		runResult <- svc.RunStream(parent, &backend.RunStreamRequest{
+			Path: validSearchPath, PluginContext: testPluginContext(srv.URL),
+		}, backend.NewStreamSender(&recordingSender{}))
+	}()
+	_, _ = svc.PublishStream(parent, &backend.PublishStreamRequest{
+		Path: validSearchPath, PluginContext: testPluginContext(srv.URL),
+		Data: mustJSON(publishPayload{
+			RequestID: "request-dispose", SlotID: "slot-dispose", Endpoint: resource.SearchMetricNames,
+		}),
+	})
+	select {
+	case <-upstreamStarted:
+	case <-time.After(time.Second):
+		t.Fatal("upstream request did not start")
+	}
+
+	svc.Dispose()
+
+	select {
+	case err := <-runResult:
+		require.ErrorIs(t, err, context.Canceled)
+	case <-time.After(time.Second):
+		t.Fatal("Dispose did not cancel the active RunStream")
+	}
+	assert.NoError(t, parent.Err(), "service disposal must own cancellation")
+	_, exists := svc.getMailbox(validSearchPath)
+	assert.False(t, exists, "disposed service retained mailbox state")
+}
+
 func TestRunStream_CancelPrevious(t *testing.T) {
 	release := make(chan struct{})
 	var releaseOnce sync.Once

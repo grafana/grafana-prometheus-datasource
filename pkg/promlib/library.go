@@ -2,6 +2,7 @@ package promlib
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -33,6 +34,12 @@ type Service struct {
 	mailboxes   map[string]*searchMailbox
 
 	searchPermits chan struct{}
+
+	lifecycleMu sync.Mutex
+	disposed    bool
+	nextRunID   uint64
+	runCancels  map[uint64]context.CancelFunc
+	runWG       sync.WaitGroup
 }
 
 type instance struct {
@@ -52,6 +59,7 @@ func NewService(httpClientProvider *sdkhttpclient.Provider, plog log.Logger, ext
 		logger:        plog,
 		mailboxes:     make(map[string]*searchMailbox),
 		searchPermits: make(chan struct{}, maxConcurrentSearches),
+		runCancels:    make(map[uint64]context.CancelFunc),
 	}
 }
 
@@ -61,10 +69,45 @@ func NewService(httpClientProvider *sdkhttpclient.Provider, plog log.Logger, ext
 func (s *Service) Dispose() {
 	// Clean up datasource instance resources.
 	s.logger.Debug("Disposing the instance...")
+	s.lifecycleMu.Lock()
+	if !s.disposed {
+		s.disposed = true
+		for _, cancel := range s.runCancels {
+			cancel()
+		}
+	}
+	s.lifecycleMu.Unlock()
+	s.runWG.Wait()
+
 	// Drop any per-instance search mailbox state; the replacement instance gets a fresh map.
 	s.mailboxesMu.Lock()
 	s.mailboxes = make(map[string]*searchMailbox)
 	s.mailboxesMu.Unlock()
+}
+
+func (s *Service) registerRun(parent context.Context) (context.Context, context.CancelFunc, func(), error) {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	if s.disposed {
+		return nil, nil, nil, errors.New("prometheus service is disposed")
+	}
+	runCtx, cancelRun := context.WithCancel(parent)
+	s.nextRunID++
+	runID := s.nextRunID
+	s.runCancels[runID] = cancelRun
+	s.runWG.Add(1)
+
+	var once sync.Once
+	release := func() {
+		once.Do(func() {
+			cancelRun()
+			s.lifecycleMu.Lock()
+			delete(s.runCancels, runID)
+			s.lifecycleMu.Unlock()
+			s.runWG.Done()
+		})
+	}
+	return runCtx, cancelRun, release, nil
 }
 
 func newInstanceSettings(httpClientProvider *sdkhttpclient.Provider, log log.Logger, extendOptions ExtendOptions) datasource.InstanceFactoryFunc {

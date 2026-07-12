@@ -415,14 +415,17 @@ func (s *Service) RunStream(ctx context.Context, req *backend.RunStreamRequest, 
 	if !ok {
 		return errors.New("search stream requester identity is unavailable")
 	}
+	runCtx, cancelRun, releaseRun, err := s.registerRun(ctx)
+	if err != nil {
+		return err
+	}
+	defer releaseRun()
+
 	mb := s.createMailbox(req.Path, owner)
 	if mb == nil {
 		return errors.New("search stream channel budget exceeded")
 	}
 	defer s.removeMailbox(req.Path)
-
-	runCtx, cancelRun := context.WithCancel(ctx)
-	defer cancelRun()
 
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, maxConcurrentSlots)
