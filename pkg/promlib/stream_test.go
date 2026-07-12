@@ -239,7 +239,7 @@ func TestPublishStream_Validation(t *testing.T) {
 	assert.Equal(t, backend.PublishStreamStatusOK, resp.Status)
 
 	mb, _ := svc.getMailbox(validSearchPath)
-	if msg, ok := mb.next(); ok {
+	if msg, _, ok := mb.next(); ok {
 		assert.Equal(t, "r1", msg.requestID)
 		assert.Equal(t, resource.SearchMetricNames, msg.endpoint)
 		assert.Equal(t, "up", msg.params.Get("search[]"))
@@ -309,7 +309,7 @@ func TestPublishStream_BoundsClientControlledWork(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, backend.PublishStreamStatusOK, resp.Status)
 	mb, _ := svc.getMailbox(validSearchPath)
-	msg, ok := mb.next()
+	msg, _, ok := mb.next()
 	require.True(t, ok)
 	assert.Equal(t, "10000", msg.params.Get("limit"))
 	assert.Equal(t, "1000", msg.params.Get("batch_size"))
@@ -348,7 +348,7 @@ func TestEnqueue_CoalescesWithoutEvictingOtherSlots(t *testing.T) {
 	foundUnrelated := false
 	foundNewest := false
 	for {
-		msg, ok := mb.next()
+		msg, _, ok := mb.next()
 		if !ok {
 			assert.True(t, foundUnrelated, "a hot slot must not evict another slot")
 			assert.True(t, foundNewest, "the hot slot should retain its newest request")
@@ -704,16 +704,121 @@ func TestRunStream_CancelPrevious(t *testing.T) {
 		Data:          mustJSON(publishPayload{RequestID: "req-fast", SlotID: "slot-1", Endpoint: resource.SearchMetricNames, Params: map[string][]string{"search[]": {"fast"}}}),
 	})
 
-	// req-fast completes with a terminal.
+	// req-fast completes with a terminal and the superseded request settles once with
+	// an explicit cancellation response.
 	waitForEnvelope(t, sender, func(e responseEnvelope) bool { return e.RequestID == "req-fast" && e.Type == "terminal" })
-
-	// The superseded slow request must NOT have produced a terminal (it was cancelled,
-	// so runSearch stays silent on context.Canceled).
+	waitForEnvelope(t, sender, func(e responseEnvelope) bool {
+		return e.RequestID == "req-slow" && e.Type == "error" && e.ErrorType == "canceled"
+	})
+	cancellationCount := 0
 	for _, e := range sender.envelopes() {
-		if e.RequestID == "req-slow" {
-			assert.NotEqual(t, "terminal", e.Type, "cancelled request should not emit a terminal frame")
+		if e.RequestID == "req-slow" && e.Type == "error" && e.ErrorType == "canceled" {
+			cancellationCount++
+		}
+	}
+	assert.Equal(t, 1, cancellationCount)
+
+	doRelease()
+}
+
+func TestRunStream_CoalescedRequestReceivesCancellation(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		_, _ = w.Write([]byte(`{"status":"success"}` + "\n"))
+	}))
+	defer srv.Close()
+
+	svc := newTestService()
+	pluginContext := testPluginContext(srv.URL)
+	subscribe, err := svc.SubscribeStream(context.Background(), &backend.SubscribeStreamRequest{
+		Path: validSearchPath, PluginContext: pluginContext,
+	})
+	require.NoError(t, err)
+	require.Equal(t, backend.SubscribeStreamStatusOK, subscribe.Status)
+	for _, requestID := range []string{"request-old", "request-new"} {
+		publish, err := svc.PublishStream(context.Background(), &backend.PublishStreamRequest{
+			Path: validSearchPath, PluginContext: pluginContext,
+			Data: mustJSON(publishPayload{
+				RequestID: requestID, SlotID: "slot-1", Endpoint: resource.SearchMetricNames,
+			}),
+		})
+		require.NoError(t, err)
+		require.Equal(t, backend.PublishStreamStatusOK, publish.Status)
+	}
+
+	sender := &recordingSender{}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		_ = svc.RunStream(ctx, &backend.RunStreamRequest{
+			Path: validSearchPath, PluginContext: pluginContext,
+		}, backend.NewStreamSender(sender))
+	}()
+
+	waitForEnvelope(t, sender, func(e responseEnvelope) bool {
+		return e.RequestID == "request-new" && e.Type == "terminal"
+	})
+	waitForEnvelope(t, sender, func(e responseEnvelope) bool {
+		return e.RequestID == "request-old" && e.Type == "error" && e.ErrorType == "canceled"
+	})
+}
+
+func TestRunStream_PermitWaiterReceivesCancellation(t *testing.T) {
+	started := make(chan struct{}, maxConcurrentSlots)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		started <- struct{}{}
+		<-req.Context().Done()
+	}))
+	defer srv.Close()
+
+	svc := newTestService()
+	pluginContext := testPluginContext(srv.URL)
+	mb := svc.createMailbox(validSearchPath, testRequesterIdentity())
+	sender := &recordingSender{}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		_ = svc.RunStream(ctx, &backend.RunStreamRequest{
+			Path: validSearchPath, PluginContext: pluginContext,
+		}, backend.NewStreamSender(sender))
+	}()
+	for i := 0; i < maxConcurrentSlots; i++ {
+		id := fmt.Sprintf("active-%d", i)
+		_, _ = svc.PublishStream(ctx, &backend.PublishStreamRequest{
+			Path: validSearchPath, PluginContext: pluginContext,
+			Data: mustJSON(publishPayload{
+				RequestID: id, SlotID: id, Endpoint: resource.SearchMetricNames,
+				Params: map[string][]string{"search[]": {id}},
+			}),
+		})
+	}
+	for i := 0; i < maxConcurrentSlots; i++ {
+		select {
+		case <-started:
+		case <-time.After(time.Second):
+			t.Fatal("did not saturate per-channel permits")
 		}
 	}
 
-	doRelease()
+	_, _ = svc.PublishStream(ctx, &backend.PublishStreamRequest{
+		Path: validSearchPath, PluginContext: pluginContext,
+		Data: mustJSON(publishPayload{
+			RequestID: "waiting-old", SlotID: "waiting-slot", Endpoint: resource.SearchMetricNames,
+		}),
+	})
+	require.Eventually(t, func() bool {
+		mb.mu.Lock()
+		defer mb.mu.Unlock()
+		_, pending := mb.pending[resource.SearchMetricNames+"|waiting-slot"]
+		return !pending
+	}, time.Second, time.Millisecond)
+	_, _ = svc.PublishStream(ctx, &backend.PublishStreamRequest{
+		Path: validSearchPath, PluginContext: pluginContext,
+		Data: mustJSON(publishPayload{
+			RequestID: "waiting-new", SlotID: "waiting-slot", Endpoint: resource.SearchMetricNames,
+		}),
+	})
+
+	waitForEnvelope(t, sender, func(e responseEnvelope) bool {
+		return e.RequestID == "waiting-old" && e.Type == "error" && e.ErrorType == "canceled"
+	})
 }

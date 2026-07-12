@@ -31,6 +31,10 @@ const mailboxBuffer = 8
 // streamOutputBuffer bounds responses waiting for the single StreamSender writer.
 const streamOutputBuffer = 32
 
+// mailboxCancellationBuffer bounds cancellation responses retained while pending work
+// is coalesced before RunStream consumes it.
+const mailboxCancellationBuffer = 32
+
 // maxConcurrentSlots bounds how many independent search "slots" (endpoint + widget
 // slotId) run upstream requests concurrently on one channel. Independent widgets and
 // panels sharing a datasource instance must not cancel each other, but we still cap
@@ -54,6 +58,8 @@ const (
 )
 
 var searchIdentifierPattern = regexp.MustCompile(`^[A-Za-z0-9._:-]+$`)
+
+var errSearchSuperseded = errors.New("search request superseded")
 
 var allowedSearchParams = map[string]struct{}{
 	"start": {}, "end": {}, "case_sensitive": {}, "batch_size": {}, "limit": {},
@@ -80,11 +86,12 @@ type publishPayload struct {
 }
 
 type searchMailbox struct {
-	mu      sync.Mutex
-	owner   requesterIdentity
-	pending map[string]publishMsg
-	order   []string
-	wake    chan struct{}
+	mu       sync.Mutex
+	owner    requesterIdentity
+	pending  map[string]publishMsg
+	order    []string
+	canceled []publishMsg
+	wake     chan struct{}
 }
 
 type requesterIdentity struct {
@@ -109,10 +116,11 @@ func requesterIdentityFromPluginContext(pluginContext backend.PluginContext) (re
 
 func newSearchMailbox(owner requesterIdentity) *searchMailbox {
 	return &searchMailbox{
-		pending: make(map[string]publishMsg),
-		order:   make([]string, 0, mailboxBuffer),
-		wake:    make(chan struct{}, 1),
-		owner:   owner,
+		pending:  make(map[string]publishMsg),
+		order:    make([]string, 0, mailboxBuffer),
+		canceled: make([]publishMsg, 0, mailboxCancellationBuffer),
+		wake:     make(chan struct{}, 1),
+		owner:    owner,
 	}
 }
 
@@ -364,7 +372,13 @@ func parseSearchTimestamp(value string) (float64, bool) {
 func enqueue(mb *searchMailbox, msg publishMsg) bool {
 	key := publishSlotKey(msg)
 	mb.mu.Lock()
-	if _, exists := mb.pending[key]; !exists {
+	if previous, exists := mb.pending[key]; exists {
+		if len(mb.canceled) >= mailboxCancellationBuffer {
+			mb.mu.Unlock()
+			return false
+		}
+		mb.canceled = append(mb.canceled, previous)
+	} else {
 		if len(mb.pending) >= mailboxBuffer {
 			mb.mu.Unlock()
 			return false
@@ -381,23 +395,33 @@ func enqueue(mb *searchMailbox, msg publishMsg) bool {
 	return true
 }
 
-func (mb *searchMailbox) next() (publishMsg, bool) {
+func (mb *searchMailbox) next() (publishMsg, bool, bool) {
 	mb.mu.Lock()
 	defer mb.mu.Unlock()
+	if len(mb.canceled) > 0 {
+		msg := mb.canceled[0]
+		mb.canceled = mb.canceled[1:]
+		mb.signalIfPending()
+		return msg, true, true
+	}
 	if len(mb.order) == 0 {
-		return publishMsg{}, false
+		return publishMsg{}, false, false
 	}
 	key := mb.order[0]
 	mb.order = mb.order[1:]
 	msg := mb.pending[key]
 	delete(mb.pending, key)
-	if len(mb.order) > 0 {
+	mb.signalIfPending()
+	return msg, false, true
+}
+
+func (mb *searchMailbox) signalIfPending() {
+	if len(mb.canceled) > 0 || len(mb.order) > 0 {
 		select {
 		case mb.wake <- struct{}{}:
 		default:
 		}
 	}
-	return msg, true
 }
 
 // RunStream is the long-lived per-channel loop. It idles on the mailbox; for each
@@ -442,12 +466,12 @@ func (s *Service) RunStream(ctx context.Context, req *backend.RunStreamRequest, 
 
 	// slotCancels tracks the in-flight cancel func per slot. Only the RunStream loop
 	// reads/writes it, so no extra locking is needed.
-	slotCancels := make(map[string]context.CancelFunc)
+	slotCancels := make(map[string]context.CancelCauseFunc)
 
 	defer func() {
 		cancelRun()
 		for _, cancel := range slotCancels {
-			cancel()
+			cancel(context.Canceled)
 		}
 		wg.Wait()
 		close(output)
@@ -466,43 +490,61 @@ func (s *Service) RunStream(ctx context.Context, req *backend.RunStreamRequest, 
 				return runCtx.Err()
 			}
 		case <-mb.wake:
-			msg, ok := mb.next()
+			msg, canceled, ok := mb.next()
 			if !ok {
 				continue
+			}
+			if canceled {
+				select {
+				case output <- canceledEnvelope(msg):
+					continue
+				case <-runCtx.Done():
+					return runCtx.Err()
+				}
 			}
 			slotKey := publishSlotKey(msg)
 			if cancel, ok := slotCancels[slotKey]; ok {
 				// cancel-previous, scoped to this slot only.
-				cancel()
+				cancel(errSearchSuperseded)
 			}
 
-			reqCtx, cancel := context.WithCancel(runCtx)
+			reqCtx, cancel := context.WithCancelCause(runCtx)
 			slotCancels[slotKey] = cancel
 
 			wg.Add(1)
-			go func(m publishMsg, rctx context.Context, cancel context.CancelFunc) {
+			go func(m publishMsg, rctx context.Context, cancel context.CancelCauseFunc) {
 				defer wg.Done()
+				emitCanceledWaiter := func() {
+					if errors.Is(context.Cause(rctx), errSearchSuperseded) {
+						select {
+						case output <- canceledEnvelope(m):
+						case <-runCtx.Done():
+						}
+					}
+				}
 				select {
 				case s.searchPermits <- struct{}{}:
 				case <-rctx.Done():
+					emitCanceledWaiter()
 					return
 				}
 				defer func() { <-s.searchPermits }()
 				select {
 				case sem <- struct{}{}:
 				case <-rctx.Done():
+					emitCanceledWaiter()
 					return
 				}
 				defer func() { <-sem }()
-				defer cancel()
+				defer cancel(context.Canceled)
 				searchCtx, cancelSearch := context.WithTimeout(rctx, searchRequestTimeout)
 				defer cancelSearch()
 				s.runSearch(searchCtx, req.PluginContext, m, func(env responseEnvelope) error {
 					select {
 					case output <- env:
 						return nil
-					case <-searchCtx.Done():
-						return searchCtx.Err()
+					case <-runCtx.Done():
+						return runCtx.Err()
 					}
 				})
 			}(msg, reqCtx, cancel)
@@ -521,7 +563,8 @@ func searchAPIEnabled(pluginContext backend.PluginContext) bool {
 // runSearch executes a single upstream search read and forwards frames. It guarantees a
 // single terminal frame per requestId: if the upstream omitted a trailer (abrupt EOF) a
 // synthetic terminal frame is sent so the frontend promise/observable always settles.
-// A cancelled request (superseded by a newer one for the same slot) sends nothing.
+// A request superseded by newer work in the same slot emits one explicit cancellation
+// response; whole-stream cancellation stays silent because the sender is closing.
 func (s *Service) runSearch(ctx context.Context, pCtx backend.PluginContext, m publishMsg, emit func(responseEnvelope) error) {
 	sawTerminal := false
 
@@ -534,8 +577,11 @@ func (s *Service) runSearch(ctx context.Context, pCtx backend.PluginContext, m p
 	})
 
 	if err != nil {
+		if !sawTerminal && errors.Is(context.Cause(ctx), errSearchSuperseded) {
+			_ = emit(canceledEnvelope(m))
+			return
+		}
 		if errors.Is(err, context.Canceled) {
-			// Superseded by a newer request on the same slot; stay silent.
 			return
 		}
 		if errors.Is(err, context.DeadlineExceeded) {
@@ -556,6 +602,13 @@ func (s *Service) runSearch(ctx context.Context, pCtx backend.PluginContext, m p
 	if !sawTerminal {
 		// Abrupt EOF without a trailer: treat collected results as complete.
 		_ = emit(responseEnvelope{RequestID: m.requestID, SlotID: m.slotID, Type: "terminal"})
+	}
+}
+
+func canceledEnvelope(m publishMsg) responseEnvelope {
+	return responseEnvelope{
+		RequestID: m.requestID, SlotID: m.slotID, Type: "error",
+		Error: "search request canceled", ErrorType: "canceled",
 	}
 }
 
