@@ -236,21 +236,27 @@ func (s *Service) RunStream(ctx context.Context, req *backend.RunStreamRequest, 
 				cancel()
 			}
 
-			reqCtx, cancel := context.WithTimeout(runCtx, searchRequestTimeout)
+			reqCtx, cancel := context.WithCancel(runCtx)
 			slotCancels[slotKey] = cancel
 
 			wg.Add(1)
-			sem <- struct{}{}
 			go func(m publishMsg, rctx context.Context, cancel context.CancelFunc) {
 				defer wg.Done()
+				select {
+				case sem <- struct{}{}:
+				case <-rctx.Done():
+					return
+				}
 				defer func() { <-sem }()
 				defer cancel()
-				s.runSearch(rctx, req.PluginContext, m, func(env responseEnvelope) error {
+				searchCtx, cancelSearch := context.WithTimeout(rctx, searchRequestTimeout)
+				defer cancelSearch()
+				s.runSearch(searchCtx, req.PluginContext, m, func(env responseEnvelope) error {
 					select {
 					case output <- env:
 						return nil
-					case <-rctx.Done():
-						return rctx.Err()
+					case <-searchCtx.Done():
+						return searchCtx.Err()
 					}
 				})
 			}(msg, reqCtx, cancel)

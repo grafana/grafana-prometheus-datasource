@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -378,6 +379,70 @@ func TestRunStream_WriterFailureCancelsUpstreamAndReturns(t *testing.T) {
 	case <-upstreamCanceled:
 	case <-time.After(time.Second):
 		t.Fatal("writer failure did not cancel the upstream request")
+	}
+}
+
+func TestRunStream_ControlLoopRemainsResponsiveAtConcurrencyLimit(t *testing.T) {
+	started := make(chan string, maxConcurrentSlots+1)
+	canceled := make(chan string, maxConcurrentSlots+1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		requestID := req.URL.Query().Get("rid")
+		started <- requestID
+		<-req.Context().Done()
+		canceled <- requestID
+	}))
+	defer srv.Close()
+
+	svc := newTestService()
+	svc.createMailbox(validSearchPath)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		_ = svc.RunStream(ctx, &backend.RunStreamRequest{
+			Path: validSearchPath, PluginContext: testPluginContext(srv.URL),
+		}, backend.NewStreamSender(&recordingSender{}))
+	}()
+
+	for i := 0; i < maxConcurrentSlots; i++ {
+		id := fmt.Sprintf("request-%d", i)
+		_, _ = svc.PublishStream(ctx, &backend.PublishStreamRequest{
+			Path: validSearchPath, PluginContext: testPluginContext(srv.URL),
+			Data: mustJSON(publishPayload{
+				RequestID: id, SlotID: fmt.Sprintf("slot-%d", i), Endpoint: resource.SearchMetricNames,
+				Params: map[string][]string{"rid": {id}},
+			}),
+		})
+	}
+	for i := 0; i < maxConcurrentSlots; i++ {
+		select {
+		case <-started:
+		case <-time.After(time.Second):
+			t.Fatal("did not saturate upstream concurrency")
+		}
+	}
+
+	// This request waits for a permit. It must not block the mailbox loop from
+	// consuming the following request, which supersedes and cancels slot-0.
+	_, _ = svc.PublishStream(ctx, &backend.PublishStreamRequest{
+		Path: validSearchPath, PluginContext: testPluginContext(srv.URL),
+		Data: mustJSON(publishPayload{
+			RequestID: "waiting", SlotID: "slot-waiting", Endpoint: resource.SearchMetricNames,
+			Params: map[string][]string{"rid": {"waiting"}},
+		}),
+	})
+	_, _ = svc.PublishStream(ctx, &backend.PublishStreamRequest{
+		Path: validSearchPath, PluginContext: testPluginContext(srv.URL),
+		Data: mustJSON(publishPayload{
+			RequestID: "replacement", SlotID: "slot-0", Endpoint: resource.SearchMetricNames,
+			Params: map[string][]string{"rid": {"replacement"}},
+		}),
+	})
+
+	select {
+	case id := <-canceled:
+		assert.Equal(t, "request-0", id)
+	case <-time.After(time.Second):
+		t.Fatal("mailbox control loop blocked while concurrency was saturated")
 	}
 }
 
