@@ -48,6 +48,7 @@ export interface PromOptions extends DataSourceJsonData {
   disableRecordingRules?: boolean;
   allowAsRecordingRulesTarget?: boolean;
   oauthPassThru?: boolean;
+  keepCookies?: string[];
   seriesEndpoint?: boolean;
   seriesLimit?: number;
   maxSamplesProcessedWarningThreshold?: number;
