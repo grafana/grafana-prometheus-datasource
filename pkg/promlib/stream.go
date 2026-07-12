@@ -25,6 +25,9 @@ var searchChannelPattern = regexp.MustCompile(`^search/[0-9a-fA-F]{8}-[0-9a-fA-F
 // without unbounded growth; under fast typing PublishStream applies latest-wins drop.
 const mailboxBuffer = 8
 
+// streamOutputBuffer bounds responses waiting for the single StreamSender writer.
+const streamOutputBuffer = 32
+
 // maxConcurrentSlots bounds how many independent search "slots" (endpoint + widget
 // slotId) run upstream requests concurrently on one channel. Independent widgets and
 // panels sharing a datasource instance must not cancel each other, but we still cap
@@ -185,23 +188,47 @@ func (s *Service) RunStream(ctx context.Context, req *backend.RunStreamRequest, 
 	mb := s.createMailbox(req.Path)
 	defer s.removeMailbox(req.Path)
 
+	runCtx, cancelRun := context.WithCancel(ctx)
+	defer cancelRun()
+
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, maxConcurrentSlots)
+	output := make(chan responseEnvelope, streamOutputBuffer)
+	writerErr := make(chan error, 1)
+	writerDone := make(chan struct{})
+	go func() {
+		defer close(writerDone)
+		if err := writeEnvelopes(runCtx, sender, output); err != nil {
+			writerErr <- err
+			cancelRun()
+		}
+	}()
+
 	// slotCancels tracks the in-flight cancel func per slot. Only the RunStream loop
 	// reads/writes it, so no extra locking is needed.
 	slotCancels := make(map[string]context.CancelFunc)
 
 	defer func() {
+		cancelRun()
 		for _, cancel := range slotCancels {
 			cancel()
 		}
 		wg.Wait()
+		close(output)
+		<-writerDone
 	}()
 
 	for {
 		select {
-		case <-ctx.Done():
-			return ctx.Err()
+		case err := <-writerErr:
+			return err
+		case <-runCtx.Done():
+			select {
+			case err := <-writerErr:
+				return err
+			default:
+				return runCtx.Err()
+			}
 		case msg := <-mb:
 			slotKey := msg.endpoint + "|" + msg.slotID
 			if cancel, ok := slotCancels[slotKey]; ok {
@@ -209,7 +236,7 @@ func (s *Service) RunStream(ctx context.Context, req *backend.RunStreamRequest, 
 				cancel()
 			}
 
-			reqCtx, cancel := context.WithTimeout(ctx, searchRequestTimeout)
+			reqCtx, cancel := context.WithTimeout(runCtx, searchRequestTimeout)
 			slotCancels[slotKey] = cancel
 
 			wg.Add(1)
@@ -218,7 +245,14 @@ func (s *Service) RunStream(ctx context.Context, req *backend.RunStreamRequest, 
 				defer wg.Done()
 				defer func() { <-sem }()
 				defer cancel()
-				s.runSearch(rctx, req.PluginContext, m, sender)
+				s.runSearch(rctx, req.PluginContext, m, func(env responseEnvelope) error {
+					select {
+					case output <- env:
+						return nil
+					case <-rctx.Done():
+						return rctx.Err()
+					}
+				})
 			}(msg, reqCtx, cancel)
 		}
 	}
@@ -236,7 +270,7 @@ func searchAPIEnabled(pluginContext backend.PluginContext) bool {
 // single terminal frame per requestId: if the upstream omitted a trailer (abrupt EOF) a
 // synthetic terminal frame is sent so the frontend promise/observable always settles.
 // A cancelled request (superseded by a newer one for the same slot) sends nothing.
-func (s *Service) runSearch(ctx context.Context, pCtx backend.PluginContext, m publishMsg, sender *backend.StreamSender) {
+func (s *Service) runSearch(ctx context.Context, pCtx backend.PluginContext, m publishMsg, emit func(responseEnvelope) error) {
 	sawTerminal := false
 
 	err := s.StreamSearch(ctx, pCtx, m.endpoint, m.params, func(line resource.SearchLine) error {
@@ -244,7 +278,7 @@ func (s *Service) runSearch(ctx context.Context, pCtx backend.PluginContext, m p
 		if env.Type == "terminal" || env.Type == "error" {
 			sawTerminal = true
 		}
-		return sendEnvelope(sender, env)
+		return emit(env)
 	})
 
 	if err != nil {
@@ -253,7 +287,7 @@ func (s *Service) runSearch(ctx context.Context, pCtx backend.PluginContext, m p
 			return
 		}
 		if errors.Is(err, context.DeadlineExceeded) {
-			_ = sendEnvelope(sender, responseEnvelope{
+			_ = emit(responseEnvelope{
 				RequestID: m.requestID, SlotID: m.slotID, Type: "error", Error: "search request timed out",
 			})
 			return
@@ -261,7 +295,7 @@ func (s *Service) runSearch(ctx context.Context, pCtx backend.PluginContext, m p
 		if s.logger != nil {
 			s.logger.Warn("search stream read failed", "endpoint", m.endpoint, "error", err)
 		}
-		_ = sendEnvelope(sender, responseEnvelope{
+		_ = emit(responseEnvelope{
 			RequestID: m.requestID, SlotID: m.slotID, Type: "error", Error: err.Error(),
 		})
 		return
@@ -269,7 +303,7 @@ func (s *Service) runSearch(ctx context.Context, pCtx backend.PluginContext, m p
 
 	if !sawTerminal {
 		// Abrupt EOF without a trailer: treat collected results as complete.
-		_ = sendEnvelope(sender, responseEnvelope{RequestID: m.requestID, SlotID: m.slotID, Type: "terminal"})
+		_ = emit(responseEnvelope{RequestID: m.requestID, SlotID: m.slotID, Type: "terminal"})
 	}
 }
 
@@ -298,4 +332,20 @@ func sendEnvelope(sender *backend.StreamSender, env responseEnvelope) error {
 		return err
 	}
 	return sender.SendJSON(b)
+}
+
+func writeEnvelopes(ctx context.Context, sender *backend.StreamSender, output <-chan responseEnvelope) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case env, ok := <-output:
+			if !ok {
+				return nil
+			}
+			if err := sendEnvelope(sender, env); err != nil {
+				return err
+			}
+		}
+	}
 }

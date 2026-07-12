@@ -3,6 +3,7 @@ package promlib
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -62,6 +63,17 @@ func (s *recordingSender) envelopes() []responseEnvelope {
 		}
 	}
 	return out
+}
+
+type failingSender struct {
+	err     error
+	entered chan struct{}
+	once    sync.Once
+}
+
+func (s *failingSender) Send(_ *backend.StreamPacket) error {
+	s.once.Do(func() { close(s.entered) })
+	return s.err
 }
 
 func TestSubscribeStream_AllowlistAndMailbox(t *testing.T) {
@@ -320,6 +332,53 @@ func TestRunStream_EndToEnd_RequestIdTagging(t *testing.T) {
 		return e.RequestID == "req-A" && e.Type == "batch"
 	})
 	assert.Len(t, batch.Results, 1)
+}
+
+func TestRunStream_WriterFailureCancelsUpstreamAndReturns(t *testing.T) {
+	upstreamCanceled := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		_, _ = w.Write([]byte(`{"results":[{"name":"up"}]}` + "\n"))
+		if flusher, ok := w.(http.Flusher); ok {
+			flusher.Flush()
+		}
+		<-req.Context().Done()
+		close(upstreamCanceled)
+	}))
+	defer srv.Close()
+
+	svc := newTestService()
+	svc.createMailbox(validSearchPath)
+	senderErr := errors.New("stream send failed")
+	sender := &failingSender{err: senderErr, entered: make(chan struct{})}
+	runResult := make(chan error, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		runResult <- svc.RunStream(ctx, &backend.RunStreamRequest{
+			Path: validSearchPath, PluginContext: testPluginContext(srv.URL),
+		}, backend.NewStreamSender(sender))
+	}()
+
+	_, err := svc.PublishStream(ctx, &backend.PublishStreamRequest{
+		Path:          validSearchPath,
+		PluginContext: testPluginContext(srv.URL),
+		Data: mustJSON(publishPayload{
+			RequestID: "req-writer-failure", SlotID: "slot-1", Endpoint: resource.SearchMetricNames,
+		}),
+	})
+	require.NoError(t, err)
+
+	select {
+	case err := <-runResult:
+		require.ErrorIs(t, err, senderErr)
+	case <-time.After(time.Second):
+		t.Fatal("RunStream did not return the writer failure")
+	}
+	select {
+	case <-upstreamCanceled:
+	case <-time.After(time.Second):
+		t.Fatal("writer failure did not cancel the upstream request")
+	}
 }
 
 func TestRunStream_CancelPrevious(t *testing.T) {
