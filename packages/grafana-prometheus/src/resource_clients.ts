@@ -446,10 +446,12 @@ export class SearchApiClient extends BaseResourceClient implements SearchCapable
           if (isLiveChannelMessageEvent(event)) {
             this.messages$.next(event.message);
           } else if (isLiveChannelStatusEvent(event)) {
+            const wasConnected = this.connected;
             this.connected = event.state === LiveChannelConnectionState.Connected;
             if (this.connected) {
               this.resolveConnectionWaiters(true);
             } else if (
+              wasConnected ||
               event.error ||
               event.state === LiveChannelConnectionState.Invalid ||
               event.state === LiveChannelConnectionState.Shutdown

@@ -50,6 +50,15 @@ function connectedEvent(): LiveChannelEvent<Frame> {
   };
 }
 
+function disconnectedEvent(): LiveChannelEvent<Frame> {
+  return {
+    type: LiveChannelEventType.Status,
+    id: 'ds/ds-uid/search/test',
+    timestamp: Date.now(),
+    state: LiveChannelConnectionState.Disconnected,
+  };
+}
+
 function makeDatasource(overrides: Partial<PrometheusDatasource> = {}): PrometheusDatasource {
   return {
     uid: 'ds-uid',
@@ -310,5 +319,48 @@ describe('SearchApiClient', () => {
         });
       })
     ).resolves.toEqual(['fallback-value']);
+  });
+
+  it('settles an active Promise through HTTP when Live disconnects', async () => {
+    mockRequest.mockResolvedValueOnce(['after-disconnect']);
+    const client = new SearchApiClient(mockRequest, makeDatasource());
+    const result = client.queryLabelKeys(mockTimeRange);
+
+    stream$.next(disconnectedEvent());
+
+    await expect(result).resolves.toEqual(['after-disconnect']);
+  });
+
+  it('completes progressive search through HTTP when readiness times out', async () => {
+    jest.useFakeTimers();
+    try {
+      stream$ = new Subject<LiveChannelEvent<Frame>>();
+      mockRequest.mockResolvedValueOnce(['ready-timeout-fallback']);
+      const client = new SearchApiClient(mockRequest, makeDatasource());
+      const result = new Promise<string[]>((resolve) => {
+        client.searchLabelNames(mockTimeRange, { search: 'job' }).subscribe({ next: resolve });
+      });
+
+      await jest.advanceTimersByTimeAsync(5000);
+
+      await expect(result).resolves.toEqual(['ready-timeout-fallback']);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('cancels timers and fallback work when a progressive caller unsubscribes', async () => {
+    jest.useFakeTimers();
+    try {
+      const client = new SearchApiClient(mockRequest, makeDatasource());
+      const subscription = client.searchMetricNames(mockTimeRange, { search: 'up' }).subscribe();
+
+      subscription.unsubscribe();
+      await jest.advanceTimersByTimeAsync(15000);
+
+      expect(mockRequest).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });
