@@ -284,7 +284,9 @@ describe('MetricsLabelsSection', () => {
       defaultTimeRange,
       'label2',
       'web',
-      '{label1="value1", __name__="metric1"}'
+      '{label1="value1", __name__="metric1"}',
+      undefined,
+      expect.stringMatching(/^metrics-labels-section-.*-values-label2$/)
     );
     expect(datasource.languageProvider.queryLabelValues).not.toHaveBeenCalled();
     expect(result).toContainEqual(expect.objectContaining({ label: 'web-1', value: 'web-1' }));
@@ -318,7 +320,9 @@ describe('MetricsLabelsSection', () => {
     expect(datasource.languageProvider.searchLabelKeys).toHaveBeenCalledWith(
       defaultTimeRange,
       'jo',
-      expect.stringContaining('__name__="metric1"')
+      expect.stringContaining('__name__="metric1"'),
+      undefined,
+      expect.stringMatching(/^metrics-labels-section-.*-names$/)
     );
     expect(result).toContainEqual(expect.objectContaining({ value: 'job' }));
   });

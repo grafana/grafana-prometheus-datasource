@@ -1,11 +1,12 @@
 // Core Grafana history https://github.com/grafana/grafana/blob/v11.0.0-preview/public/app/plugins/datasource/prometheus/querybuilder/components/MetricsLabelsSection.tsx
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 
 import { type SelectableValue, type TimeRange } from '@grafana/data';
 
 import { getDebounceTimeInMilliseconds } from '../../caching';
 import { type PrometheusDatasource } from '../../datasource';
 import { truncateResult } from '../../language_utils';
+import { createSearchSlotId } from '../../resource_clients';
 import { type PromMetricsMetadata } from '../../types';
 import { regexifyLabelValuesQueryString } from '../parsingUtils';
 import { promQueryModeller } from '../shared/modeller_instance';
@@ -32,6 +33,7 @@ export function MetricsLabelsSection({
   variableEditor,
   timeRange,
 }: MetricsLabelsSectionProps) {
+  const searchSlotId = useRef(createSearchSlotId('metrics-labels-section'));
   // fixing the use of 'as' from refactoring
   // @ts-ignore
   const onChangeLabels = (labels) => {
@@ -106,7 +108,9 @@ export function MetricsLabelsSection({
         timeRange,
         forLabelName,
         queryString ?? '',
-        matchExpr === '' ? undefined : matchExpr
+        matchExpr === '' ? undefined : matchExpr,
+        undefined,
+        `${searchSlotId.current}-values-${forLabelName}`
       );
       return truncateResult(values).map(toSelectableValue);
     }
@@ -154,7 +158,9 @@ export function MetricsLabelsSection({
         const labelsIndex = await datasource.languageProvider.searchLabelKeys(
           timeRange,
           queryString,
-          matchExpr === '' ? undefined : matchExpr
+          matchExpr === '' ? undefined : matchExpr,
+          undefined,
+          `${searchSlotId.current}-names`
         );
         return labelsIndex
           .filter((labelName) => !query.labels.find((filter) => filter.label === labelName))
