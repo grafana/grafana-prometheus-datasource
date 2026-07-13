@@ -16,6 +16,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # GitHub already requires write access to dispatch or re-run this workflow, so
+  # this job is a fast-fail UX/branch gate, not the security boundary. The real
+  # publishing control is enforced on the `publish` job's `npm-publish`
+  # environment (required reviewers + main-only deployment branch policy),
+  # because that is where the OIDC publishing token lives.
   check-permissions:
     name: Verify caller has write access
     runs-on: github-hosted-ubuntu-x64-small
@@ -123,6 +128,11 @@ jobs:
     needs: build
     if: needs.build.outputs.changed == 'true' && inputs['dry-run'] != true
     runs-on: github-hosted-ubuntu-x64-small
+    # Security boundary: this environment holds the OIDC publishing rights, so
+    # access control is enforced here via required reviewers and a main-only
+    # deployment branch policy (configured in repo settings). These protections
+    # also apply when only this job is re-run, which the check-permissions job
+    # does not cover.
     environment: npm-publish
     permissions:
       contents: read
