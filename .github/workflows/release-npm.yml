@@ -134,6 +134,8 @@ jobs:
   publish:
     name: Publish @grafana/prometheus
     needs: build
+    # The changed == 'true' condition is defence in depth: the build job already
+    # fails via "Abort if version not newer" when the version is not newer.
     if: needs.build.outputs.changed == 'true' && inputs['dry-run'] != true
     runs-on: github-hosted-ubuntu-x64-small
     # Security boundary: this environment holds the OIDC publishing rights, so
