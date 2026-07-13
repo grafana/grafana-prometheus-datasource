@@ -53,6 +53,10 @@ jobs:
           }
 
           check_permission "$ACTOR"
+          # Only covers full-workflow reruns: re-running just the failed publish
+          # job skips this job entirely, so triggering_actor is not re-checked
+          # here. That path is covered by GitHub's write requirement for reruns
+          # and the npm-publish environment protections.
           if [[ "$TRIGGERING_ACTOR" != "$ACTOR" ]]; then
             check_permission "$TRIGGERING_ACTOR"
           fi
