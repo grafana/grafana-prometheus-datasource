@@ -11,6 +11,10 @@ on:
         default: false
 
 # Prevent overlapping publish runs from racing on the same package version.
+# cancel-in-progress: false lets an in-flight publish finish, but GitHub keeps
+# only the newest pending run per group, so dispatching several releases in quick
+# succession silently drops older queued runs. Acceptable here since releases are
+# dispatched manually one at a time.
 concurrency:
   group: npm-publish-grafana-prometheus
   cancel-in-progress: false
