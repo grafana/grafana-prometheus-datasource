@@ -1,8 +1,22 @@
 services:
+  # Vanilla upstream Prometheus so the provisioned 'prometheus' datasource
+  # (url: http://prometheus:9090) actually points at a running server. It
+  # scrapes itself and the Grafana dev container, giving real metric names,
+  # label names and label values to exercise the plugin against.
+  prometheus:
+    image: prom/prometheus
+    container_name: 'prometheus'
+    volumes:
+      - ./provisioning/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - 9090:9090/tcp
+
   grafana:
     extends:
       file: .config/docker-compose-base.yaml
       service: grafana
+    depends_on:
+      - prometheus
     environment:
       # Grafana 13 enables splashScreen by default; the overlay blocks Playwright interactions.
       GF_FEATURE_TOGGLES_splashScreen: 'false'

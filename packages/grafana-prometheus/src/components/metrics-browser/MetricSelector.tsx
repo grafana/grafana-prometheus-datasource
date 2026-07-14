@@ -15,6 +15,10 @@ export function MetricSelector() {
   const [metricSearchTerm, setMetricSearchTerm] = useState('');
   const { metrics, selectedMetric, seriesLimit, setSeriesLimit, onMetricClick } = useMetricsBrowser();
 
+  const [localSeriesLimit, setLocalSeriesLimit] = useState<string>(
+    Number.isNaN(seriesLimit) ? '' : String(seriesLimit)
+  );
+
   const filteredMetrics = useMemo(() => {
     return metrics.filter((m) => m.name === selectedMetric || m.name.includes(metricSearchTerm));
   }, [metrics, selectedMetric, metricSearchTerm]);
@@ -51,12 +55,16 @@ export function MetricSelector() {
         </Label>
         <div>
           <Input
-            onChange={(e) => setSeriesLimit(parseInt(e.currentTarget.value.trim(), 10))}
+            onChange={(e) => setLocalSeriesLimit(e.currentTarget.value)}
+            onBlur={(e) => {
+              const parsed = parseInt(e.currentTarget.value.trim(), 10);
+              setSeriesLimit(Number.isNaN(parsed) ? NaN : parsed);
+            }}
             aria-label={t(
               'grafana-prometheus.components.metric-selector.aria-label-limit-results-from-series-endpoint',
               'Limit results from series endpoint'
             )}
-            value={seriesLimit}
+            value={localSeriesLimit}
             data-testid={selectors.components.DataSource.Prometheus.queryEditor.code.metricsBrowser.seriesLimit}
           />
         </div>

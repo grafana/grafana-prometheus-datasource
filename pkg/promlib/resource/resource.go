@@ -11,7 +11,6 @@ import (
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
-	"github.com/grafana/grafana-plugin-sdk-go/data/utils/maputil"
 	scope "github.com/grafana/grafana/apps/scope/pkg/apis/scope/v0alpha1"
 	"github.com/prometheus/prometheus/promql/parser"
 
@@ -30,20 +29,14 @@ func New(
 	settings backend.DataSourceInstanceSettings,
 	plog log.Logger,
 ) (*Resource, error) {
-	jsonData, err := utils.GetJsonData(settings)
+	jsonData, err := models.ParsePromOptions(settings)
 	if err != nil {
 		return nil, err
 	}
-	httpMethod, _ := maputil.GetStringOptional(jsonData, "httpMethod")
-
-	if httpMethod == "" {
-		httpMethod = http.MethodPost
-	}
-
 	return &Resource{
 		log: plog,
 		// we don't use queryTimeout for resource calls
-		promClient: client.NewClient(httpClient, httpMethod, settings.URL, ""),
+		promClient: client.NewClient(httpClient, jsonData.HTTPMethod, settings.URL, ""),
 	}, nil
 }
 
@@ -71,6 +64,15 @@ func (r *Resource) Execute(ctx context.Context, req *backend.CallResourceRequest
 	if err != nil {
 		return nil, err
 	}
+
+	// The body has been decoded to plaintext, so the framing/encoding headers that
+	// described the original (compressed) payload no longer apply. Leaving them in
+	// place makes the response advertise an encoding/length that no longer matches
+	// the body, which a downstream proxy rejects with an HTTP 500.
+	resp.Header.Del("Content-Encoding")
+	resp.Header.Del("Content-Length")
+	resp.Header.Del("Transfer-Encoding")
+
 	callResponse := &backend.CallResourceResponse{
 		Status:  resp.StatusCode,
 		Headers: resp.Header,
@@ -188,6 +190,12 @@ func (r *Resource) GetSuggestions(ctx context.Context, req *backend.CallResource
 
 	newReq := &backend.CallResourceRequest{
 		PluginContext: req.PluginContext,
+	}
+
+	// Execute reads X-Grafana-Cache to set Cache-Control on the response.
+	// Carry it forward from the original request so suggestion responses are cached.
+	if v := req.GetHTTPHeaders().Get("X-Grafana-Cache"); v != "" {
+		newReq.Headers = map[string][]string{"X-Grafana-Cache": {v}}
 	}
 
 	if sugReq.LabelName != "" {

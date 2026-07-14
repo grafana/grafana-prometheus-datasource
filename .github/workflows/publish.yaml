@@ -1,10 +1,5 @@
 name: Plugins - CD
 run-name: Deploy ${{ inputs.branch }} to ${{ inputs.environment }} by @${{ github.actor }}
-permissions:
-  attestations: write
-  contents: write
-  pull-requests: read
-  id-token: write
 
 on:
   workflow_dispatch:
@@ -17,27 +12,38 @@ on:
         required: true
         type: choice
         options:
-          - 'dev'
+          - "dev"
+          - "ops"
+          - "prod"
       scope:
         description: Cloud will publish scoped only to Grafana Cloud, On Prem will publish with Universal scope. Please use Cloud unless emergency fix needed for On Prem customer.
         required: true
         type: choice
-        default: 'cloud (recommended)'
+        default: "cloud (recommended)"
         options:
-          - 'cloud (recommended)'
-          - 'on-prem (for emergencies fix to On Prem customers)'
+          - "cloud (recommended)"
+          - "on-prem (for emergencies fix to On Prem customers)"
       docs-only:
         description: Only publish docs, do not publish the plugin
         default: false
         type: boolean
 
+permissions: {}
+
 jobs:
   cd:
     name: CD
-    uses: grafana/plugin-ci-workflows/.github/workflows/cd.yml@ci-cd-workflows/v9.0.0
+    uses: grafana/plugin-ci-workflows/.github/workflows/cd.yml@ci-cd-workflows/v10.1.0
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+      pull-requests: read
     with:
       branch: ${{ github.event.inputs.branch }}
-      environment: ${{ github.event.inputs.environment }}
+      # prod targets all environments by default; ops does not target dev by default
+      environment: ${{ github.event.inputs.environment == 'ops' && 'dev,ops' || github.event.inputs.environment }}
       docs-only: ${{ fromJSON(github.event.inputs.docs-only) }}
+      scopes: ${{ github.event.inputs.scope == 'cloud (recommended)' && 'grafana_cloud' || github.event.inputs.scope == 'on-prem (for emergencies fix to On Prem customers)' && 'universal' }}
       run-playwright: false
       github-draft-release: false

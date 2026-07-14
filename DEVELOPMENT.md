@@ -39,6 +39,70 @@ GRAFANA_VERSION=13.0.1 docker compose up
 
 Grafana will be available at `http://localhost:3000`.
 
+## Running locally against a local grafana/grafana checkout
+
+If you want to develop against a local build of Grafana itself rather than the Docker image, follow these steps.
+
+### 1. Set up the Grafana repository
+
+Clone [grafana/grafana](https://github.com/grafana/grafana) somewhere in your workspace, for example next to this repository:
+
+```
+workspace/
+  grafana/          ← grafana/grafana checkout
+  plugins/
+    grafana-prometheus-datasource/   ← this repo
+```
+
+### 2. Create a `custom.ini`
+
+Grafana's [defaults.ini](https://github.com/grafana/grafana/blob/main/conf/defaults.ini#L25-L26) looks for additional plugins in `data/plugins`. It is cleaner to keep your plugin repos in a dedicated directory (e.g. `workspace/plugins`) and point Grafana there with a `custom.ini` file instead of touching `defaults.ini`.
+
+Create `conf/custom.ini` next to `conf/defaults.ini` in the grafana/grafana repo and add at minimum:
+
+```ini
+app_mode = development
+force_migration = true
+
+[paths]
+plugins = /your/workspace/plugins
+
+[plugin.prometheus]
+as_external = true
+
+[log]
+level = debug
+```
+
+### 3. Start Grafana
+
+Start grafana/grafana with `yarn install && yarn start` for the frontend in one terminal and `make run` for the backend in another. Grafana will use the plugin from `workspace/plugins/grafana-prometheus-datasource`, and you can iterate on frontend or backend changes directly.
+
+### 4. Build the plugin
+
+**Backend** — build the Go binary for your platform. On Apple Silicon:
+
+```bash
+mage build:darwinARM64
+```
+
+Run `mage -v` with no target to build for all supported platforms. You must re-run this command after every backend change. After rebuilding, tell Grafana to reload the plugin:
+
+```bash
+mage reloadPlugin
+```
+
+**Frontend** — install dependencies and start the watch mode:
+
+```bash
+yarn install
+yarn dev
+```
+
+`yarn dev` starts an incremental build that picks up frontend changes automatically. This is powered by [`@grafana/create-plugin`](https://www.npmjs.com/package/@grafana/create-plugin), the base scaffolding tool used for Grafana plugins.
+
+---
+
 ## Testing
 
 ```bash
