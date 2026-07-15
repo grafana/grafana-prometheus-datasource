@@ -225,6 +225,21 @@ describe('SearchApiClient', () => {
     await expect(p).resolves.toEqual(['zeta', 'alpha', 'beta']);
   });
 
+  it('ignores the echoed publish request (Grafana Live broadcasts our own payload back)', async () => {
+    const client = new SearchApiClient(mockRequest, makeDatasource());
+    const p = client.queryLabelKeys(mockTimeRange);
+    const payload = lastPayload();
+
+    // Centrifuge echoes the client's own publish payload ({requestId, slotId, endpoint,
+    // params} — no `type`) to all subscribers before the real response frames arrive.
+    // It must not settle the promise (previously it hit the error branch and resolved []).
+    stream$.next({ type: LiveChannelEventType.Message, message: payload });
+    stream$.next(messageEvent({ requestId: payload.requestId, type: 'batch', results: [{ name: 'real_metric' }] }));
+    stream$.next(messageEvent({ requestId: payload.requestId, type: 'terminal' }));
+
+    await expect(p).resolves.toEqual(['real_metric']);
+  });
+
   it('ignores stale frames whose requestId is not the active one', async () => {
     const client = new SearchApiClient(mockRequest, makeDatasource());
     const p = client.queryLabelKeys(mockTimeRange);

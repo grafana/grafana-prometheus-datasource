@@ -92,6 +92,24 @@ interface SearchFrame {
   errorType?: string;
 }
 
+const SEARCH_FRAME_TYPES: ReadonlySet<string> = new Set(['batch', 'terminal', 'error']);
+
+/**
+ * Type guard for response envelopes sent by the Go RunStream loop. Grafana Live echoes
+ * every client->server publish back to all channel subscribers (when PublishStream
+ * returns OK without custom data, Centrifuge broadcasts the client's own payload), so
+ * the channel also carries our own request payloads ({requestId, slotId, endpoint,
+ * params} — no `type`). Those echoes share the active requestId and must never reach
+ * the correlation logic, otherwise they settle the search immediately with no results.
+ */
+function isSearchFrame(message: unknown): message is SearchFrame {
+  if (typeof message !== 'object' || message === null) {
+    return false;
+  }
+  const frame = message as Partial<SearchFrame>;
+  return typeof frame.requestId === 'string' && typeof frame.type === 'string' && SEARCH_FRAME_TYPES.has(frame.type);
+}
+
 type RequestFn = (
   url: string,
   params?: Record<string, unknown>,
@@ -444,7 +462,11 @@ export class SearchApiClient extends BaseResourceClient implements SearchCapable
       this.liveSub = live.getStream<SearchFrame>(this.channelAddr).subscribe({
         next: (event) => {
           if (isLiveChannelMessageEvent(event)) {
-            this.messages$.next(event.message);
+            // Drop echoed publish requests (and anything else that is not a response
+            // envelope); see isSearchFrame.
+            if (isSearchFrame(event.message)) {
+              this.messages$.next(event.message);
+            }
           } else if (isLiveChannelStatusEvent(event)) {
             const wasConnected = this.connected;
             this.connected = event.state === LiveChannelConnectionState.Connected;
