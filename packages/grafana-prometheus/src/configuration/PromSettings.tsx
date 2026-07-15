@@ -274,7 +274,7 @@ export const PromSettings = (props: Props) => {
               labelWidth={PROM_CONFIG_LABEL_WIDTH}
               label={t(
                 'grafana-prometheus.configuration.prom-settings.label-enable-search-api',
-                'Streaming search API (experimental)'
+                'Streaming search API'
               )}
               tooltip={
                 <>

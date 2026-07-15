@@ -168,7 +168,7 @@
         "label-default-editor": "Default editor",
         "label-disable-metrics-lookup": "Disable metrics lookup",
         "label-disable-recording-rules-beta": "Disable recording rules (beta)",
-        "label-enable-search-api": "Streaming search API (experimental)",
+        "label-enable-search-api": "Streaming search API",
         "label-http-method": "HTTP method",
         "label-incremental-querying-beta": "Incremental querying (beta)",
         "label-prom-type-version": "{{promType}} version",
