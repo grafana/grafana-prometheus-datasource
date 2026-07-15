@@ -1,32 +1,15 @@
 services:
   # Phase 0 dev Prometheus for the experimental NDJSON streaming search API.
   #
-  # Compiled ONCE from the local Prometheus clone into a Docker image (the clone carries
-  # the experimental --enable-feature=search-api flag, not in any released image). Because
-  # this is a real `build:` step, `docker compose up` just launches the prebuilt binary —
-  # it does NOT recompile on every start (unlike the old `go run` approach). The build
-  # context defaults to the layout used during development and can be overridden with
-  # PROMETHEUS_SRC.
-  #
-  # Rebuild only when the Prometheus source changes:  docker compose build prometheus
-  # (BuildKit cache mounts below keep that rebuild incremental — only changed packages
-  # recompile). The first build compiles Prometheus from source and can take a few minutes;
-  # every subsequent `up` is instant.
+  # --enable-feature=search-api shipped (still experimental/flagged) in the official
+  # Prometheus 3.13.0 release, so the official image now supports it directly — no local
+  # source build needed. Must pin >= v3.13.0 explicitly: the `latest` tag has a known bug
+  # (https://github.com/prometheus/prometheus/issues/18962) where it can resolve to an
+  # older backported-fix release that predates search-api and rejects the flag.
   prometheus:
-    image: prometheus-search-api:dev
-    build:
-      context: ${PROMETHEUS_SRC:-../../prometheus/prometheus}
-      dockerfile_inline: |
-        # syntax=docker/dockerfile:1
-        FROM golang:1.26
-        WORKDIR /prometheus-src
-        COPY . .
-        RUN --mount=type=cache,target=/root/.cache/go-build \
-            --mount=type=cache,target=/go/pkg/mod \
-            go build -o /usr/local/bin/prometheus ./cmd/prometheus
+    image: prom/prometheus:v3.13.1
     container_name: 'prometheus-search-api'
     command:
-      - /usr/local/bin/prometheus
       - --config.file=/etc/prometheus/prometheus.yml
       - --enable-feature=search-api
       - --web.listen-address=0.0.0.0:9090
