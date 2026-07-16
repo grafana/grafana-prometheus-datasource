@@ -1,7 +1,7 @@
 import { Observable } from 'rxjs';
 
 import { dateTime, type TimeRange } from '@grafana/data';
-import { type BackendSrvRequest, type FetchResponse, getBackendSrv, setBackendSrv } from '@grafana/runtime';
+import { type BackendSrvRequest, config, type FetchResponse, getBackendSrv, setBackendSrv } from '@grafana/runtime';
 
 import { SEARCH_STREAM_BATCH_SIZE } from './constants';
 import { type PrometheusDatasource } from './datasource';
@@ -142,6 +142,7 @@ describe('SearchApiClient', () => {
         batch_size: '100',
         include_metadata: 'true',
       },
+      headers: {},
     });
   });
 
@@ -167,6 +168,28 @@ describe('SearchApiClient', () => {
     await client.searchMetricNames(timeRange, 'up', { limit: 10 });
 
     expect(chunkedMock).toHaveBeenCalledWith(expect.objectContaining({ url: expect.not.stringMatching(/^\//) }));
+  });
+
+  it('sends X-Grafana-Org-Id when the current org is known', async () => {
+    jest.replaceProperty(config, 'bootData', { ...config.bootData, user: { ...config.bootData.user, orgId: 7 } });
+    chunkedMock.mockReturnValue(chunkedStream(['{"results":[]}\n', '{"status":"success","has_more":false}\n']));
+    const client = new SearchApiClient(jest.fn(), datasource);
+
+    await client.searchMetricNames(timeRange, 'up', { limit: 10 });
+
+    expect(chunkedMock).toHaveBeenCalledWith(
+      expect.objectContaining({ headers: expect.objectContaining({ 'X-Grafana-Org-Id': '7' }) })
+    );
+  });
+
+  it('omits X-Grafana-Org-Id when the current org is unknown', async () => {
+    jest.replaceProperty(config, 'bootData', { ...config.bootData, user: { ...config.bootData.user, orgId: 0 } });
+    chunkedMock.mockReturnValue(chunkedStream(['{"results":[]}\n', '{"status":"success","has_more":false}\n']));
+    const client = new SearchApiClient(jest.fn(), datasource);
+
+    await client.searchMetricNames(timeRange, 'up', { limit: 10 });
+
+    expect(chunkedMock).toHaveBeenCalledWith(expect.objectContaining({ headers: {} }));
   });
 
   it('caps legacy unlimited and default limits at the Prometheus search maximum', async () => {

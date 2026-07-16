@@ -1,5 +1,5 @@
 import { type TimeRange } from '@grafana/data';
-import { type BackendSrvRequest, getBackendSrv } from '@grafana/runtime';
+import { type BackendSrvRequest, config, getBackendSrv } from '@grafana/runtime';
 
 import { SEARCH_STREAM_BATCH_SIZE } from './constants';
 import { getRangeSnapInterval, processHistogramMetrics, removeQuotesIfExist } from './language_utils';
@@ -465,7 +465,16 @@ export class SearchApiClient extends BaseResourceClient implements ResourceApiCl
     // <base href>, which already accounts for a Grafana subpath install.
     const url = `api/datasources/uid/${uid}/resources/api/v1/search/${endpoint}`;
 
-    const { source, cancel } = await bridgeChunkedResponse({ url, method: 'GET', params }, options.signal);
+    const headers: Record<string, string> = {};
+    // chunked() skips the core pipeline step that normally injects this on
+    // every local-URL request, so a user who switches org without a full
+    // page reload would otherwise query the wrong org's datasource.
+    const orgId = config.bootData?.user?.orgId;
+    if (orgId) {
+      headers['X-Grafana-Org-Id'] = String(orgId);
+    }
+
+    const { source, cancel } = await bridgeChunkedResponse({ url, method: 'GET', params, headers }, options.signal);
     try {
       return await readSearchStream<T>(source, options.onBatch);
     } finally {
