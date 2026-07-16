@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -197,12 +198,68 @@ func TestResourceExecuteSearchReturnsSenderError(t *testing.T) {
 	require.ErrorIs(t, err, senderErr)
 }
 
+func TestResourceExecuteSearchLogsNonEOFReadError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		// Promise more bytes than we deliver, then abandon the connection so the
+		// client sees an unexpected EOF rather than a clean end of stream.
+		w.Header().Set("Content-Length", "999")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("{\"results\":[\"up\"]}\n"))
+		w.(http.Flusher).Flush()
+	}))
+	defer server.Close()
+
+	logger := &recordingLogger{}
+	res := newSearchResourceWithLogger(t, server.URL, logger)
+	err := res.ExecuteSearch(context.Background(), &backend.CallResourceRequest{
+		Method: http.MethodGet,
+		Path:   "api/v1/search/metric_names",
+		URL:    "/api/v1/search/metric_names",
+	}, backend.CallResourceResponseSenderFunc(func(_ *backend.CallResourceResponse) error {
+		return nil
+	}))
+
+	// A truncated stream ends the partial response cleanly, but the transport
+	// error must still be observable in the logs.
+	require.NoError(t, err)
+	require.True(t, logger.hasWarning(), "expected a warning to be logged for the non-EOF read error")
+}
+
 func newSearchResource(t *testing.T, serverURL string) *resource.Resource {
+	t.Helper()
+	return newSearchResourceWithLogger(t, serverURL, log.DefaultLogger)
+}
+
+func newSearchResourceWithLogger(t *testing.T, serverURL string, logger log.Logger) *resource.Resource {
 	t.Helper()
 	res, err := resource.New(http.DefaultClient, backend.DataSourceInstanceSettings{
 		URL:      serverURL,
 		JSONData: []byte(`{"httpMethod":"GET"}`),
-	}, log.DefaultLogger)
+	}, logger)
 	require.NoError(t, err)
 	return res
+}
+
+// recordingLogger captures Warn calls so tests can assert on logged transport
+// errors without inspecting stderr.
+type recordingLogger struct {
+	log.Logger
+	mu       sync.Mutex
+	warnings []string
+}
+
+func (l *recordingLogger) Warn(msg string, _ ...interface{}) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.warnings = append(l.warnings, msg)
+}
+
+func (l *recordingLogger) Debug(_ string, _ ...interface{}) {}
+
+func (l *recordingLogger) FromContext(_ context.Context) log.Logger { return l }
+
+func (l *recordingLogger) hasWarning() bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return len(l.warnings) > 0
 }

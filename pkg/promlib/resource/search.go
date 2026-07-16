@@ -2,6 +2,7 @@ package resource
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -91,6 +92,11 @@ func (r *Resource) ExecuteSearch(
 			}
 			// The Search API permits abrupt EOF. Results already forwarded remain
 			// useful, so a transport read error ends the partial stream cleanly.
+			// A non-EOF error (e.g. a reset connection) is still logged so the
+			// truncation is observable rather than silently swallowed.
+			if !errors.Is(readErr, io.EOF) {
+				r.log.FromContext(ctx).Warn("Search stream ended with a transport error", "err", readErr)
+			}
 			return nil
 		}
 	}
