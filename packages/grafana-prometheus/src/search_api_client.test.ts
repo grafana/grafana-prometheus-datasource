@@ -1,4 +1,5 @@
 import { dateTime, type TimeRange } from '@grafana/data';
+import { config } from '@grafana/runtime';
 
 import { type PrometheusDatasource } from './datasource';
 import { readSearchStream, SearchApiClient, type SearchMetricResult } from './search_api_client';
@@ -89,6 +90,7 @@ describe('SearchApiClient', () => {
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
+    jest.restoreAllMocks();
     jest.clearAllMocks();
   });
 
@@ -135,6 +137,34 @@ describe('SearchApiClient', () => {
       metrics: ['request_duration_bucket', 'up'],
       histogramMetrics: ['request_duration_bucket'],
     });
+  });
+
+  it('uses the Grafana application subpath', async () => {
+    jest.replaceProperty(config, 'appSubUrl', '/grafana');
+    globalThis.fetch = jest
+      .fn()
+      .mockResolvedValue(streamResponse(['{"results":[]}\n', '{"status":"success","has_more":false}\n']));
+    const client = new SearchApiClient(jest.fn(), datasource);
+
+    await client.searchMetricNames(timeRange, 'up', { limit: 10 });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /^\/grafana\/api\/datasources\/uid\/prometheus%2Fprimary\/resources\/api\/v1\/search\/metric_names\?/
+      ),
+      expect.anything()
+    );
+  });
+
+  it('caps legacy unlimited and default limits at the Prometheus search maximum', async () => {
+    globalThis.fetch = jest
+      .fn()
+      .mockResolvedValue(streamResponse(['{"results":[]}\n', '{"status":"success","has_more":true}\n']));
+    const client = new SearchApiClient(jest.fn(), datasource);
+
+    await client.searchLabelNames(timeRange, '', { limit: 0 });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining('limit=10000'), expect.anything());
   });
 
   it('passes abort signals to fetch', async () => {

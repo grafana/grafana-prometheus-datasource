@@ -1,7 +1,10 @@
 import { type TimeRange } from '@grafana/data';
+import { config } from '@grafana/runtime';
 
 import { getRangeSnapInterval, processHistogramMetrics, removeQuotesIfExist } from './language_utils';
 import { BaseResourceClient, type ResourceApiClient, ResourceClientsCache } from './resource_clients';
+
+const DEFAULT_SEARCH_API_MAX_LIMIT = 10_000;
 
 export interface SearchMetricResult {
   name: string;
@@ -166,7 +169,7 @@ export class SearchApiClient extends BaseResourceClient implements ResourceApiCl
     timeRange: TimeRange,
     limit?: number
   ): Promise<{ metrics: string[]; histogramMetrics: string[] }> => {
-    const effectiveLimit = this.getEffectiveLimit(limit);
+    const effectiveLimit = this.getEffectiveSearchLimit(limit);
     const response = await this.searchMetricNames(timeRange, '', { limit: effectiveLimit });
     this.metrics = response.results.map((result) => result.name);
     this.histogramMetrics = processHistogramMetrics(this.metrics);
@@ -175,7 +178,7 @@ export class SearchApiClient extends BaseResourceClient implements ResourceApiCl
   };
 
   public queryLabelKeys = async (timeRange: TimeRange, match?: string, limit?: number): Promise<string[]> => {
-    const effectiveLimit = this.getEffectiveLimit(limit);
+    const effectiveLimit = this.getEffectiveSearchLimit(limit);
     const effectiveMatch = match ?? '';
     const cached = this._cache.getLabelKeys(timeRange, effectiveMatch, effectiveLimit);
     if (cached) {
@@ -194,7 +197,7 @@ export class SearchApiClient extends BaseResourceClient implements ResourceApiCl
     match?: string,
     limit?: number
   ): Promise<string[]> => {
-    const effectiveLimit = this.getEffectiveLimit(limit);
+    const effectiveLimit = this.getEffectiveSearchLimit(limit);
     const interpolatedName = this.datasource.interpolateString(labelKey);
     const labelName = removeQuotesIfExist(interpolatedName);
     const effectiveMatch = `${match ?? ''}-${labelName}`;
@@ -250,7 +253,7 @@ export class SearchApiClient extends BaseResourceClient implements ResourceApiCl
     const params = new URLSearchParams({
       start: String(timeParams.start),
       end: String(timeParams.end),
-      limit: String(this.getEffectiveLimit(options.limit)),
+      limit: String(this.getEffectiveSearchLimit(options.limit)),
     });
 
     if (term) {
@@ -267,8 +270,9 @@ export class SearchApiClient extends BaseResourceClient implements ResourceApiCl
     }
 
     const uid = encodeURIComponent(this.datasource.uid);
+    const appSubUrl = config.appSubUrl?.replace(/\/$/, '') ?? '';
     const response = await fetch(
-      `/api/datasources/uid/${uid}/resources/api/v1/search/${endpoint}?${params.toString()}`,
+      `${appSubUrl}/api/datasources/uid/${uid}/resources/api/v1/search/${endpoint}?${params.toString()}`,
       {
         method: 'GET',
         credentials: 'same-origin',
@@ -276,5 +280,13 @@ export class SearchApiClient extends BaseResourceClient implements ResourceApiCl
       }
     );
     return readSearchStream<T>(response, options.onBatch);
+  }
+
+  private getEffectiveSearchLimit(limit?: number): number {
+    const effectiveLimit = this.getEffectiveLimit(limit);
+    if (effectiveLimit <= 0) {
+      return DEFAULT_SEARCH_API_MAX_LIMIT;
+    }
+    return Math.min(effectiveLimit, DEFAULT_SEARCH_API_MAX_LIMIT);
   }
 }
