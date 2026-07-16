@@ -46,7 +46,7 @@ export class DataProvider {
    */
   queryMetricNames = async (timeRange: TimeRange, searchTerm: string | undefined): Promise<string[]> => {
     try {
-      const searchClient = this.languageProvider.getSearchApiClient?.();
+      const searchClient = this.languageProvider.getSearchApiClient();
       if (searchClient) {
         // Search API ranks the raw editor text server-side; the regex and UTF-8
         // escaping below belong only to the legacy label-values endpoint.
@@ -85,7 +85,7 @@ export class DataProvider {
     limit?: number,
     searchTerm?: string
   ): Promise<string[]> => {
-    const searchClient = this.languageProvider.getSearchApiClient?.();
+    const searchClient = this.languageProvider.getSearchApiClient();
     if (searchClient && searchTerm) {
       // Empty-prefix requests use the drop-in ResourceApiClient path. Typed
       // prefixes use the fuzzy extension so Prometheus can rank matches.
@@ -108,7 +108,7 @@ export class DataProvider {
     limit?: number,
     searchTerm?: string
   ): Promise<string[]> => {
-    const searchClient = this.languageProvider.getSearchApiClient?.();
+    const searchClient = this.languageProvider.getSearchApiClient();
     if (searchClient && searchTerm) {
       this.labelValueSearchAbortController?.abort();
       this.labelValueSearchAbortController = new AbortController();

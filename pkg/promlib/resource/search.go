@@ -24,9 +24,6 @@ func (r *Resource) ExecuteSearch(
 	// decompression step such as the one used by Resource.Execute.
 	streamReq := *req
 	streamReq.Headers = map[string][]string(req.GetHTTPHeaders().Clone())
-	if streamReq.Headers == nil {
-		streamReq.Headers = make(map[string][]string)
-	}
 	streamReq.Headers["Accept-Encoding"] = []string{"identity"}
 
 	resp, err := r.promClient.QueryResource(ctx, &streamReq)
@@ -50,9 +47,6 @@ func (r *Resource) ExecuteSearch(
 	}
 
 	headers := resp.Header.Clone()
-	if headers == nil {
-		headers = make(http.Header)
-	}
 	headers.Set("Content-Type", "application/x-ndjson; charset=utf-8")
 	headers.Del("Content-Length")
 	headers.Del("Content-Encoding")

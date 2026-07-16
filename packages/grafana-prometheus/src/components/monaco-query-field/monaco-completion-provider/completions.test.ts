@@ -16,6 +16,7 @@ const dataProviderSettings = {
     queryMetricsMetadata: jest.fn().mockResolvedValue({}),
     retrieveLabelKeys: jest.fn(),
     retrieveMetricsMetadata: jest.fn().mockReturnValue({}),
+    getSearchApiClient: jest.fn().mockReturnValue(undefined),
   },
   historyProvider: history.map((expr, idx) => ({ query: { expr, refId: 'some-ref' }, ts: idx })),
 } as unknown as DataProviderParams;
