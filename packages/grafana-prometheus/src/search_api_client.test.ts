@@ -1,6 +1,7 @@
 import { dateTime, type TimeRange } from '@grafana/data';
 import { config } from '@grafana/runtime';
 
+import { SEARCH_STREAM_BATCH_SIZE } from './constants';
 import { type PrometheusDatasource } from './datasource';
 import { readSearchStream, SearchApiClient, type SearchMetricResult } from './search_api_client';
 import { PrometheusCacheLevel } from './types';
@@ -113,7 +114,7 @@ describe('SearchApiClient', () => {
     expect(result.results).toEqual([{ name: 'http_requests_total', score: 0.9, type: 'counter', help: 'Requests' }]);
     expect(globalThis.fetch).toHaveBeenCalledWith(
       '/api/datasources/uid/prometheus%2Fprimary/resources/api/v1/search/metric_names?' +
-        'start=1681300260&end=1681300320&limit=100&search%5B%5D=http+req&sort_by=score&include_metadata=true',
+        'start=1681300260&end=1681300320&limit=100&search%5B%5D=http+req&sort_by=score&batch_size=100&include_metadata=true',
       {
         method: 'GET',
         credentials: 'same-origin',
@@ -180,6 +181,31 @@ describe('SearchApiClient', () => {
     controller.abort();
 
     await expect(promise).rejects.toThrow('aborted');
+  });
+
+  it('sends batch_size when a batch size is provided', async () => {
+    globalThis.fetch = jest
+      .fn()
+      .mockResolvedValue(streamResponse(['{"results":[]}\n', '{"status":"success","has_more":false}\n']));
+    const client = new SearchApiClient(jest.fn(), datasource);
+
+    await client.searchMetricNames(timeRange, 'up', { limit: 100, batchSize: 25 });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining('batch_size=25'), expect.anything());
+  });
+
+  it('defaults batch_size to the streaming batch size when none is provided', async () => {
+    globalThis.fetch = jest
+      .fn()
+      .mockResolvedValue(streamResponse(['{"results":[]}\n', '{"status":"success","has_more":false}\n']));
+    const client = new SearchApiClient(jest.fn(), datasource);
+
+    await client.searchMetricNames(timeRange, 'up', { limit: 100 });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining(`batch_size=${SEARCH_STREAM_BATCH_SIZE}`),
+      expect.anything()
+    );
   });
 });
 

@@ -20,6 +20,12 @@ export const DEFAULT_SERIES_LIMIT = 40000;
 
 export const DEFAULT_COMPLETION_LIMIT = 1000;
 
+// Default results per NDJSON batch line for every Search API request. Smaller
+// values let incremental consumers (e.g. Metrics Explorer) paint the first rows
+// sooner, at the cost of more updates. It only affects streaming granularity,
+// never the final result set. Matches Prometheus's own default of 100.
+export const SEARCH_STREAM_BATCH_SIZE = 100;
+
 /**
  * Only for /series endpoint. Don't use this anywhere else as it cause an expensive query
  */

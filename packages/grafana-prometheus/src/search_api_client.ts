@@ -1,6 +1,7 @@
 import { type TimeRange } from '@grafana/data';
 import { config } from '@grafana/runtime';
 
+import { SEARCH_STREAM_BATCH_SIZE } from './constants';
 import { getRangeSnapInterval, processHistogramMetrics, removeQuotesIfExist } from './language_utils';
 import { BaseResourceClient, type ResourceApiClient, ResourceClientsCache } from './resource_clients';
 
@@ -35,6 +36,10 @@ export interface SearchOptions<T> {
   match?: string;
   signal?: AbortSignal;
   onBatch?: (results: T[]) => void;
+  // Number of results per NDJSON batch line. This only affects streaming
+  // granularity (time-to-first-batch and how often onBatch fires), not the
+  // accumulated result. Omit to use the upstream default.
+  batchSize?: number;
 }
 
 export interface SearchMetricOptions extends SearchOptions<SearchMetricResult> {
@@ -286,6 +291,13 @@ export class SearchApiClient extends BaseResourceClient implements ResourceApiCl
     }
     if (options.match) {
       params.append('match[]', options.match);
+    }
+    // batch_size only affects streaming granularity, not the result set, so it
+    // is applied to every Search API request. A single constant therefore tunes
+    // delivery for all consumers; callers may still override it per request.
+    const batchSize = options.batchSize ?? SEARCH_STREAM_BATCH_SIZE;
+    if (batchSize > 0) {
+      params.set('batch_size', String(batchSize));
     }
     for (const [key, value] of Object.entries(extraParams)) {
       if (value !== undefined) {
