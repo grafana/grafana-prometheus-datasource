@@ -47,6 +47,8 @@ export function MetricCombobox({
     async (query: string) => {
       const searchClient = datasource.languageProvider.getSearchApiClient();
       if (searchClient) {
+        // The search endpoint ranks the user's raw text. Label filters remain a
+        // match[] selector, and cancellation prevents stale options winning.
         searchAbortControllerRef.current?.abort();
         const abortController = new AbortController();
         searchAbortControllerRef.current = abortController;

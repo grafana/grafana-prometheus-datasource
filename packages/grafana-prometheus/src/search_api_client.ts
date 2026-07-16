@@ -58,6 +58,8 @@ interface SearchErrorLine {
   error?: string;
 }
 
+// Mid-stream failures keep the records already delivered to onBatch available
+// to callers while still surfacing the upstream error.
 export class SearchApiError<T = unknown> extends Error {
   constructor(
     message: string,
@@ -108,6 +110,8 @@ export async function readSearchStream<T>(
       parsed = JSON.parse(line);
     } catch (error) {
       if (tolerateIncomplete) {
+        // Abrupt EOF is valid for this API. Ignore only the unfinished final
+        // line; malformed newline-terminated records still fail loudly.
         return;
       }
       throw error;
@@ -129,10 +133,14 @@ export async function readSearchStream<T>(
       if (parsed.warnings) {
         warnings.push(...parsed.warnings);
       }
+      // Incremental consumers render this batch immediately; conventional
+      // callers still receive the accumulated result when the stream ends.
       onBatch?.(parsed.results);
     }
   };
 
+  // HTTP chunk boundaries are unrelated to NDJSON line boundaries, so retain
+  // the final fragment and prepend it to the next decoded chunk.
   while (true) {
     const { done, value } = await reader.read();
     if (done) {
@@ -152,6 +160,8 @@ export async function readSearchStream<T>(
   return { results, warnings, hasMore };
 }
 
+// This client preserves ResourceApiClient's string-array contract for existing
+// consumers and exposes structured streaming methods to search-aware UIs.
 export class SearchApiClient extends BaseResourceClient implements ResourceApiClient {
   private _cache: ResourceClientsCache = new ResourceClientsCache(this.datasource.cacheLevel);
 
@@ -199,6 +209,8 @@ export class SearchApiClient extends BaseResourceClient implements ResourceApiCl
   ): Promise<string[]> => {
     const effectiveLimit = this.getEffectiveSearchLimit(limit);
     const interpolatedName = this.datasource.interpolateString(labelKey);
+    // Unlike the legacy /label/{name}/values endpoint, Search API carries the
+    // label name in a query parameter and therefore expects the unescaped name.
     const labelName = removeQuotesIfExist(interpolatedName);
     const effectiveMatch = `${match ?? ''}-${labelName}`;
     const cached = this._cache.getLabelValues(timeRange, effectiveMatch, effectiveLimit);
@@ -271,6 +283,9 @@ export class SearchApiClient extends BaseResourceClient implements ResourceApiCl
 
     const uid = encodeURIComponent(this.datasource.uid);
     const appSubUrl = config.appSubUrl?.replace(/\/$/, '') ?? '';
+    // getBackendSrv materializes response bodies, so native fetch is required
+    // here to retain browser ReadableStream access. appSubUrl keeps hosted
+    // Grafana installations under a subpath working.
     const response = await fetch(
       `${appSubUrl}/api/datasources/uid/${uid}/resources/api/v1/search/${endpoint}?${params.toString()}`,
       {
@@ -284,6 +299,9 @@ export class SearchApiClient extends BaseResourceClient implements ResourceApiCl
 
   private getEffectiveSearchLimit(limit?: number): number {
     const effectiveLimit = this.getEffectiveLimit(limit);
+    // Legacy discovery treats zero as unlimited and defaults to 40,000.
+    // Search API requires a positive limit and Prometheus caps it at 10,000 by
+    // default, so normalize both values before the request reaches upstream.
     if (effectiveLimit <= 0) {
       return DEFAULT_SEARCH_API_MAX_LIMIT;
     }

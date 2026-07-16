@@ -129,6 +129,9 @@ export const MetricsModalContextProvider: FC<PropsWithChildren<MetricsModalConte
         return false;
       }
 
+      // Abort saves work across browser → Grafana → plugin → Prometheus. The
+      // search ID remains necessary because an already queued batch callback
+      // can run after cancellation.
       searchAbortControllerRef.current?.abort();
       const abortController = new AbortController();
       searchAbortControllerRef.current = abortController;
@@ -138,6 +141,8 @@ export const MetricsModalContextProvider: FC<PropsWithChildren<MetricsModalConte
       setIsLoading(true);
       setMetricsData([]);
       await searchClient.searchMetricNames(searchTimeRange, metricText, {
+        // Search API metadata lets each batch render without waiting for the
+        // separate /metadata request used by the legacy path below.
         includeMetadata: true,
         limit: PROMETHEUS_QUERY_BUILDER_MAX_RESULTS,
         match,
@@ -182,6 +187,8 @@ export const MetricsModalContextProvider: FC<PropsWithChildren<MetricsModalConte
           setMetricsData(processedData);
         }
       } catch (error) {
+        // Search batches may already be visible when a mid-stream error occurs.
+        // Preserve those partial results; the legacy path has no partial data.
         if (!languageProvider.hasSearchSupport()) {
           setMetricsData([]);
         }
@@ -232,6 +239,7 @@ export const MetricsModalContextProvider: FC<PropsWithChildren<MetricsModalConte
           // Only update state if this is still the latest search
           if (searchId === latestSearchIdRef.current) {
             console.error('Backend search failed:', error);
+            // Keep batches already rendered by the streaming path.
             if (!languageProvider.hasSearchSupport()) {
               setMetricsData([]);
             }

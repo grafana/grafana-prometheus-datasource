@@ -148,6 +148,7 @@ export class PrometheusLanguageProvider implements PrometheusLanguageProviderInt
    * Lazily initializes and returns the appropriate resource client based on Prometheus version.
    *
    * The client selection logic:
+   * - When explicitly enabled: Uses SearchApiClient for streaming discovery
    * - For Prometheus v2.6+ with labels API: Uses LabelsApiClient for efficient label-based queries
    * - For older versions: Falls back to SeriesApiClient for backward compatibility
    *
@@ -158,6 +159,9 @@ export class PrometheusLanguageProvider implements PrometheusLanguageProviderInt
   private get resourceClient(): ResourceApiClient {
     if (!this._resourceClient) {
       if (this.datasource.hasSearchApiSupport()) {
+        // The explicit setting wins over automatic version detection. We do
+        // not silently fall back because that would hide a misconfigured
+        // Prometheus/Mimir search feature flag.
         this._resourceClient = new SearchApiClient(this.request, this.datasource);
       } else {
         this._resourceClient = this.datasource.hasLabelsMatchAPISupport()

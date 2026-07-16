@@ -50,6 +50,9 @@ shown to the user. Search streams remain subject to the data source response
 limit; the bounded limits used by discovery consumers keep normal requests
 within that limit.
 
+See the [Search API feature lifecycle](./docs/prometheus-search-api-lifecycle.md)
+for the complete browser-to-Prometheus request and response flow.
+
 ## Issues
 
 Please report bugs and feature requests at

@@ -22,6 +22,8 @@ export class DataProvider {
   readonly languageProvider: PrometheusLanguageProviderInterface;
   readonly historyProvider: Array<HistoryItem<PromQuery>>;
 
+  // Completion categories can request concurrently, but a newer request in the
+  // same category always supersedes the previous typed prefix.
   private metricSearchAbortController?: AbortController;
   private labelKeySearchAbortController?: AbortController;
   private labelValueSearchAbortController?: AbortController;
@@ -46,6 +48,8 @@ export class DataProvider {
     try {
       const searchClient = this.languageProvider.getSearchApiClient?.();
       if (searchClient) {
+        // Search API ranks the raw editor text server-side; the regex and UTF-8
+        // escaping below belong only to the legacy label-values endpoint.
         this.metricSearchAbortController?.abort();
         this.metricSearchAbortController = new AbortController();
         const response = await searchClient.searchMetricNames(timeRange, searchTerm ?? '', {
@@ -83,6 +87,8 @@ export class DataProvider {
   ): Promise<string[]> => {
     const searchClient = this.languageProvider.getSearchApiClient?.();
     if (searchClient && searchTerm) {
+      // Empty-prefix requests use the drop-in ResourceApiClient path. Typed
+      // prefixes use the fuzzy extension so Prometheus can rank matches.
       this.labelKeySearchAbortController?.abort();
       this.labelKeySearchAbortController = new AbortController();
       const response = await searchClient.searchLabelNames(timeRange, searchTerm, {
