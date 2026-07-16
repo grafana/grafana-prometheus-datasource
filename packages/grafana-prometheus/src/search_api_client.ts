@@ -332,6 +332,21 @@ export async function readSearchStream<T>(
 
 // This client preserves ResourceApiClient's string-array contract for existing
 // consumers and exposes structured streaming methods to search-aware UIs.
+//
+// Transport parity with getBackendSrv().fetch(): search() uses
+// getBackendSrv().chunked() (public @grafana/runtime API) instead of fetch()
+// so streaming NDJSON survives while still gaining credentials handling,
+// param/URL parsing, abort wiring, grafana-trace-id capture, X-Grafana-Org-Id,
+// and a 401-triggered auth-refresh retry (see bridgeChunkedResponse and the
+// `search` method below). A few core BackendSrv behaviors live in private
+// instance state that a plugin cannot reach and are knowingly NOT replicated:
+//   - X-Grafana-Device-Id (FingerprintJS-derived, private `deviceID` field).
+//   - The 5-concurrent-request FetchQueue throttle (private `fetchQueue`).
+//   - Query Inspector stream events (private `inspectorStream`, write-only).
+//   - JWT URL-login header (needs app-internal `loadUrlToken()`).
+//   - showErrorAlert toasts on failure (discovery failures stay silent by design).
+// All are low-impact for background GET discovery, since none of them affect
+// correctness of the search results themselves.
 export class SearchApiClient extends BaseResourceClient implements ResourceApiClient {
   private _cache: ResourceClientsCache = new ResourceClientsCache(this.datasource.cacheLevel);
 
