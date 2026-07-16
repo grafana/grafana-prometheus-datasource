@@ -92,6 +92,7 @@ export class PrometheusDatasource
   languageProvider: PrometheusLanguageProviderInterface;
   lookupsDisabled: boolean;
   ruleMappings: RuleQueryMapping;
+  searchApi: boolean;
   seriesEndpoint: boolean;
   seriesLimit: number;
   type: string;
@@ -126,6 +127,7 @@ export class PrometheusDatasource
     this.interval = instanceSettings.jsonData.timeInterval || '15s';
     this.lookupsDisabled = instanceSettings.jsonData.disableMetricsLookup ?? false;
     this.ruleMappings = {};
+    this.searchApi = instanceSettings.jsonData.searchApi ?? false;
     this.seriesEndpoint = instanceSettings.jsonData.seriesEndpoint ?? false;
     this.seriesLimit = instanceSettings.jsonData.seriesLimit ?? DEFAULT_SERIES_LIMIT;
     this.type = 'prometheus';
@@ -237,6 +239,10 @@ export class PrometheusDatasource
       //https://github.com/thanos-io/thanos/releases/tag/v0.18.0
       this._isDatasourceVersionGreaterOrEqualTo('0.18.0', PromApplication.Thanos)
     );
+  }
+
+  hasSearchApiSupport(): boolean {
+    return this.searchApi;
   }
 
   _isDatasourceVersionGreaterOrEqualTo(targetVersion: string, targetFlavor: PromApplication): boolean {

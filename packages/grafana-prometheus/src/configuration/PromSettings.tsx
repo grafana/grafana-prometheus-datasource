@@ -769,6 +769,24 @@ export const PromSettings = (props: Props) => {
                 onChange={onUpdateDatasourceJsonDataOptionChecked(props, 'seriesEndpoint')}
               />
             </InlineField>
+            <InlineField
+              labelWidth={PROM_CONFIG_LABEL_WIDTH}
+              label={t('grafana-prometheus.configuration.prom-settings.label-search-api', 'Search API')}
+              tooltip={
+                <Trans i18nKey="grafana-prometheus.configuration.prom-settings.tooltip-search-api">
+                  Use the streaming Search API for metric and label discovery. Requires Prometheus with
+                  --enable-feature=search-api or Mimir with -querier.experimental-search-api-enabled.
+                </Trans>
+              }
+              interactive={true}
+              disabled={optionsWithDefaults.readOnly}
+              className={styles.switchField}
+            >
+              <Switch
+                value={optionsWithDefaults.jsonData.searchApi ?? false}
+                onChange={onUpdateDatasourceJsonDataOptionChecked(props, 'searchApi')}
+              />
+            </InlineField>
           </Stack>
         </Box>
       </ConfigSubSection>

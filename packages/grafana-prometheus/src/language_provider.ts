@@ -20,6 +20,7 @@ import { extractLabelMatchers, fixSummariesMetadata, toPromLikeQuery } from './l
 import { promqlGrammar } from './promql';
 import { buildVisualQueryFromString } from './querybuilder/parsing';
 import { LabelsApiClient, type ResourceApiClient, SeriesApiClient } from './resource_clients';
+import { SearchApiClient } from './search_api_client';
 import { type PromMetricsMetadata, type PromQuery } from './types';
 
 interface PrometheusBaseLanguageProvider {
@@ -114,6 +115,10 @@ export interface PrometheusLanguageProviderInterface extends PrometheusBaseLangu
    * Use zero (0) to fetch all label values, but this might return huge amounts of data.
    */
   queryLabelValues: (timeRange: TimeRange, labelKey: string, match?: string, limit?: number) => Promise<string[]>;
+
+  hasSearchSupport: () => boolean;
+
+  getSearchApiClient: () => SearchApiClient | undefined;
 }
 
 export class PrometheusLanguageProvider implements PrometheusLanguageProviderInterface {
@@ -152,13 +157,26 @@ export class PrometheusLanguageProvider implements PrometheusLanguageProviderInt
    */
   private get resourceClient(): ResourceApiClient {
     if (!this._resourceClient) {
-      this._resourceClient = this.datasource.hasLabelsMatchAPISupport()
-        ? new LabelsApiClient(this.request, this.datasource)
-        : new SeriesApiClient(this.request, this.datasource);
+      if (this.datasource.hasSearchApiSupport()) {
+        this._resourceClient = new SearchApiClient(this.request, this.datasource);
+      } else {
+        this._resourceClient = this.datasource.hasLabelsMatchAPISupport()
+          ? new LabelsApiClient(this.request, this.datasource)
+          : new SeriesApiClient(this.request, this.datasource);
+      }
     }
 
     return this._resourceClient;
   }
+
+  public hasSearchSupport = (): boolean => {
+    return this.datasource.hasSearchApiSupport();
+  };
+
+  public getSearchApiClient = (): SearchApiClient | undefined => {
+    const client = this.resourceClient;
+    return client instanceof SearchApiClient ? client : undefined;
+  };
 
   /**
    * Same start logic but it uses resource clients. Backward compatibility it calls _backwardCompatibleStart.
