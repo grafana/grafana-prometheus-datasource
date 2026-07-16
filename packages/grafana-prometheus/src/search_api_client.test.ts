@@ -243,6 +243,21 @@ describe('SearchApiClient', () => {
     expect(chunkedMock).toHaveBeenCalledTimes(2);
   });
 
+  it('flags a chunked stream that ends without the success trailer as incomplete', async () => {
+    // The trailer line is dropped entirely (not just truncated) to simulate a
+    // connection that ends right after the last data batch.
+    chunkedMock.mockReturnValue(chunkedStream(['{"results":[{"name":"up"}]}\n']));
+    const client = new SearchApiClient(jest.fn(), datasource);
+
+    const result = await client.searchMetricNames(timeRange, 'up', { limit: 10 });
+
+    expect(result).toEqual({
+      results: [{ name: 'up' }],
+      warnings: ['Search stream ended before completion; results may be incomplete.'],
+      hasMore: true,
+    });
+  });
+
   it('propagates abort by unsubscribing the chunked request', async () => {
     const unsubscribe = jest.fn();
     chunkedMock.mockReturnValue(
