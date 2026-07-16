@@ -371,7 +371,7 @@ function genId(): string {
   return genSecureId() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-/** Creates a stable caller-owned slot ID; call once per mounted autocomplete source. */
+/** Creates a stable caller-owned slot ID; call once per mounted resource consumer. */
 export function createSearchSlotId(prefix: string): string {
   return `${prefix}-${genId()}`;
 }
@@ -409,8 +409,8 @@ export function extractSearchValues(
  * streams requestId-tagged frames back down the same channel.
  *
  * Resilience: if Grafana Live is unavailable or the subscription errors, every method
- * transparently delegates to a LabelsApiClient/SeriesApiClient so autocomplete never
- * breaks. Drop-in promises always resolve (never reject) — on stream error/timeout they
+ * transparently delegates to a LabelsApiClient/SeriesApiClient so language provider never
+ * breaks. Drop-in promises always resolve (never reject) on stream error/timeout they
  * resolve with the partial snapshot collected so far.
  */
 export class SearchApiClient extends BaseResourceClient implements SearchCapableClient {
@@ -462,8 +462,7 @@ export class SearchApiClient extends BaseResourceClient implements SearchCapable
       this.liveSub = live.getStream<SearchFrame>(this.channelAddr).subscribe({
         next: (event) => {
           if (isLiveChannelMessageEvent(event)) {
-            // Drop echoed publish requests (and anything else that is not a response
-            // envelope); see isSearchFrame.
+            // Drop echoed publish requests (and anything else that is not a response envelope). See isSearchFrame.
             if (isSearchFrame(event.message)) {
               this.messages$.next(event.message);
             }
