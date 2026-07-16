@@ -45,3 +45,32 @@ export const GET_AND_POST_METADATA_ENDPOINTS = [
   'api/v1/labels',
   'suggestions',
 ];
+
+/**
+ * Experimental Prometheus/Mimir NDJSON streaming search API endpoints. These are the
+ * allowlisted endpoints the backend stream handler is permitted to reach and the values
+ * the frontend publishes over the Live channel.
+ */
+export const SEARCH_ENDPOINTS = {
+  metricNames: 'metric_names',
+  labelNames: 'label_names',
+  labelValues: 'label_values',
+} as const;
+
+export type SearchEndpoint = (typeof SEARCH_ENDPOINTS)[keyof typeof SEARCH_ENDPOINTS];
+
+/**
+ * Recommended starting defaults for search-API autocomplete (from Mimir testing).
+ * `sort_by=score` requires a `search[]` term; callers fall back to `alpha` for the
+ * empty-search "list everything" path.
+ */
+export const SEARCH_API_DEFAULTS = {
+  fuzzAlg: 'subsequence',
+  fuzzThreshold: 50,
+  caseSensitive: false,
+  batchSize: 100,
+  // Default result cap for the search API. Kept lower than DEFAULT_SERIES_LIMIT (40000)
+  // because the search API returns scored/fuzzy autocomplete suggestions, where a tighter
+  // ceiling is enough and keeps the streamed payload small. `0` still means unlimited.
+  limit: 10000,
+} as const;

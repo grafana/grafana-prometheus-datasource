@@ -1,3 +1,5 @@
+import { of } from 'rxjs';
+
 import { type HistoryItem, type TimeRange } from '@grafana/data';
 
 import { DEFAULT_COMPLETION_LIMIT, METRIC_LABEL } from '../../../constants';
@@ -89,6 +91,47 @@ describe('DataProvider', () => {
         '{__name__=~".*U__metric_2e_name.*"}',
         DEFAULT_COMPLETION_LIMIT
       );
+    });
+
+    it('routes the search term to the server-side search (no regex matcher) when supported', async () => {
+      const languageProvider = {
+        ...createLanguageProviderMock(),
+        hasServerSideSearch: jest.fn().mockReturnValue(true),
+        streamMetrics: jest.fn().mockReturnValue(of(['http_requests_total'])),
+      };
+      const dataProvider = createDataProvider(languageProvider);
+
+      const result = await dataProvider.queryMetricNames(timeRange, 'requests');
+
+      expect(result).toEqual(['http_requests_total']);
+      // Typed text goes straight to the streaming search (search[]) — no __name__=~ regex.
+      expect(languageProvider.streamMetrics).toHaveBeenCalledWith(
+        timeRange,
+        'requests',
+        undefined,
+        DEFAULT_COMPLETION_LIMIT,
+        expect.stringMatching(/^monaco-/)
+      );
+      expect(languageProvider.queryLabelValues).not.toHaveBeenCalled();
+    });
+
+    it('uses a distinct search slot for each data provider instance', async () => {
+      const languageProvider = {
+        ...createLanguageProviderMock(),
+        hasServerSideSearch: jest.fn().mockReturnValue(true),
+        streamMetrics: jest.fn().mockReturnValue(of([])),
+      };
+      const firstProvider = createDataProvider(languageProvider);
+      const secondProvider = createDataProvider(languageProvider);
+
+      await firstProvider.queryMetricNames(timeRange, 'first');
+      await secondProvider.queryMetricNames(timeRange, 'second');
+
+      const firstSlot = languageProvider.streamMetrics.mock.calls[0][4];
+      const secondSlot = languageProvider.streamMetrics.mock.calls[1][4];
+      expect(firstSlot).toMatch(/^monaco-/);
+      expect(secondSlot).toMatch(/^monaco-/);
+      expect(firstSlot).not.toBe(secondSlot);
     });
 
     it('returns an empty array when the language provider rejects', async () => {

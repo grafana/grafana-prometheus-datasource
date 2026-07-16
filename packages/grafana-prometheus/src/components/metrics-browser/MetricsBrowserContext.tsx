@@ -1,4 +1,5 @@
 import { createContext, type PropsWithChildren, useCallback, useContext, useMemo } from 'react';
+import { type Observable } from 'rxjs';
 
 import { type TimeRange } from '@grafana/data';
 
@@ -47,6 +48,13 @@ interface MetricsBrowserContextType {
   getSelector: () => string;
   onClearClick: () => void;
 
+  // Server-side (streaming) search. When hasServerSideSearch is false the selectors keep
+  // their existing client-side substring filtering and never call the stream functions.
+  hasServerSideSearch: boolean;
+  searchMetricsStream: (term: string) => Observable<string[]>;
+  searchLabelKeysStream: (term: string) => Observable<string[]>;
+  searchLabelValuesStream: (labelKey: string, term: string) => Observable<string[]>;
+
   // Validation
   validationStatus: string;
   onValidationClick: () => void;
@@ -91,6 +99,10 @@ export function MetricsBrowserProvider({
     handleSelectedLabelValueChange,
     handleValidation,
     handleClear,
+    hasServerSideSearch,
+    searchMetricsStream,
+    searchLabelKeysStream,
+    searchLabelValuesStream,
   } = useMetricsLabelsValues(timeRange, languageProvider);
 
   // Build a Prometheus selector string from the current selections
@@ -124,6 +136,10 @@ export function MetricsBrowserProvider({
       onLabelValueClick: handleSelectedLabelValueChange,
       onValidationClick: handleValidation,
       onClearClick: handleClear,
+      hasServerSideSearch,
+      searchMetricsStream,
+      searchLabelKeysStream,
+      searchLabelValuesStream,
     }),
     [
       err,
@@ -148,6 +164,10 @@ export function MetricsBrowserProvider({
       handleSelectedLabelValueChange,
       handleValidation,
       handleClear,
+      hasServerSideSearch,
+      searchMetricsStream,
+      searchLabelKeysStream,
+      searchLabelValuesStream,
     ]
   );
 

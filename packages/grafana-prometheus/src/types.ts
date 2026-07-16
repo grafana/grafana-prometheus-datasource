@@ -48,10 +48,18 @@ export interface PromOptions extends DataSourceJsonData {
   disableRecordingRules?: boolean;
   allowAsRecordingRulesTarget?: boolean;
   oauthPassThru?: boolean;
+  keepCookies?: string[];
   seriesEndpoint?: boolean;
   seriesLimit?: number;
   maxSamplesProcessedWarningThreshold?: number;
   maxSamplesProcessedErrorThreshold?: number;
+  /**
+   * Opt-in to the experimental Prometheus/Mimir NDJSON streaming search API
+   * (/api/v1/search/*) for fuzzy, scored, server-side autocomplete. Requires the
+   * upstream to be started with --enable-feature=search-api. When off, autocomplete
+   * uses the existing labels/series endpoints unchanged.
+   */
+  enableSearchApi?: boolean;
 }
 
 export type ExemplarTraceIdDestination = {

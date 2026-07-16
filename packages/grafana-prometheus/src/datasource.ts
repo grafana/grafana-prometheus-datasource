@@ -94,6 +94,8 @@ export class PrometheusDatasource
   ruleMappings: RuleQueryMapping;
   seriesEndpoint: boolean;
   seriesLimit: number;
+  enableSearchApi: boolean;
+  usesForwardedAuth: boolean;
   type: string;
   url: string;
   withCredentials: boolean;
@@ -128,6 +130,9 @@ export class PrometheusDatasource
     this.ruleMappings = {};
     this.seriesEndpoint = instanceSettings.jsonData.seriesEndpoint ?? false;
     this.seriesLimit = instanceSettings.jsonData.seriesLimit ?? DEFAULT_SERIES_LIMIT;
+    this.enableSearchApi = instanceSettings.jsonData.enableSearchApi ?? false;
+    this.usesForwardedAuth =
+      Boolean(instanceSettings.jsonData.oauthPassThru) || Boolean(instanceSettings.jsonData.keepCookies?.length);
     this.type = 'prometheus';
     this.url = instanceSettings.url!;
     this.withCredentials = Boolean(instanceSettings.withCredentials);
@@ -154,6 +159,15 @@ export class PrometheusDatasource
     }
     this.exemplarsAvailable = await this.areExemplarsAvailable();
   };
+
+  /**
+   * Forward-compatible cleanup plumbing for a future DataSourceApi lifecycle hook.
+   * Grafana core does not call this today; effective page cleanup comes from the
+   * websocket closing during page unload.
+   */
+  destroy(): void {
+    this.languageProvider.dispose();
+  }
 
   /**
    * Loads recording rules from the Prometheus API and extracts rule mappings.
@@ -237,6 +251,21 @@ export class PrometheusDatasource
       //https://github.com/thanos-io/thanos/releases/tag/v0.18.0
       this._isDatasourceVersionGreaterOrEqualTo('0.18.0', PromApplication.Thanos)
     );
+  }
+
+  /**
+   * Reports whether the experimental NDJSON streaming search API should be used for
+   * autocomplete on this datasource.
+   *
+   * Gated strictly on the per-datasource `enableSearchApi` jsonData toggle. The version
+   * check is kept optimistic (mirrors hasLabelsMatchAPISupport) because the upstream
+   * feature is still experimental and release versions are not yet known; the toggle is
+   * the real switch, and the SearchApiClient falls back to the labels/series client at
+   * runtime if Grafana Live or the stream is unavailable, so a misconfigured toggle can
+   * never break autocomplete.
+   */
+  hasSearchApiSupport(): boolean {
+    return this.enableSearchApi && !this.usesForwardedAuth;
   }
 
   _isDatasourceVersionGreaterOrEqualTo(targetVersion: string, targetFlavor: PromApplication): boolean {

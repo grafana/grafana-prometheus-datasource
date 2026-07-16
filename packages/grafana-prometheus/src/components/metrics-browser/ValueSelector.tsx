@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { FixedSizeList } from 'react-window';
+import { type Subscription } from 'rxjs';
 
 import { selectors } from '@grafana/e2e-selectors';
 import { t, Trans } from '@grafana/i18n';
@@ -15,18 +16,60 @@ export function ValueSelector() {
   const sharedStyles = useStyles2(getStylesMetricsBrowser);
 
   const [valueSearchTerm, setValueSearchTerm] = useState('');
-  const { labelValues, selectedLabelValues, isLoadingLabelValues, onLabelValueClick, onLabelKeyClick } =
-    useMetricsBrowser();
+  const {
+    labelValues,
+    selectedLabelValues,
+    isLoadingLabelValues,
+    onLabelValueClick,
+    onLabelKeyClick,
+    hasServerSideSearch,
+    searchLabelValuesStream,
+  } = useMetricsBrowser();
   const [filteredLabelValues, setFilteredLabelValues] = useState<Record<string, string[]>>({ ...labelValues });
 
+  const useServerSearch = hasServerSideSearch && valueSearchTerm !== '';
+
+  // Client-side substring filtering (used when streaming search is off, or the term is
+  // empty). Skipped while a server-side search is active so the two paths don't fight.
   useEffect(() => {
+    if (useServerSearch) {
+      return;
+    }
     const filtered: Record<string, string[]> = {};
     for (const labelKey in labelValues) {
       const values = labelValues[labelKey];
       filtered[labelKey] = values.filter((value) => value.includes(valueSearchTerm));
     }
     setFilteredLabelValues(filtered);
-  }, [labelValues, valueSearchTerm]);
+  }, [labelValues, valueSearchTerm, useServerSearch]);
+
+  // Server-side (streaming) search: route the typed term to the upstream `search[]` for
+  // each selected label key, rendering each key's values progressively as they stream in.
+  useEffect(() => {
+    if (!useServerSearch) {
+      return;
+    }
+    const keys = Object.keys(labelValues);
+    const acc = Object.fromEntries(keys.map((key) => [key, [...(selectedLabelValues[key] ?? [])]]));
+    setFilteredLabelValues({ ...acc });
+    const subs: Subscription[] = [];
+    const handle = setTimeout(() => {
+      keys.forEach((lk) => {
+        const sub = searchLabelValuesStream(lk, valueSearchTerm).subscribe({
+          next: (vals) => {
+            acc[lk] = Array.from(new Set([...(selectedLabelValues[lk] ?? []), ...vals]));
+            setFilteredLabelValues({ ...acc });
+          },
+        });
+        subs.push(sub);
+      });
+    }, 300);
+
+    return () => {
+      clearTimeout(handle);
+      subs.forEach((sub) => sub.unsubscribe());
+    };
+  }, [labelValues, selectedLabelValues, valueSearchTerm, useServerSearch, searchLabelValuesStream]);
 
   return (
     <div className={styles.section}>

@@ -1,6 +1,7 @@
-# Scrape config for the dev Prometheus. It scrapes itself and the Grafana dev
-# container so there are real metric names, label names and label values to
-# exercise the plugin against.
+# Scrape config for the Phase 0 dev Prometheus that runs with the experimental
+# NDJSON streaming search API enabled (--enable-feature=search-api).
+# It scrapes itself and the Grafana dev container so there are real metric names,
+# label names and label values to exercise the search autocomplete against.
 global:
   scrape_interval: 60s
   evaluation_interval: 60s

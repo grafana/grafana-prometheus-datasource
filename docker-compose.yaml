@@ -1,11 +1,19 @@
 services:
-  # Vanilla upstream Prometheus so the provisioned 'prometheus' datasource
-  # (url: http://prometheus:9090) actually points at a running server. It
-  # scrapes itself and the Grafana dev container, giving real metric names,
-  # label names and label values to exercise the plugin against.
+  # Phase 0 dev Prometheus for the experimental NDJSON streaming search API.
+  #
+  # --enable-feature=search-api shipped (still experimental/flagged) in the official
+  # Prometheus 3.13.0 release, so the official image now supports it directly — no local
+  # source build needed. Must pin >= v3.13.0 explicitly: the `latest` tag has a known bug
+  # (https://github.com/prometheus/prometheus/issues/18962) where it can resolve to an
+  # older backported-fix release that predates search-api and rejects the flag.
   prometheus:
-    image: prom/prometheus
-    container_name: 'prometheus'
+    image: prom/prometheus:v3.13.1
+    container_name: 'prometheus-search-api'
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --enable-feature=search-api
+      - --web.listen-address=0.0.0.0:9090
+      - --storage.tsdb.path=/tmp/tsdb
     volumes:
       - ./provisioning/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     ports:
@@ -18,6 +26,8 @@ services:
     depends_on:
       - prometheus
     environment:
+      # Grafana Live (websocket) is required for the streaming search API transport.
+      GF_LIVE_MAX_CONNECTIONS: '100'
       # Grafana 13 enables splashScreen by default; the overlay blocks Playwright interactions.
       GF_FEATURE_TOGGLES_splashScreen: 'false'
       # Override the base value now that the plugin ID is 'prometheus'.

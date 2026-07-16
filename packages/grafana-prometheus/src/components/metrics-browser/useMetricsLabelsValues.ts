@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { useDebounce } from 'react-use';
+import { type Observable } from 'rxjs';
 
 import { type TimeRange } from '@grafana/data';
 
 import { EMPTY_SELECTOR, LAST_USED_LABELS_KEY, METRIC_LABEL } from '../../constants';
 import { type PrometheusLanguageProviderInterface } from '../../language_provider';
+import { createSearchSlotId } from '../../resource_clients';
 
 import { type Metric } from './MetricsBrowserContext';
 import { buildSelector } from './selectorBuilder';
@@ -13,6 +15,7 @@ export const useMetricsLabelsValues = (timeRange: TimeRange, languageProvider: P
   const timeRangeRef = useRef<TimeRange>(timeRange);
   const lastSeriesLimitRef = useRef(languageProvider.datasource.seriesLimit);
   const isInitializedRef = useRef(false);
+  const searchSlotIdRef = useRef(createSearchSlotId('metrics-browser'));
 
   const [seriesLimit, setSeriesLimit] = useState(languageProvider.datasource.seriesLimit);
   const [err, setErr] = useState('');
@@ -360,6 +363,66 @@ export const useMetricsLabelsValues = (timeRange: TimeRange, languageProvider: P
     setSelectedLabelValues(newSelectedLabelValues);
   };
 
+  // Whether the active resource client supports server-side (fuzzy, scored) search.
+  // When false, the selectors keep their existing client-side substring filtering.
+  const hasServerSideSearch = useMemo(
+    () => languageProvider.hasServerSideSearch?.() ?? false,
+    [languageProvider]
+  );
+
+  // Progressive server-side metric search. Emits accumulating results as NDJSON batches
+  // stream in; the typed term is routed to the upstream `search[]` and the current label
+  // selections become the match context (the selected metric is intentionally ignored so
+  // the user can switch metrics by searching).
+  const searchMetricsStream = useCallback(
+    (term: string): Observable<string[]> => {
+      const selector = buildSafeSelector('', selectedLabelValues);
+      return languageProvider.streamMetrics(
+        timeRangeRef.current,
+        term,
+        selector,
+        effectiveLimit,
+        `${searchSlotIdRef.current}-metrics`
+      );
+    },
+    [languageProvider, buildSafeSelector, selectedLabelValues, effectiveLimit]
+  );
+
+  // Progressive server-side label-name search scoped to the current selections.
+  const searchLabelKeysStream = useCallback(
+    (term: string): Observable<string[]> => {
+      const selector = buildSafeSelector(selectedMetric, selectedLabelValues);
+      return languageProvider.streamLabelKeys(
+        timeRangeRef.current,
+        term,
+        selector,
+        effectiveLimit,
+        `${searchSlotIdRef.current}-labelkeys`
+      );
+    },
+    [languageProvider, buildSafeSelector, selectedMetric, selectedLabelValues, effectiveLimit]
+  );
+
+  // Progressive server-side label-value search for a given key, scoped to the current
+  // selections. A per-key slotId lets independent value lists stream concurrently.
+  const searchLabelValuesStream = useCallback(
+    (labelKey: string, term: string): Observable<string[]> => {
+      const otherSelectedLabelValues = Object.fromEntries(
+        Object.entries(selectedLabelValues).filter(([key]) => key !== labelKey)
+      );
+      const selector = buildSafeSelector(selectedMetric, otherSelectedLabelValues);
+      return languageProvider.streamLabelValues(
+        timeRangeRef.current,
+        labelKey,
+        term,
+        selector,
+        effectiveLimit,
+        `${searchSlotIdRef.current}-labelvalues-${labelKey}`
+      );
+    },
+    [languageProvider, buildSafeSelector, selectedMetric, selectedLabelValues, effectiveLimit]
+  );
+
   // Validating if the selections we have can create a valid query
   const handleValidation = async () => {
     const selector = buildSelector(selectedMetric, selectedLabelValues);
@@ -411,6 +474,11 @@ export const useMetricsLabelsValues = (timeRange: TimeRange, languageProvider: P
     handleSelectedLabelValueChange,
     handleValidation,
     handleClear,
+    // Server-side (streaming) search — no-op fallback handled by the selectors when false
+    hasServerSideSearch,
+    searchMetricsStream,
+    searchLabelKeysStream,
+    searchLabelValuesStream,
     // Helper functions - not part of the public API
     buildSafeSelector,
     loadSelectedLabelsFromStorage,

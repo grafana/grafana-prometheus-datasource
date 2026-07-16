@@ -243,6 +243,68 @@ describe('MetricsModalContext', () => {
       expect(result.current.filteredMetricsData).toEqual([]);
       expect(result.current.isLoading).toBe(false);
     });
+
+    it('routes typed text to the server-side search (no regex match, no client-side fuzzy) when supported', async () => {
+      const searchProvider = {
+        ...mockLanguageProvider,
+        hasServerSideSearch: jest.fn().mockReturnValue(true),
+        searchMetrics: jest.fn().mockResolvedValue(['scored_metric']),
+      } as unknown as PrometheusLanguageProviderInterface;
+
+      const { result } = renderHook(() => useMetricsModal(), {
+        wrapper: createWrapper(searchProvider),
+      });
+
+      await act(async () => {
+        await result.current.debouncedBackendSearch(defaultTimeRange, 'test', [
+          { label: 'job', op: '=', value: 'grafana' },
+        ]);
+      });
+
+      // Typed text goes to search[] (3rd arg); label filters become the match selector.
+      expect(searchProvider.searchMetrics).toHaveBeenCalledWith(
+        defaultTimeRange,
+        'test',
+        '{job="grafana"}',
+        undefined,
+        expect.stringMatching(/^metrics-modal-/)
+      );
+      // The legacy regex `__name__=~` match path must not be used for the search term.
+      expect(searchProvider.queryLabelValues).not.toHaveBeenCalledWith(
+        defaultTimeRange,
+        '__name__',
+        expect.stringContaining('=~')
+      );
+      expect(result.current.filteredMetricsData).toHaveLength(1);
+      expect(result.current.filteredMetricsData[0].value).toBe('scored_metric');
+    });
+
+    it('invalidates an in-flight search as soon as the input changes', async () => {
+      let resolveSearch!: (metrics: string[]) => void;
+      const searchProvider = {
+        ...mockLanguageProvider,
+        hasServerSideSearch: jest.fn().mockReturnValue(true),
+        searchMetrics: jest.fn().mockReturnValue(new Promise<string[]>((resolve) => (resolveSearch = resolve))),
+      } as unknown as PrometheusLanguageProviderInterface;
+      const { result } = renderHook(() => useMetricsModal(), {
+        wrapper: createWrapper(searchProvider),
+      });
+
+      let pending!: Promise<void>;
+      await act(async () => {
+        pending = result.current.debouncedBackendSearch(defaultTimeRange, 'old');
+        await new Promise((resolve) => setTimeout(resolve, 350));
+      });
+      act(() => result.current.setSearchedText('new'));
+      await act(async () => {
+        resolveSearch(['old_metric']);
+        await pending;
+      });
+
+      expect(result.current.filteredMetricsData).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ value: 'old_metric' })])
+      );
+    });
   });
 
   describe('Filtering logic', () => {

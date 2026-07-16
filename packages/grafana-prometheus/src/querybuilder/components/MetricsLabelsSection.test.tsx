@@ -259,6 +259,74 @@ describe('MetricsLabelsSection', () => {
     expect(datasource.languageProvider.queryLabelValues).toHaveBeenCalled();
   });
 
+  it('routes typed text to searchLabelValues (search[]) when server-side search is supported', async () => {
+    const onChange = jest.fn();
+    const datasource = createMockDatasource();
+    datasource.languageProvider.hasServerSideSearch = jest.fn().mockReturnValue(true);
+    datasource.languageProvider.searchLabelValues = jest.fn().mockResolvedValue(['web-1', 'web-2']);
+    const { LabelFilters } = require('./LabelFilters');
+
+    render(
+      <MetricsLabelsSection
+        query={defaultQuery}
+        datasource={datasource}
+        onChange={onChange}
+        timeRange={defaultTimeRange}
+      />
+    );
+
+    const getLabelValuesCallback = LabelFilters.mock.calls[0][0].getLabelValuesAutofillSuggestions;
+    const result = await getLabelValuesCallback('web', 'label2');
+
+    // Typed text is the 3rd arg (search[]); the match selector is built from the OTHER
+    // labels (+ metric), NOT from a regexified typed text.
+    expect(datasource.languageProvider.searchLabelValues).toHaveBeenCalledWith(
+      defaultTimeRange,
+      'label2',
+      'web',
+      '{label1="value1", __name__="metric1"}',
+      undefined,
+      expect.stringMatching(/^metrics-labels-section-.*-values-label2$/)
+    );
+    expect(datasource.languageProvider.queryLabelValues).not.toHaveBeenCalled();
+    expect(result).toContainEqual(expect.objectContaining({ label: 'web-1', value: 'web-1' }));
+  });
+
+  it('provides server-side label-name search to LabelFilters only when supported', async () => {
+    const onChange = jest.fn();
+    const { LabelFilters } = require('./LabelFilters');
+
+    // Not capable -> no server-side label-name search callback.
+    const plain = createMockDatasource();
+    const { unmount } = render(
+      <MetricsLabelsSection query={defaultQuery} datasource={plain} onChange={onChange} timeRange={defaultTimeRange} />
+    );
+    expect(LabelFilters.mock.calls[0][0].getLabelNamesAutofillSuggestions).toBeUndefined();
+    unmount();
+    LabelFilters.mockClear();
+
+    // Capable -> typed text routes to searchLabelKeys with the labels/metric match context.
+    const datasource = createMockDatasource();
+    datasource.languageProvider.hasServerSideSearch = jest.fn().mockReturnValue(true);
+    datasource.languageProvider.searchLabelKeys = jest.fn().mockResolvedValue(['job', 'instance']);
+
+    render(
+      <MetricsLabelsSection query={defaultQuery} datasource={datasource} onChange={onChange} timeRange={defaultTimeRange} />
+    );
+    const getLabelNames = LabelFilters.mock.calls[0][0].getLabelNamesAutofillSuggestions;
+    expect(getLabelNames).toBeDefined();
+
+    const result = await getLabelNames('jo');
+    expect(datasource.languageProvider.searchLabelKeys).toHaveBeenCalledWith(
+      defaultTimeRange,
+      'jo',
+      expect.stringContaining('__name__="metric1"'),
+      undefined,
+      expect.stringMatching(/^metrics-labels-section-.*-names$/)
+    );
+    expect(result).toContainEqual(expect.objectContaining({ value: 'job' }));
+  });
+
   it('should handle onGetLabelValues with no metric correctly', async () => {
     const onChange = jest.fn();
     const datasource = createMockDatasource();

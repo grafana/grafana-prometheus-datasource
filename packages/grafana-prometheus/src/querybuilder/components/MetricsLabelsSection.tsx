@@ -1,11 +1,12 @@
 // Core Grafana history https://github.com/grafana/grafana/blob/v11.0.0-preview/public/app/plugins/datasource/prometheus/querybuilder/components/MetricsLabelsSection.tsx
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 
 import { type SelectableValue, type TimeRange } from '@grafana/data';
 
 import { getDebounceTimeInMilliseconds } from '../../caching';
 import { type PrometheusDatasource } from '../../datasource';
 import { truncateResult } from '../../language_utils';
+import { createSearchSlotId } from '../../resource_clients';
 import { type PromMetricsMetadata } from '../../types';
 import { regexifyLabelValuesQueryString } from '../parsingUtils';
 import { promQueryModeller } from '../shared/modeller_instance';
@@ -32,6 +33,7 @@ export function MetricsLabelsSection({
   variableEditor,
   timeRange,
 }: MetricsLabelsSectionProps) {
+  const searchSlotId = useRef(createSearchSlotId('metrics-labels-section'));
   // fixing the use of 'as' from refactoring
   // @ts-ignore
   const onChangeLabels = (labels) => {
@@ -85,8 +87,36 @@ export function MetricsLabelsSection({
     queryString?: string,
     labelName?: string
   ): Promise<SelectableValue[]> => {
+    const forLabelName = labelName ?? '__name__';
+
+    // Server-side search path: route the typed text to the upstream `search[]` (fuzzy +
+    // scored) and build the match selector from the OTHER labels (+ metric) only, instead
+    // of regexifying the typed text into `match[]`.
+    if (datasource.languageProvider.hasServerSideSearch?.()) {
+      const otherLabels = query.labels.filter((x) => x.label !== forLabelName);
+      if (query.metric) {
+        // eslint-disable-next-line @grafana/i18n/no-untranslated-strings
+        otherLabels.push({ label: '__name__', op: '=', value: query.metric });
+      }
+      const interpolatedOtherLabels = otherLabels.map((labelObject) => ({
+        ...labelObject,
+        label: datasource.interpolateString(labelObject.label),
+        value: datasource.interpolateString(labelObject.value),
+      }));
+      const matchExpr = promQueryModeller.renderLabels(interpolatedOtherLabels);
+      const values = await datasource.languageProvider.searchLabelValues(
+        timeRange,
+        forLabelName,
+        queryString ?? '',
+        matchExpr === '' ? undefined : matchExpr,
+        undefined,
+        `${searchSlotId.current}-values-${forLabelName}`
+      );
+      return truncateResult(values).map(toSelectableValue);
+    }
+
     const forLabel = {
-      label: labelName ?? '__name__',
+      label: forLabelName,
       op: '=~',
       value: regexifyLabelValuesQueryString(`.*${queryString}`),
     };
@@ -105,6 +135,38 @@ export function MetricsLabelsSection({
     const values = await datasource.languageProvider.queryLabelValues(timeRange, forLabel.label, expr);
     return truncateResult(values).map(toSelectableValue);
   };
+
+  /**
+   * Server-side label-NAME search-as-you-type (streaming search API only). Routes the typed
+   * text to the upstream fuzzy/scored `search[]`, scoped by the current labels/metric, and
+   * drops already-used label names. Returns undefined when the search API is inactive so the
+   * builder keeps its existing preloaded-list client-side filtering.
+   */
+  const getLabelNamesAutocompleteSuggestions = datasource.languageProvider.hasServerSideSearch?.()
+    ? async (queryString: string): Promise<SelectableValue[]> => {
+        const labelsToConsider = query.labels.slice();
+        if (query.metric) {
+          // eslint-disable-next-line @grafana/i18n/no-untranslated-strings
+          labelsToConsider.push({ label: '__name__', op: '=', value: query.metric });
+        }
+        const interpolated = labelsToConsider.map((labelObject) => ({
+          ...labelObject,
+          label: datasource.interpolateString(labelObject.label),
+          value: datasource.interpolateString(labelObject.value),
+        }));
+        const matchExpr = promQueryModeller.renderLabels(interpolated);
+        const labelsIndex = await datasource.languageProvider.searchLabelKeys(
+          timeRange,
+          queryString,
+          matchExpr === '' ? undefined : matchExpr,
+          undefined,
+          `${searchSlotId.current}-names`
+        );
+        return labelsIndex
+          .filter((labelName) => !query.labels.find((filter) => filter.label === labelName))
+          .map((k) => ({ value: k, label: k }));
+      }
+    : undefined;
 
   /**
    * Function kicked off when users interact with the value of the label filters
@@ -154,6 +216,11 @@ export function MetricsLabelsSection({
       <LabelFilters
         debounceDuration={getDebounceTimeInMilliseconds(datasource.cacheLevel)}
         getLabelValuesAutofillSuggestions={getLabelValuesAutocompleteSuggestions}
+        getLabelNamesAutofillSuggestions={
+          getLabelNamesAutocompleteSuggestions
+            ? (query) => withTemplateVariableOptions(getLabelNamesAutocompleteSuggestions(query))
+            : undefined
+        }
         labelsFilters={query.labels}
         onChange={onChangeLabels}
         onGetLabelNames={(forLabel) => withTemplateVariableOptions(onGetLabelNames(forLabel))}

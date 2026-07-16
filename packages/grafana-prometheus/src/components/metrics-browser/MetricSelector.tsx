@@ -7,21 +7,33 @@ import { BrowserLabel as PromLabel, Input, Label, useStyles2 } from '@grafana/ui
 
 import { LIST_ITEM_SIZE } from '../../constants';
 
-import { useMetricsBrowser } from './MetricsBrowserContext';
+import { type Metric, useMetricsBrowser } from './MetricsBrowserContext';
 import { getStylesMetricSelector } from './styles';
+import { useStreamingSearch } from './useStreamingSearch';
 
 export function MetricSelector() {
   const styles = useStyles2(getStylesMetricSelector);
   const [metricSearchTerm, setMetricSearchTerm] = useState('');
-  const { metrics, selectedMetric, seriesLimit, setSeriesLimit, onMetricClick } = useMetricsBrowser();
+  const { metrics, selectedMetric, seriesLimit, setSeriesLimit, onMetricClick, hasServerSideSearch, searchMetricsStream } =
+    useMetricsBrowser();
+
+  // Server-side (streaming) search: when the term is non-empty we route it to the upstream
+  // `search[]` (fuzzy + scored) and render results progressively. Otherwise (or when not
+  // supported) we fall back to client-side substring filtering of the browse list.
+  const { results: serverResults } = useStreamingSearch(hasServerSideSearch, metricSearchTerm, searchMetricsStream);
 
   const [localSeriesLimit, setLocalSeriesLimit] = useState<string>(
     Number.isNaN(seriesLimit) ? '' : String(seriesLimit)
   );
 
   const filteredMetrics = useMemo(() => {
+    if (hasServerSideSearch && serverResults !== null) {
+      const existingMetrics = new Map(metrics.map((metric) => [metric.name, metric]));
+      const names = new Set([...(selectedMetric ? [selectedMetric] : []), ...serverResults]);
+      return Array.from(names, (name): Metric => existingMetrics.get(name) ?? { name });
+    }
     return metrics.filter((m) => m.name === selectedMetric || m.name.includes(metricSearchTerm));
-  }, [metrics, selectedMetric, metricSearchTerm]);
+  }, [hasServerSideSearch, serverResults, metrics, selectedMetric, metricSearchTerm]);
 
   return (
     <div>

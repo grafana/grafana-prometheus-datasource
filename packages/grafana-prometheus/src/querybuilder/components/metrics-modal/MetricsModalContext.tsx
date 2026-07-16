@@ -15,9 +15,10 @@ import { type SelectableValue, type TimeRange } from '@grafana/data';
 
 import { METRIC_LABEL, PROMETHEUS_QUERY_BUILDER_MAX_RESULTS } from '../../../constants';
 import { type PrometheusLanguageProviderInterface } from '../../../language_provider';
+import { createSearchSlotId } from '../../../resource_clients';
 import { regexifyLabelValuesQueryString } from '../../parsingUtils';
 import { type QueryBuilderLabelFilter } from '../../shared/types';
-import { formatPrometheusLabelFilters } from '../formatter';
+import { formatLabelFiltersToString, formatPrometheusLabelFilters } from '../formatter';
 
 import { generateMetricData } from './helpers';
 import { type MetricData, type MetricsData } from './types';
@@ -68,7 +69,13 @@ export const MetricsModalContextProvider: FC<PropsWithChildren<MetricsModalConte
     resultsPerPage: DEFAULT_RESULTS_PER_PAGE,
   });
   const [selectedTypes, setSelectedTypes] = useState<Array<SelectableValue<string>>>([]);
-  const [searchedText, setSearchedText] = useState('');
+  const [searchedText, setSearchedTextState] = useState('');
+  const searchSlotId = useRef(createSearchSlotId('metrics-modal'));
+  const latestSearchIdRef = useRef<number>(0);
+  const setSearchedText = useCallback((value: string) => {
+    latestSearchIdRef.current++;
+    setSearchedTextState(value);
+  }, []);
 
   const filteredMetricsData = useMemo(() => {
     if (selectedTypes.length === 0) {
@@ -104,9 +111,6 @@ export const MetricsModalContextProvider: FC<PropsWithChildren<MetricsModalConte
       pageNum,
     }));
   }, [filteredMetricsData.length, pagination.resultsPerPage, pagination.pageNum]);
-
-  // Track the latest search ID to handle race conditions
-  const latestSearchIdRef = useRef<number>(0);
 
   const fetchMetadata = useCallback(async () => {
     try {
@@ -148,19 +152,39 @@ export const MetricsModalContextProvider: FC<PropsWithChildren<MetricsModalConte
 
           setIsLoading(true);
 
-          const queryString = regexifyLabelValuesQueryString(metricText);
           const filterArray = queryLabels ? formatPrometheusLabelFilters(queryLabels) : [];
-          const match = `{__name__=~"(?i).*${queryString}"${filterArray ? filterArray.join('') : ''}}`;
+          let resultsOptions: MetricsData;
 
-          const results = await languageProvider.queryLabelValues(timeRange, METRIC_LABEL, match);
+          if (languageProvider.hasServerSideSearch?.()) {
+            // Server-side fuzzy/scored search: route the typed text to `search[]` and let
+            // the upstream do ranking — no regex `match[]` injection, no client-side fuzzy.
+            const match = formatLabelFiltersToString(queryLabels) || undefined;
+            const results = await languageProvider.searchMetrics(
+              timeRange,
+              metricText,
+              match,
+              undefined,
+              searchSlotId.current
+            );
 
-          // Check if this is still the most recent search
-          if (searchId !== latestSearchIdRef.current) {
-            return; // Ignore outdated results
+            if (searchId !== latestSearchIdRef.current) {
+              return; // Ignore outdated results
+            }
+            resultsOptions = results.map((m) => generateMetricData(m, languageProvider));
+          } else {
+            const queryString = regexifyLabelValuesQueryString(metricText);
+            const match = `{__name__=~"(?i).*${queryString}"${filterArray ? filterArray.join('') : ''}}`;
+
+            const results = await languageProvider.queryLabelValues(timeRange, METRIC_LABEL, match);
+
+            // Check if this is still the most recent search
+            if (searchId !== latestSearchIdRef.current) {
+              return; // Ignore outdated results
+            }
+
+            const [fuzzyOrderedMetrics] = fuzzySearch(results, queryString);
+            resultsOptions = fuzzyOrderedMetrics.map((m) => generateMetricData(m, languageProvider));
           }
-
-          const [fuzzyOrderedMetrics] = fuzzySearch(results, queryString);
-          const resultsOptions: MetricsData = fuzzyOrderedMetrics.map((m) => generateMetricData(m, languageProvider));
 
           setMetricsData(resultsOptions);
           setIsLoading(false);

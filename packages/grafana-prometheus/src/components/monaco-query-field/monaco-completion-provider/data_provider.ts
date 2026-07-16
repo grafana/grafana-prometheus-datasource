@@ -1,8 +1,11 @@
+import { lastValueFrom } from 'rxjs';
+
 import { type HistoryItem, type TimeRange } from '@grafana/data';
 
 import { DEFAULT_COMPLETION_LIMIT, METRIC_LABEL } from '../../../constants';
 import { type PrometheusLanguageProviderInterface } from '../../../language_provider';
 import { removeQuotesIfExist } from '../../../language_utils';
+import { createSearchSlotId } from '../../../resource_clients';
 import { type PromQuery } from '../../../types';
 import { escapeForUtf8Support, isValidLegacyName } from '../../../utf8_support';
 
@@ -21,6 +24,7 @@ export interface DataProviderParams {
 export class DataProvider {
   readonly languageProvider: PrometheusLanguageProviderInterface;
   readonly historyProvider: Array<HistoryItem<PromQuery>>;
+  private readonly searchSlotId = createSearchSlotId('monaco');
 
   readonly queryLabelKeys: typeof this.languageProvider.queryLabelKeys;
   readonly queryLabelValues: typeof this.languageProvider.queryLabelValues;
@@ -46,6 +50,24 @@ export class DataProvider {
    */
   queryMetricNames = async (timeRange: TimeRange, searchTerm: string | undefined): Promise<string[]> => {
     try {
+      // Server-side search path: route the typed text to the upstream `search[]` (fuzzy +
+      // scored) instead of regexifying it into a `__name__=~` match selector. Consumes the
+      // progressive Observable; Monaco completions are one-shot, so we resolve on the
+      // terminal frame via lastValueFrom.
+      if (this.languageProvider.hasServerSideSearch?.()) {
+        const result = await lastValueFrom(
+          this.languageProvider.streamMetrics(
+            timeRange,
+            searchTerm ?? '',
+            undefined,
+            DEFAULT_COMPLETION_LIMIT,
+            this.searchSlotId
+          ),
+          { defaultValue: [] }
+        );
+        return Array.isArray(result) ? result : [];
+      }
+
       let match: string | undefined;
       if (searchTerm) {
         const escapedWord = escapeForUtf8Support(removeQuotesIfExist(searchTerm));

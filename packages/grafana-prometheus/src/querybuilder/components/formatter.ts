@@ -1,6 +1,7 @@
 import { regexifyLabelValuesQueryString } from '../parsingUtils';
+import { promQueryModeller } from '../shared/modeller_instance';
+import { renderLabelsWithoutBrackets } from '../shared/rendering/labels';
 import { type QueryBuilderLabelFilter } from '../shared/types';
-import { utf8Support } from './../../utf8_support';
 
 const formatPrometheusLabelFiltersToString = (
   queryString: string,
@@ -12,9 +13,7 @@ const formatPrometheusLabelFiltersToString = (
 };
 
 export const formatPrometheusLabelFilters = (labelsFilters: QueryBuilderLabelFilter[]): string[] => {
-  return labelsFilters.map((label) => {
-    return `,${utf8Support(label.label)}="${label.value}"`;
-  });
+  return renderLabelsWithoutBrackets(labelsFilters).map((label) => `,${label}`);
 };
 
 /**
@@ -24,4 +23,16 @@ export const formatKeyValueStrings = (query: string, labelsFilters?: QueryBuilde
   const queryString = regexifyLabelValuesQueryString(query);
 
   return formatPrometheusLabelFiltersToString(queryString, labelsFilters);
+};
+
+/**
+ * Builds a PromQL selector from ONLY the label filters (no typed-text regex). Used by the
+ * search-API path, where the typed text is routed to `search[]` instead of being
+ * regexified into `match[]`. Returns '' when there are no label filters.
+ */
+export const formatLabelFiltersToString = (labelsFilters?: QueryBuilderLabelFilter[]): string => {
+  if (!labelsFilters?.length) {
+    return '';
+  }
+  return promQueryModeller.renderLabels(labelsFilters);
 };

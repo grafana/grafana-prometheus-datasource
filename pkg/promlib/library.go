@@ -2,8 +2,11 @@ package promlib
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/url"
 	"strings"
+	"sync"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/datasource"
@@ -21,6 +24,22 @@ import (
 type Service struct {
 	im     instancemgmt.InstanceManager
 	logger log.Logger
+
+	// mailboxes bridges PublishStream (producer) and RunStream (consumer) for the
+	// persistent per-session search channels. Keyed by channel path
+	// (search/<sessionNonce>); each value coalesces bounded pending work per slot. A
+	// Service is created per datasource instance, so this map is already isolated by
+	// datasource and tenant.
+	mailboxesMu sync.Mutex
+	mailboxes   map[string]*searchMailbox
+
+	searchPermits chan struct{}
+
+	lifecycleMu sync.Mutex
+	disposed    bool
+	nextRunID   uint64
+	runCancels  map[uint64]context.CancelFunc
+	runWG       sync.WaitGroup
 }
 
 type instance struct {
@@ -36,8 +55,11 @@ func NewService(httpClientProvider *sdkhttpclient.Provider, plog log.Logger, ext
 		httpClientProvider = sdkhttpclient.NewProvider()
 	}
 	return &Service{
-		im:     datasource.NewInstanceManager(newInstanceSettings(httpClientProvider, plog, extendOptions)),
-		logger: plog,
+		im:            datasource.NewInstanceManager(newInstanceSettings(httpClientProvider, plog, extendOptions)),
+		logger:        plog,
+		mailboxes:     make(map[string]*searchMailbox),
+		searchPermits: make(chan struct{}, maxConcurrentSearches),
+		runCancels:    make(map[uint64]context.CancelFunc),
 	}
 }
 
@@ -47,6 +69,45 @@ func NewService(httpClientProvider *sdkhttpclient.Provider, plog log.Logger, ext
 func (s *Service) Dispose() {
 	// Clean up datasource instance resources.
 	s.logger.Debug("Disposing the instance...")
+	s.lifecycleMu.Lock()
+	if !s.disposed {
+		s.disposed = true
+		for _, cancel := range s.runCancels {
+			cancel()
+		}
+	}
+	s.lifecycleMu.Unlock()
+	s.runWG.Wait()
+
+	// Drop any per-instance search mailbox state; the replacement instance gets a fresh map.
+	s.mailboxesMu.Lock()
+	s.mailboxes = make(map[string]*searchMailbox)
+	s.mailboxesMu.Unlock()
+}
+
+func (s *Service) registerRun(parent context.Context) (context.Context, context.CancelFunc, func(), error) {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	if s.disposed {
+		return nil, nil, nil, errors.New("prometheus service is disposed")
+	}
+	runCtx, cancelRun := context.WithCancel(parent)
+	s.nextRunID++
+	runID := s.nextRunID
+	s.runCancels[runID] = cancelRun
+	s.runWG.Add(1)
+
+	var once sync.Once
+	release := func() {
+		once.Do(func() {
+			cancelRun()
+			s.lifecycleMu.Lock()
+			delete(s.runCancels, runID)
+			s.lifecycleMu.Unlock()
+			s.runWG.Done()
+		})
+	}
+	return runCtx, cancelRun, release, nil
 }
 
 func newInstanceSettings(httpClientProvider *sdkhttpclient.Provider, log log.Logger, extendOptions ExtendOptions) datasource.InstanceFactoryFunc {
@@ -159,6 +220,21 @@ func (s *Service) CallResource(ctx context.Context, req *backend.CallResourceReq
 	}
 
 	return sender.Send(resp)
+}
+
+// StreamSearch resolves the datasource instance for pluginCtx and performs a streaming
+// NDJSON read against the experimental search API, invoking onLine per decoded line.
+//
+// It intentionally does NOT go through Resource.Execute (which buffers the full body)
+// nor through the ResponseLimitMiddleware path, so long NDJSON responses stream
+// incrementally without being capped/errored. The instance's resource client carries
+// the same instance-settings-built (authenticated) *http.Client used by resource calls.
+func (s *Service) StreamSearch(ctx context.Context, pluginCtx backend.PluginContext, endpoint string, params url.Values, onLine func(resource.SearchLine) error) error {
+	i, err := s.getInstance(ctx, pluginCtx)
+	if err != nil {
+		return err
+	}
+	return i.resource.StreamSearch(ctx, endpoint, params, onLine)
 }
 
 func (s *Service) getInstance(ctx context.Context, pluginCtx backend.PluginContext) (*instance, error) {
