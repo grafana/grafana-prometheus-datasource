@@ -5,6 +5,7 @@ import '@testing-library/jest-dom';
 
 import { type DataSourceInstanceSettings } from '@grafana/data';
 
+import { DEFAULT_COMPLETION_LIMIT } from '../../constants';
 import { PrometheusDatasource } from '../../datasource';
 import { type PrometheusLanguageProviderInterface } from '../../language_provider';
 import { EmptyLanguageProviderMock } from '../../language_provider.mock';
@@ -62,6 +63,8 @@ describe('MetricCombobox', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    (mockLanguageProvider.hasSearchSupport as jest.Mock).mockReturnValue(false);
+    (mockLanguageProvider.getSearchApiClient as jest.Mock).mockReturnValue(undefined);
   });
 
   it('renders correctly', () => {
@@ -102,6 +105,33 @@ describe('MetricCombobox', () => {
       '__name__',
       '{__name__=~".*unique.*"}'
     );
+  });
+
+  it('uses fuzzy metric search when the search API is enabled', async () => {
+    const searchMetricNames = jest.fn().mockResolvedValue({
+      results: [{ name: 'http_requests_total' }],
+      warnings: [],
+      hasMore: false,
+    });
+    (mockLanguageProvider.hasSearchSupport as jest.Mock).mockReturnValue(true);
+    (mockLanguageProvider.getSearchApiClient as jest.Mock).mockReturnValue({ searchMetricNames });
+
+    render(<MetricCombobox {...defaultProps} />);
+
+    const combobox = screen.getByPlaceholderText('Select metric');
+    await userEvent.click(combobox);
+    await userEvent.type(combobox, 'http req');
+
+    expect(await screen.findByRole('option', { name: 'http_requests_total' })).toBeInTheDocument();
+    expect(searchMetricNames).toHaveBeenCalledWith(
+      defaultProps.timeRange,
+      'http req',
+      expect.objectContaining({
+        limit: DEFAULT_COMPLETION_LIMIT,
+        signal: expect.anything(),
+      })
+    );
+    expect(mockDatasource.languageProvider.queryLabelValues).not.toHaveBeenCalled();
   });
 
   it('calls onChange with the correct value when a metric is selected', async () => {

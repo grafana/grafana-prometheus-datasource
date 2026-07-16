@@ -2,7 +2,6 @@ import { type TimeRange } from '@grafana/data';
 
 import { getRangeSnapInterval, processHistogramMetrics, removeQuotesIfExist } from './language_utils';
 import { BaseResourceClient, type ResourceApiClient, ResourceClientsCache } from './resource_clients';
-import { escapeForUtf8Support } from './utf8_support';
 
 export interface SearchMetricResult {
   name: string;
@@ -197,14 +196,14 @@ export class SearchApiClient extends BaseResourceClient implements ResourceApiCl
   ): Promise<string[]> => {
     const effectiveLimit = this.getEffectiveLimit(limit);
     const interpolatedName = this.datasource.interpolateString(labelKey);
-    const escapedName = escapeForUtf8Support(removeQuotesIfExist(interpolatedName));
-    const effectiveMatch = `${match ?? ''}-${escapedName}`;
+    const labelName = removeQuotesIfExist(interpolatedName);
+    const effectiveMatch = `${match ?? ''}-${labelName}`;
     const cached = this._cache.getLabelValues(timeRange, effectiveMatch, effectiveLimit);
     if (cached) {
       return cached.slice();
     }
 
-    const response = await this.searchLabelValues(timeRange, escapedName, '', { limit: effectiveLimit, match });
+    const response = await this.searchLabelValues(timeRange, labelName, '', { limit: effectiveLimit, match });
     const values = response.results.map((result) => result.value);
     this._cache.setLabelValues(timeRange, effectiveMatch, effectiveLimit, values);
     return values;
