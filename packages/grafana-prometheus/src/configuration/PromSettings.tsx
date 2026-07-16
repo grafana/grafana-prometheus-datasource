@@ -783,8 +783,8 @@ export const PromSettings = (props: Props) => {
               className={styles.switchField}
             >
               <Switch
-                value={optionsWithDefaults.jsonData.searchApi ?? false}
-                onChange={onUpdateDatasourceJsonDataOptionChecked(props, 'searchApi')}
+                value={optionsWithDefaults.jsonData.enableSearchApi ?? false}
+                onChange={onUpdateDatasourceJsonDataOptionChecked(props, 'enableSearchApi')}
               />
             </InlineField>
           </Stack>

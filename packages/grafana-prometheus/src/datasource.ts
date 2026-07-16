@@ -92,7 +92,7 @@ export class PrometheusDatasource
   languageProvider: PrometheusLanguageProviderInterface;
   lookupsDisabled: boolean;
   ruleMappings: RuleQueryMapping;
-  searchApi: boolean;
+  enableSearchApi: boolean;
   seriesEndpoint: boolean;
   seriesLimit: number;
   type: string;
@@ -127,7 +127,7 @@ export class PrometheusDatasource
     this.interval = instanceSettings.jsonData.timeInterval || '15s';
     this.lookupsDisabled = instanceSettings.jsonData.disableMetricsLookup ?? false;
     this.ruleMappings = {};
-    this.searchApi = instanceSettings.jsonData.searchApi ?? false;
+    this.enableSearchApi = instanceSettings.jsonData.enableSearchApi ?? false;
     this.seriesEndpoint = instanceSettings.jsonData.seriesEndpoint ?? false;
     this.seriesLimit = instanceSettings.jsonData.seriesLimit ?? DEFAULT_SERIES_LIMIT;
     this.type = 'prometheus';
@@ -242,7 +242,7 @@ export class PrometheusDatasource
   }
 
   hasSearchApiSupport(): boolean {
-    return this.searchApi;
+    return this.enableSearchApi;
   }
 
   _isDatasourceVersionGreaterOrEqualTo(targetVersion: string, targetFlavor: PromApplication): boolean {
