@@ -1,5 +1,7 @@
+import { Observable } from 'rxjs';
+
 import { dateTime, type TimeRange } from '@grafana/data';
-import { config } from '@grafana/runtime';
+import { type BackendSrvRequest, type FetchResponse, getBackendSrv, setBackendSrv } from '@grafana/runtime';
 
 import { SEARCH_STREAM_BATCH_SIZE } from './constants';
 import { type PrometheusDatasource } from './datasource';
@@ -100,23 +102,26 @@ describe('readSearchStream', () => {
 });
 
 describe('SearchApiClient', () => {
-  const originalFetch = globalThis.fetch;
+  const originalBackendSrv = getBackendSrv();
+  const chunkedMock = jest.fn();
+
+  beforeEach(() => {
+    setBackendSrv({ ...originalBackendSrv, chunked: chunkedMock });
+  });
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    setBackendSrv(originalBackendSrv);
     jest.restoreAllMocks();
     jest.clearAllMocks();
   });
 
   it('searches metric names with metadata and score ordering', async () => {
-    globalThis.fetch = jest
-      .fn()
-      .mockResolvedValue(
-        streamResponse([
-          '{"results":[{"name":"http_requests_total","score":0.9,"type":"counter","help":"Requests"}]}\n',
-          '{"status":"success","has_more":false}\n',
-        ])
-      );
+    chunkedMock.mockReturnValue(
+      chunkedStream([
+        '{"results":[{"name":"http_requests_total","score":0.9,"type":"counter","help":"Requests"}]}\n',
+        '{"status":"success","has_more":false}\n',
+      ])
+    );
     const client = new SearchApiClient(jest.fn(), datasource);
 
     const result = await client.searchMetricNames(timeRange, 'http req', {
@@ -125,26 +130,28 @@ describe('SearchApiClient', () => {
     });
 
     expect(result.results).toEqual([{ name: 'http_requests_total', score: 0.9, type: 'counter', help: 'Requests' }]);
-    expect(globalThis.fetch).toHaveBeenCalledWith(
-      '/api/datasources/uid/prometheus%2Fprimary/resources/api/v1/search/metric_names?' +
-        'start=1681300260&end=1681300320&limit=100&search%5B%5D=http+req&sort_by=score&batch_size=100&include_metadata=true',
-      {
-        method: 'GET',
-        credentials: 'same-origin',
-        signal: undefined,
-      }
-    );
+    expect(chunkedMock).toHaveBeenCalledWith({
+      url: 'api/datasources/uid/prometheus%2Fprimary/resources/api/v1/search/metric_names',
+      method: 'GET',
+      params: {
+        start: '1681300260',
+        end: '1681300320',
+        limit: '100',
+        'search[]': 'http req',
+        sort_by: 'score',
+        batch_size: '100',
+        include_metadata: 'true',
+      },
+    });
   });
 
   it('adapts metric search results to the resource client interface', async () => {
-    globalThis.fetch = jest
-      .fn()
-      .mockResolvedValue(
-        streamResponse([
-          '{"results":[{"name":"request_duration_bucket"},{"name":"up"}]}\n',
-          '{"status":"success","has_more":false}\n',
-        ])
-      );
+    chunkedMock.mockReturnValue(
+      chunkedStream([
+        '{"results":[{"name":"request_duration_bucket"},{"name":"up"}]}\n',
+        '{"status":"success","has_more":false}\n',
+      ])
+    );
     const client = new SearchApiClient(jest.fn(), datasource);
 
     await expect(client.queryMetrics(timeRange, 20)).resolves.toEqual({
@@ -153,71 +160,79 @@ describe('SearchApiClient', () => {
     });
   });
 
-  it('uses the Grafana application subpath', async () => {
-    jest.replaceProperty(config, 'appSubUrl', '/grafana');
-    globalThis.fetch = jest
-      .fn()
-      .mockResolvedValue(streamResponse(['{"results":[]}\n', '{"status":"success","has_more":false}\n']));
+  it('omits the leading slash so the request resolves under a Grafana subpath install', async () => {
+    chunkedMock.mockReturnValue(chunkedStream(['{"results":[]}\n', '{"status":"success","has_more":false}\n']));
     const client = new SearchApiClient(jest.fn(), datasource);
 
     await client.searchMetricNames(timeRange, 'up', { limit: 10 });
 
-    expect(globalThis.fetch).toHaveBeenCalledWith(
-      expect.stringMatching(
-        /^\/grafana\/api\/datasources\/uid\/prometheus%2Fprimary\/resources\/api\/v1\/search\/metric_names\?/
-      ),
-      expect.anything()
-    );
+    expect(chunkedMock).toHaveBeenCalledWith(expect.objectContaining({ url: expect.not.stringMatching(/^\//) }));
   });
 
   it('caps legacy unlimited and default limits at the Prometheus search maximum', async () => {
-    globalThis.fetch = jest
-      .fn()
-      .mockResolvedValue(streamResponse(['{"results":[]}\n', '{"status":"success","has_more":true}\n']));
+    chunkedMock.mockReturnValue(chunkedStream(['{"results":[]}\n', '{"status":"success","has_more":true}\n']));
     const client = new SearchApiClient(jest.fn(), datasource);
 
     await client.searchLabelNames(timeRange, '', { limit: 0 });
 
-    expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining('limit=10000'), expect.anything());
+    expect(chunkedMock).toHaveBeenCalledWith(
+      expect.objectContaining({ params: expect.objectContaining({ limit: '10000' }) })
+    );
   });
 
-  it('passes abort signals to fetch', async () => {
-    globalThis.fetch = jest.fn().mockImplementation((_url: string, init: RequestInit) => {
-      return new Promise((_resolve, reject) => {
-        init.signal?.addEventListener('abort', () => reject(new Error('aborted')));
-      });
+  it('surfaces a SearchApiError when the chunked response is not ok', async () => {
+    chunkedMock.mockReturnValue(
+      chunkedStream(['{"status":"error","errorType":"unavailable","error":"search API disabled"}'], {
+        ok: false,
+        status: 500,
+        statusText: 'Internal Server Error',
+      })
+    );
+    const client = new SearchApiClient(jest.fn(), datasource);
+
+    await expect(client.searchMetricNames(timeRange, 'up', { limit: 10 })).rejects.toMatchObject({
+      message: 'search API disabled',
+      errorType: 'unavailable',
     });
+  });
+
+  it('propagates abort by unsubscribing the chunked request', async () => {
+    const unsubscribe = jest.fn();
+    chunkedMock.mockReturnValue(
+      new Observable<FetchResponse<Uint8Array | undefined>>(() => {
+        // Never emits; simulates a long-running request that only ends via unsubscribe.
+        return unsubscribe;
+      })
+    );
     const client = new SearchApiClient(jest.fn(), datasource);
     const controller = new AbortController();
 
     const promise = client.searchLabelNames(timeRange, 'inst', { signal: controller.signal });
     controller.abort();
 
-    await expect(promise).rejects.toThrow('aborted');
+    await expect(promise).rejects.toThrow(/aborted/i);
+    expect(unsubscribe).toHaveBeenCalled();
   });
 
   it('sends batch_size when a batch size is provided', async () => {
-    globalThis.fetch = jest
-      .fn()
-      .mockResolvedValue(streamResponse(['{"results":[]}\n', '{"status":"success","has_more":false}\n']));
+    chunkedMock.mockReturnValue(chunkedStream(['{"results":[]}\n', '{"status":"success","has_more":false}\n']));
     const client = new SearchApiClient(jest.fn(), datasource);
 
     await client.searchMetricNames(timeRange, 'up', { limit: 100, batchSize: 25 });
 
-    expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining('batch_size=25'), expect.anything());
+    expect(chunkedMock).toHaveBeenCalledWith(
+      expect.objectContaining({ params: expect.objectContaining({ batch_size: '25' }) })
+    );
   });
 
   it('defaults batch_size to the streaming batch size when none is provided', async () => {
-    globalThis.fetch = jest
-      .fn()
-      .mockResolvedValue(streamResponse(['{"results":[]}\n', '{"status":"success","has_more":false}\n']));
+    chunkedMock.mockReturnValue(chunkedStream(['{"results":[]}\n', '{"status":"success","has_more":false}\n']));
     const client = new SearchApiClient(jest.fn(), datasource);
 
     await client.searchMetricNames(timeRange, 'up', { limit: 100 });
 
-    expect(globalThis.fetch).toHaveBeenCalledWith(
-      expect.stringContaining(`batch_size=${SEARCH_STREAM_BATCH_SIZE}`),
-      expect.anything()
+    expect(chunkedMock).toHaveBeenCalledWith(
+      expect.objectContaining({ params: expect.objectContaining({ batch_size: String(SEARCH_STREAM_BATCH_SIZE) }) })
     );
   });
 });
@@ -243,21 +258,30 @@ function chunkSource(
   };
 }
 
-function streamResponse(chunks: string[]): Response {
+// Builds a fake getBackendSrv().chunked() Observable that mirrors the real
+// contract: one next() per chunk (each carrying the invariant ok/status
+// fields), a final next() with `data: undefined`, then complete().
+function chunkedStream(
+  chunks: string[],
+  opts: { ok?: boolean; status?: number; statusText?: string } = {}
+): Observable<FetchResponse<Uint8Array | undefined>> {
   const encoder = new TextEncoder();
-  let index = 0;
-  const body = {
-    getReader: () => ({
-      read: async () =>
-        index < chunks.length
-          ? { done: false, value: encoder.encode(chunks[index++]) }
-          : { done: true, value: undefined },
-    }),
-  };
-  return {
-    ok: true,
-    status: 200,
-    statusText: 'OK',
-    body: body as ReadableStream<Uint8Array>,
-  } as Response;
+  const { ok = true, status = 200, statusText = 'OK' } = opts;
+  return new Observable<FetchResponse<Uint8Array | undefined>>((subscriber) => {
+    const base = {
+      ok,
+      status,
+      statusText,
+      headers: new Headers(),
+      url: '',
+      type: 'basic' as ResponseType,
+      redirected: false,
+      config: {} as BackendSrvRequest,
+    };
+    for (const chunk of chunks) {
+      subscriber.next({ ...base, data: encoder.encode(chunk) });
+    }
+    subscriber.next({ ...base, data: undefined });
+    subscriber.complete();
+  });
 }

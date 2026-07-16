@@ -1,5 +1,5 @@
 import { type TimeRange } from '@grafana/data';
-import { config } from '@grafana/runtime';
+import { type BackendSrvRequest, getBackendSrv } from '@grafana/runtime';
 
 import { SEARCH_STREAM_BATCH_SIZE } from './constants';
 import { getRangeSnapInterval, processHistogramMetrics, removeQuotesIfExist } from './language_utils';
@@ -93,17 +93,139 @@ export interface SearchChunkSource {
   json(): Promise<unknown>;
 }
 
-// Native fetch adapter. Kept only for the interim transport; the streaming
-// getBackendSrv().chunked() bridge is the real production source.
-export function chunkSourceFromResponse(response: Response): SearchChunkSource {
-  const reader = response.body?.getReader();
-  return {
-    ok: response.ok,
-    status: response.status,
-    statusText: response.statusText,
-    read: () => (reader ? reader.read() : Promise.resolve({ done: true, value: undefined })),
-    json: () => response.json(),
+interface QueuedChunk {
+  done: boolean;
+  value?: Uint8Array;
+}
+
+// getBackendSrv().chunked() is push-based (an Observable that calls next()
+// once per reader.read() result, mirroring `{ done, value }`, with a final
+// next({ data: undefined }) before complete()). readSearchStream is
+// pull-based. This bridges the two without buffering the whole body: each
+// read() call either drains an already-arrived chunk or waits for the next
+// one to be pushed in. Consumers only ever have one read() in flight, so a
+// single pending waiter is enough (no queue of readers needed).
+function bridgeChunkedResponse(
+  request: BackendSrvRequest,
+  signal?: AbortSignal
+): Promise<{ source: SearchChunkSource; cancel: () => void }> {
+  const queue: QueuedChunk[] = [];
+  let waiting: { resolve: (chunk: QueuedChunk) => void; reject: (err: unknown) => void } | undefined;
+  let terminalError: unknown;
+  let hasTerminalError = false;
+
+  const read = (): Promise<QueuedChunk> => {
+    if (queue.length > 0) {
+      return Promise.resolve(queue.shift()!);
+    }
+    if (hasTerminalError) {
+      hasTerminalError = false;
+      return Promise.reject(terminalError);
+    }
+    return new Promise<QueuedChunk>((resolve, reject) => {
+      waiting = { resolve, reject };
+    });
   };
+
+  // The error branch of readSearchStream needs the fully assembled body, so
+  // this drains the (typically small) error payload through the same read()
+  // path rather than requiring a separate buffered accessor on the source.
+  const json = async (): Promise<unknown> => {
+    const decoder = new TextDecoder();
+    let text = '';
+    while (true) {
+      const chunk = await read();
+      if (chunk.value) {
+        text += decoder.decode(chunk.value, { stream: true });
+      }
+      if (chunk.done) {
+        break;
+      }
+    }
+    return JSON.parse(text + decoder.decode());
+  };
+
+  const deliver = (chunk: QueuedChunk) => {
+    if (waiting) {
+      const pending = waiting;
+      waiting = undefined;
+      pending.resolve(chunk);
+    } else {
+      queue.push(chunk);
+    }
+  };
+
+  const fail = (err: unknown) => {
+    if (waiting) {
+      const pending = waiting;
+      waiting = undefined;
+      pending.reject(err);
+    } else {
+      terminalError = err;
+      hasTerminalError = true;
+    }
+  };
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+
+    const subscription = getBackendSrv()
+      .chunked(request)
+      .subscribe({
+        next: (response) => {
+          if (!settled) {
+            settled = true;
+            resolve({
+              source: { ok: response.ok, status: response.status, statusText: response.statusText, read, json },
+              cancel: () => subscription.unsubscribe(),
+            });
+          }
+          deliver({ done: response.data === undefined, value: response.data });
+        },
+        error: (err) => {
+          if (!settled) {
+            settled = true;
+            reject(err);
+            return;
+          }
+          fail(err);
+        },
+        complete: () => {
+          if (!settled) {
+            settled = true;
+            resolve({
+              source: { ok: true, status: 200, statusText: 'OK', read, json },
+              cancel: () => subscription.unsubscribe(),
+            });
+          }
+          // Defensive: chunked() always emits a final `data: undefined` chunk
+          // before completing, but any Observable meeting the same contract
+          // (e.g. a test double) may complete without one.
+          deliver({ done: true });
+        },
+      });
+
+    if (!signal) {
+      return;
+    }
+
+    const onAbort = () => {
+      subscription.unsubscribe();
+      const abortError = Object.assign(new Error('The user aborted a request.'), { name: 'AbortError' });
+      if (!settled) {
+        settled = true;
+        reject(abortError);
+      } else {
+        fail(abortError);
+      }
+    };
+
+    if (signal.aborted) {
+      onAbort();
+    } else {
+      signal.addEventListener('abort', onAbort, { once: true });
+    }
+  });
 }
 
 export async function readSearchStream<T>(
@@ -312,46 +434,43 @@ export class SearchApiClient extends BaseResourceClient implements ResourceApiCl
       endpoint === 'label_names'
         ? getRangeSnapInterval(this.datasource.cacheLevel, timeRange)
         : this.datasource.getAdjustedInterval(timeRange);
-    const params = new URLSearchParams({
+    const params: Record<string, string> = {
       start: String(timeParams.start),
       end: String(timeParams.end),
       limit: String(this.getEffectiveSearchLimit(options.limit)),
-    });
+    };
 
     if (term) {
-      params.append('search[]', term);
-      params.set('sort_by', 'score');
+      params['search[]'] = term;
+      params.sort_by = 'score';
     }
     if (options.match) {
-      params.append('match[]', options.match);
+      params['match[]'] = options.match;
     }
     // batch_size only affects streaming granularity, not the result set, so it
     // is applied to every Search API request. A single constant therefore tunes
     // delivery for all consumers; callers may still override it per request.
     const batchSize = options.batchSize ?? SEARCH_STREAM_BATCH_SIZE;
     if (batchSize > 0) {
-      params.set('batch_size', String(batchSize));
+      params.batch_size = String(batchSize);
     }
     for (const [key, value] of Object.entries(extraParams)) {
       if (value !== undefined) {
-        params.set(key, value);
+        params[key] = value;
       }
     }
 
     const uid = encodeURIComponent(this.datasource.uid);
-    const appSubUrl = config.appSubUrl?.replace(/\/$/, '') ?? '';
-    // getBackendSrv materializes response bodies, so native fetch is required
-    // here to retain browser ReadableStream access. appSubUrl keeps hosted
-    // Grafana installations under a subpath working.
-    const response = await fetch(
-      `${appSubUrl}/api/datasources/uid/${uid}/resources/api/v1/search/${endpoint}?${params.toString()}`,
-      {
-        method: 'GET',
-        credentials: 'same-origin',
-        signal: options.signal,
-      }
-    );
-    return readSearchStream<T>(chunkSourceFromResponse(response), options.onBatch);
+    // No leading slash: getBackendSrv().chunked() resolves relative to
+    // <base href>, which already accounts for a Grafana subpath install.
+    const url = `api/datasources/uid/${uid}/resources/api/v1/search/${endpoint}`;
+
+    const { source, cancel } = await bridgeChunkedResponse({ url, method: 'GET', params }, options.signal);
+    try {
+      return await readSearchStream<T>(source, options.onBatch);
+    } finally {
+      cancel();
+    }
   }
 
   private getEffectiveSearchLimit(limit?: number): number {
