@@ -474,11 +474,30 @@ export class SearchApiClient extends BaseResourceClient implements ResourceApiCl
       headers['X-Grafana-Org-Id'] = String(orgId);
     }
 
-    const { source, cancel } = await bridgeChunkedResponse({ url, method: 'GET', params, headers }, options.signal);
+    const request: BackendSrvRequest = { url, method: 'GET', params, headers };
+    let { source, cancel } = await bridgeChunkedResponse(request, options.signal);
+    if (source.status === 401) {
+      // chunked() doesn't run the core pipeline's single-flight token
+      // rotation, so approximate it: a login ping runs that full pipeline
+      // (including rotation) as a side effect, then the request is replayed
+      // once. Give up after one retry, same as the core 401 handling.
+      cancel();
+      await this.pingLoginToRefreshSession();
+      ({ source, cancel } = await bridgeChunkedResponse(request, options.signal));
+    }
     try {
       return await readSearchStream<T>(source, options.onBatch);
     } finally {
       cancel();
+    }
+  }
+
+  private async pingLoginToRefreshSession(): Promise<void> {
+    try {
+      await getBackendSrv().get('/api/login/ping');
+    } catch {
+      // If the session truly can't be refreshed, the retried request will
+      // surface its own 401 as a SearchApiError.
     }
   }
 

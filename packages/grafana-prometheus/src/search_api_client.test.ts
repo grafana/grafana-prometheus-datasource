@@ -104,9 +104,10 @@ describe('readSearchStream', () => {
 describe('SearchApiClient', () => {
   const originalBackendSrv = getBackendSrv();
   const chunkedMock = jest.fn();
+  const getMock = jest.fn().mockResolvedValue(undefined);
 
   beforeEach(() => {
-    setBackendSrv({ ...originalBackendSrv, chunked: chunkedMock });
+    setBackendSrv({ ...originalBackendSrv, chunked: chunkedMock, get: getMock });
   });
 
   afterEach(() => {
@@ -217,6 +218,29 @@ describe('SearchApiClient', () => {
       message: 'search API disabled',
       errorType: 'unavailable',
     });
+  });
+
+  it('retries once after a 401, via a login ping, and returns the retried result', async () => {
+    chunkedMock
+      .mockReturnValueOnce(chunkedStream([], { ok: false, status: 401, statusText: 'Unauthorized' }))
+      .mockReturnValueOnce(chunkedStream(['{"results":[{"name":"up"}]}\n', '{"status":"success","has_more":false}\n']));
+    const client = new SearchApiClient(jest.fn(), datasource);
+
+    const result = await client.searchMetricNames(timeRange, 'up', { limit: 10 });
+
+    expect(result.results).toEqual([{ name: 'up' }]);
+    expect(getMock).toHaveBeenCalledWith('/api/login/ping');
+    expect(chunkedMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('surfaces the error when a 401 persists after the retry', async () => {
+    chunkedMock.mockReturnValue(chunkedStream([], { ok: false, status: 401, statusText: 'Unauthorized' }));
+    const client = new SearchApiClient(jest.fn(), datasource);
+
+    await expect(client.searchMetricNames(timeRange, 'up', { limit: 10 })).rejects.toMatchObject({
+      message: 'Unauthorized',
+    });
+    expect(chunkedMock).toHaveBeenCalledTimes(2);
   });
 
   it('propagates abort by unsubscribing the chunked request', async () => {
