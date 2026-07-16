@@ -82,28 +82,47 @@ export class SearchApiError<T = unknown> extends Error {
   }
 }
 
+// Abstracts over the transport that feeds readSearchStream so both a real
+// Response.body reader (native fetch) and a getBackendSrv().chunked()
+// Observable (bridged into this shape) can drive the same NDJSON parser.
+export interface SearchChunkSource {
+  readonly ok: boolean;
+  readonly status: number;
+  readonly statusText: string;
+  read(): Promise<{ done: boolean; value?: Uint8Array }>;
+  json(): Promise<unknown>;
+}
+
+// Native fetch adapter. Kept only for the interim transport; the streaming
+// getBackendSrv().chunked() bridge is the real production source.
+export function chunkSourceFromResponse(response: Response): SearchChunkSource {
+  const reader = response.body?.getReader();
+  return {
+    ok: response.ok,
+    status: response.status,
+    statusText: response.statusText,
+    read: () => (reader ? reader.read() : Promise.resolve({ done: true, value: undefined })),
+    json: () => response.json(),
+  };
+}
+
 export async function readSearchStream<T>(
-  response: Response,
+  source: SearchChunkSource,
   onBatch?: (results: T[]) => void,
   maxLineLength: number = MAX_SEARCH_STREAM_LINE_LENGTH
 ): Promise<SearchStreamResult<T>> {
-  if (!response.ok) {
+  if (!source.ok) {
     let error: SearchErrorLine | undefined;
     try {
-      error = (await response.json()) as SearchErrorLine;
+      error = (await source.json()) as SearchErrorLine;
     } catch {
       // The status text is the best available error when an upstream proxy returns a non-JSON body.
     }
     throw new SearchApiError(
-      error?.error || response.statusText || `Search API request failed (${response.status})`,
+      error?.error || source.statusText || `Search API request failed (${source.status})`,
       [],
       error?.errorType
     );
-  }
-
-  const reader = response.body?.getReader();
-  if (!reader) {
-    return { results: [], warnings: [], hasMore: false };
   }
 
   const decoder = new TextDecoder();
@@ -156,7 +175,7 @@ export async function readSearchStream<T>(
   // HTTP chunk boundaries are unrelated to NDJSON line boundaries, so retain
   // the final fragment and prepend it to the next decoded chunk.
   while (true) {
-    const { done, value } = await reader.read();
+    const { done, value } = await source.read();
     if (done) {
       buffer += decoder.decode();
       processLine(buffer, true);
@@ -332,7 +351,7 @@ export class SearchApiClient extends BaseResourceClient implements ResourceApiCl
         signal: options.signal,
       }
     );
-    return readSearchStream<T>(response, options.onBatch);
+    return readSearchStream<T>(chunkSourceFromResponse(response), options.onBatch);
   }
 
   private getEffectiveSearchLimit(limit?: number): number {
