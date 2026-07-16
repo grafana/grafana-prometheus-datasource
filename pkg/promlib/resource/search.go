@@ -11,6 +11,11 @@ import (
 
 const searchStreamBufferSize = 16 * 1024
 
+// MaxSearchErrorBodyBytes caps how much of an upstream error response is read
+// into memory. Search errors are small Prometheus JSON payloads, so this only
+// guards against a misbehaving upstream returning an unbounded error body.
+const MaxSearchErrorBodyBytes = 1 << 20 // 1 MiB
+
 // ExecuteSearch streams a Prometheus search API response without buffering it.
 func (r *Resource) ExecuteSearch(
 	ctx context.Context,
@@ -35,7 +40,9 @@ func (r *Resource) ExecuteSearch(
 	if resp.StatusCode != http.StatusOK {
 		// Errors are small, non-streaming Prometheus JSON responses. Sending the
 		// body once preserves the upstream status and message for Grafana's UI.
-		body, err := io.ReadAll(resp.Body)
+		// The read is bounded so a misbehaving upstream cannot force unbounded
+		// buffering here.
+		body, err := io.ReadAll(io.LimitReader(resp.Body, MaxSearchErrorBodyBytes))
 		if err != nil {
 			return fmt.Errorf("error reading search error response: %v", err)
 		}

@@ -64,6 +64,16 @@ describe('readSearchStream', () => {
     });
   });
 
+  it('rejects a stream line that exceeds the maximum length', async () => {
+    // A single unterminated line larger than the cap must fail fast instead of
+    // buffering without bound.
+    const response = streamResponse(['{"results":[' + 'x'.repeat(100)]);
+
+    await expect(readSearchStream<SearchMetricResult>(response, undefined, 16)).rejects.toThrow(
+      /exceeded the maximum/i
+    );
+  });
+
   it('throws the upstream message for non-success responses', async () => {
     const response = {
       ok: false,

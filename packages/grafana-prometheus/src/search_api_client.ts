@@ -7,6 +7,12 @@ import { BaseResourceClient, type ResourceApiClient, ResourceClientsCache } from
 
 const DEFAULT_SEARCH_API_MAX_LIMIT = 10_000;
 
+// Upper bound on a single NDJSON line held in memory before a newline arrives.
+// A legitimate batch is capped by batch_size, so this only guards against a
+// misbehaving upstream that never terminates a line. Comfortably above the
+// largest realistic single-batch line (limit 10k results with metadata).
+const MAX_SEARCH_STREAM_LINE_LENGTH = 32 * 1024 * 1024;
+
 export interface SearchMetricResult {
   name: string;
   score?: number;
@@ -78,7 +84,8 @@ export class SearchApiError<T = unknown> extends Error {
 
 export async function readSearchStream<T>(
   response: Response,
-  onBatch?: (results: T[]) => void
+  onBatch?: (results: T[]) => void,
+  maxLineLength: number = MAX_SEARCH_STREAM_LINE_LENGTH
 ): Promise<SearchStreamResult<T>> {
   if (!response.ok) {
     let error: SearchErrorLine | undefined;
@@ -161,6 +168,13 @@ export async function readSearchStream<T>(
     buffer = lines.pop() ?? '';
     for (const line of lines) {
       processLine(line, false);
+    }
+    // Fail fast on an unterminated line rather than buffering without bound.
+    if (buffer.length > maxLineLength) {
+      throw new SearchApiError(
+        `Search stream line exceeded the maximum length of ${maxLineLength} bytes`,
+        results.slice()
+      );
     }
   }
 

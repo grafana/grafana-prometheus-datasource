@@ -92,6 +92,32 @@ func TestResourceExecuteSearchPassesThroughErrorResponse(t *testing.T) {
 	require.Equal(t, "application/json", http.Header(responses[0].Headers).Get("Content-Type"))
 }
 
+func TestResourceExecuteSearchLimitsErrorBodySize(t *testing.T) {
+	oversized := strings.Repeat("x", resource.MaxSearchErrorBodyBytes+1024)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(oversized))
+	}))
+	defer server.Close()
+
+	res := newSearchResource(t, server.URL)
+	var responses []*backend.CallResourceResponse
+	err := res.ExecuteSearch(context.Background(), &backend.CallResourceRequest{
+		Method: http.MethodGet,
+		Path:   "api/v1/search/metric_names",
+		URL:    "/api/v1/search/metric_names",
+	}, backend.CallResourceResponseSenderFunc(func(resp *backend.CallResourceResponse) error {
+		responses = append(responses, resp)
+		return nil
+	}))
+
+	require.NoError(t, err)
+	require.Len(t, responses, 1)
+	require.Equal(t, http.StatusInternalServerError, responses[0].Status)
+	require.Len(t, responses[0].Body, resource.MaxSearchErrorBodyBytes)
+}
+
 func TestResourceExecuteSearchStopsOnCancellation(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusOK)
