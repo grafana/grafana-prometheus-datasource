@@ -35,6 +35,21 @@ no installation is required.
 For detailed setup instructions, see the
 [Prometheus data source documentation](https://grafana.com/docs/grafana/latest/datasources/prometheus/).
 
+### Streaming Search API
+
+The optional **Search API** data source setting uses Prometheus's streaming
+metric and label discovery endpoints. It enables server-ranked fuzzy search in
+the metric picker and code editor, and progressively renders results in the
+Metrics explorer.
+
+The target must be Prometheus v3.13 or later started with
+`--enable-feature=search-api`, or Mimir started with
+`-querier.experimental-search-api-enabled`. Grafana does not fall back to the
+legacy discovery endpoints when this setting is enabled, so upstream errors are
+shown to the user. Search streams remain subject to the data source response
+limit; the bounded limits used by discovery consumers keep normal requests
+within that limit.
+
 ## Issues
 
 Please report bugs and feature requests at
