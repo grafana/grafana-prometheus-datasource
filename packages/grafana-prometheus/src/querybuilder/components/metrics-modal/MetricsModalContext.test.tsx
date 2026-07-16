@@ -21,6 +21,8 @@ const mockLanguageProvider: PrometheusLanguageProviderInterface = {
   queryMetricsMetadata: jest.fn(),
   queryLabelValues: jest.fn(),
   retrieveMetricsMetadata: jest.fn(),
+  hasSearchSupport: jest.fn().mockReturnValue(false),
+  getSearchApiClient: jest.fn().mockReturnValue(undefined),
 } as unknown as PrometheusLanguageProviderInterface;
 
 // Helper to create wrapper component
@@ -210,6 +212,54 @@ describe('MetricsModalContext', () => {
   });
 
   describe('Backend search', () => {
+    it('appends streamed search API batches incrementally', async () => {
+      let resolveSearch: (() => void) | undefined;
+      const searchMetricNames = jest.fn().mockImplementation((_timeRange, term, options) => {
+        if (term === '') {
+          return Promise.resolve({ results: [], warnings: [], hasMore: false });
+        }
+
+        options.onBatch([{ name: 'first_metric', type: 'counter', help: 'First metric' }]);
+        return new Promise((resolve) => {
+          resolveSearch = () => {
+            options.onBatch([{ name: 'second_metric', type: 'gauge', help: 'Second metric' }]);
+            resolve({ results: [], warnings: [], hasMore: false });
+          };
+        });
+      });
+      const searchLanguageProvider = {
+        ...mockLanguageProvider,
+        hasSearchSupport: jest.fn().mockReturnValue(true),
+        getSearchApiClient: jest.fn().mockReturnValue({ searchMetricNames }),
+      } as unknown as PrometheusLanguageProviderInterface;
+      const { result } = renderHook(() => useMetricsModal(), {
+        wrapper: createWrapper(searchLanguageProvider),
+      });
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      let pendingSearch: Promise<void>;
+      act(() => {
+        pendingSearch = result.current.debouncedBackendSearch(defaultTimeRange, 'metric');
+      });
+
+      await waitFor(() => {
+        expect(result.current.filteredMetricsData).toEqual([
+          { value: 'first_metric', type: 'counter', description: 'First metric' },
+        ]);
+      });
+
+      await act(async () => {
+        resolveSearch?.();
+        await pendingSearch;
+      });
+
+      expect(result.current.filteredMetricsData).toEqual([
+        { value: 'first_metric', type: 'counter', description: 'First metric' },
+        { value: 'second_metric', type: 'gauge', description: 'Second metric' },
+      ]);
+      expect(mockLanguageProvider.queryLabelValues).not.toHaveBeenCalled();
+    });
+
     it('should perform backend search with results', async () => {
       (mockLanguageProvider.queryLabelValues as jest.Mock).mockResolvedValue(['test_metric', 'other_metric']);
 

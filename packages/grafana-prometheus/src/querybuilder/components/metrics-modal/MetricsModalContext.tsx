@@ -15,6 +15,7 @@ import { type SelectableValue, type TimeRange } from '@grafana/data';
 
 import { METRIC_LABEL, PROMETHEUS_QUERY_BUILDER_MAX_RESULTS } from '../../../constants';
 import { type PrometheusLanguageProviderInterface } from '../../../language_provider';
+import { type SearchMetricResult } from '../../../search_api_client';
 import { regexifyLabelValuesQueryString } from '../../parsingUtils';
 import { type QueryBuilderLabelFilter } from '../../shared/types';
 import { formatPrometheusLabelFilters } from '../formatter';
@@ -69,6 +70,8 @@ export const MetricsModalContextProvider: FC<PropsWithChildren<MetricsModalConte
   });
   const [selectedTypes, setSelectedTypes] = useState<Array<SelectableValue<string>>>([]);
   const [searchedText, setSearchedText] = useState('');
+  const latestSearchIdRef = useRef<number>(0);
+  const searchAbortControllerRef = useRef<AbortController>();
 
   const filteredMetricsData = useMemo(() => {
     if (selectedTypes.length === 0) {
@@ -105,34 +108,91 @@ export const MetricsModalContextProvider: FC<PropsWithChildren<MetricsModalConte
     }));
   }, [filteredMetricsData.length, pagination.resultsPerPage, pagination.pageNum]);
 
-  // Track the latest search ID to handle race conditions
-  const latestSearchIdRef = useRef<number>(0);
+  const toMetricData = useCallback(
+    (result: SearchMetricResult): MetricData => ({
+      value: result.name,
+      type: result.type,
+      description: result.help,
+    }),
+    []
+  );
 
-  const fetchMetadata = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      const metadata = await languageProvider.queryMetricsMetadata(PROMETHEUS_QUERY_BUILDER_MAX_RESULTS);
-
-      // We receive ALERTS metadata in any case
-      if (Object.keys(metadata).length <= 1) {
-        const fetchedMetrics = await languageProvider.queryLabelValues(
-          timeRange,
-          METRIC_LABEL,
-          undefined,
-          PROMETHEUS_QUERY_BUILDER_MAX_RESULTS
-        );
-        const processedData = fetchedMetrics.map((m) => generateMetricData(m, languageProvider));
-        setMetricsData(processedData);
-      } else {
-        const processedData = Object.keys(metadata).map((m) => generateMetricData(m, languageProvider));
-        setMetricsData(processedData);
+  const streamSearch = useCallback(
+    async (
+      searchId: number,
+      searchTimeRange: TimeRange,
+      metricText: string,
+      queryLabels?: QueryBuilderLabelFilter[]
+    ): Promise<boolean> => {
+      const searchClient = languageProvider.getSearchApiClient();
+      if (!searchClient) {
+        return false;
       }
-    } catch (error) {
+
+      searchAbortControllerRef.current?.abort();
+      const abortController = new AbortController();
+      searchAbortControllerRef.current = abortController;
+      const filterArray = queryLabels ? formatPrometheusLabelFilters(queryLabels) : [];
+      const match = filterArray.length > 0 ? `{__name__=~".*"${filterArray.join('')}}` : undefined;
+
+      setIsLoading(true);
       setMetricsData([]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [languageProvider, timeRange]);
+      await searchClient.searchMetricNames(searchTimeRange, metricText, {
+        includeMetadata: true,
+        limit: PROMETHEUS_QUERY_BUILDER_MAX_RESULTS,
+        match,
+        signal: abortController.signal,
+        onBatch: (batch) => {
+          if (searchId === latestSearchIdRef.current) {
+            setMetricsData((current) => [...current, ...batch.map(toMetricData)]);
+          }
+        },
+      });
+
+      if (searchId === latestSearchIdRef.current) {
+        setIsLoading(false);
+      }
+      return true;
+    },
+    [languageProvider, toMetricData]
+  );
+
+  const fetchMetadata = useCallback(
+    async (searchId = ++latestSearchIdRef.current) => {
+      try {
+        setIsLoading(true);
+        if (await streamSearch(searchId, timeRange, '')) {
+          return;
+        }
+
+        const metadata = await languageProvider.queryMetricsMetadata(PROMETHEUS_QUERY_BUILDER_MAX_RESULTS);
+
+        // We receive ALERTS metadata in any case
+        if (Object.keys(metadata).length <= 1) {
+          const fetchedMetrics = await languageProvider.queryLabelValues(
+            timeRange,
+            METRIC_LABEL,
+            undefined,
+            PROMETHEUS_QUERY_BUILDER_MAX_RESULTS
+          );
+          const processedData = fetchedMetrics.map((m) => generateMetricData(m, languageProvider));
+          setMetricsData(processedData);
+        } else {
+          const processedData = Object.keys(metadata).map((m) => generateMetricData(m, languageProvider));
+          setMetricsData(processedData);
+        }
+      } catch (error) {
+        if (!languageProvider.hasSearchSupport()) {
+          setMetricsData([]);
+        }
+      } finally {
+        if (searchId === latestSearchIdRef.current) {
+          setIsLoading(false);
+        }
+      }
+    },
+    [languageProvider, streamSearch, timeRange]
+  );
 
   const debouncedBackendSearch = useMemo(
     () =>
@@ -142,7 +202,11 @@ export const MetricsModalContextProvider: FC<PropsWithChildren<MetricsModalConte
 
         try {
           if (metricText === '') {
-            await fetchMetadata();
+            await fetchMetadata(searchId);
+            return;
+          }
+
+          if (await streamSearch(searchId, timeRange, metricText, queryLabels)) {
             return;
           }
 
@@ -168,19 +232,21 @@ export const MetricsModalContextProvider: FC<PropsWithChildren<MetricsModalConte
           // Only update state if this is still the latest search
           if (searchId === latestSearchIdRef.current) {
             console.error('Backend search failed:', error);
-            setMetricsData([]); // Clear results on error
+            if (!languageProvider.hasSearchSupport()) {
+              setMetricsData([]);
+            }
             setIsLoading(false);
           }
         }
       }, 300),
-    [fetchMetadata, languageProvider]
+    [fetchMetadata, languageProvider, streamSearch]
   );
 
   useEffect(() => {
     fetchMetadata();
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    return () => searchAbortControllerRef.current?.abort();
+  }, [fetchMetadata]);
 
   return (
     <MetricsModalContext.Provider
