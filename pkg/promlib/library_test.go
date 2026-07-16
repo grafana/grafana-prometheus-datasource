@@ -149,7 +149,7 @@ func TestService(t *testing.T) {
 		err := service.CallResource(context.Background(), req, sender)
 
 		require.NoError(t, err)
-		require.Equal(t, "identity", f.Roundtripper.Req.Header.Get("Accept-Encoding"))
+		require.Equal(t, "gzip", f.Roundtripper.Req.Header.Get("Accept-Encoding"))
 		require.Equal(t, "http://localhost:9090/api/v1/search/metric_names?limit=100", f.Roundtripper.Req.URL.String())
 		require.Len(t, sender.Responses, 1)
 		require.Equal(t, "application/x-ndjson; charset=utf-8", http.Header(sender.Responses[0].Headers).Get("Content-Type"))

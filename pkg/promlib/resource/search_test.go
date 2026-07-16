@@ -1,6 +1,8 @@
 package resource_test
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"errors"
 	"io"
@@ -49,7 +51,7 @@ func TestResourceExecuteSearchStreamsResponse(t *testing.T) {
 	}))
 
 	require.NoError(t, err)
-	require.Equal(t, "identity", <-acceptEncoding)
+	require.Equal(t, "gzip", <-acceptEncoding)
 	require.GreaterOrEqual(t, len(responses), 3)
 	require.Equal(t, http.StatusOK, responses[0].Status)
 	require.Equal(t, "application/x-ndjson; charset=utf-8", http.Header(responses[0].Headers).Get("Content-Type"))
@@ -65,6 +67,46 @@ func TestResourceExecuteSearchStreamsResponse(t *testing.T) {
 		"{\"results\":[\"http_requests_total\"]}\n{\"status\":\"success\",\"has_more\":false}\n",
 		body.String(),
 	)
+}
+
+func TestResourceExecuteSearchDecodesGzipResponse(t *testing.T) {
+	payload := "{\"results\":[\"up\"]}\n{\"status\":\"success\",\"has_more\":false}\n"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		require.Equal(t, "gzip", req.Header.Get("Accept-Encoding"))
+		var buf bytes.Buffer
+		gz := gzip.NewWriter(&buf)
+		_, _ = gz.Write([]byte(payload))
+		require.NoError(t, gz.Close())
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Encoding", "gzip")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(buf.Bytes())
+	}))
+	defer server.Close()
+
+	res := newSearchResource(t, server.URL)
+	var responses []*backend.CallResourceResponse
+	err := res.ExecuteSearch(context.Background(), &backend.CallResourceRequest{
+		Method: http.MethodGet,
+		Path:   "api/v1/search/metric_names",
+		URL:    "/api/v1/search/metric_names",
+	}, backend.CallResourceResponseSenderFunc(func(resp *backend.CallResourceResponse) error {
+		responses = append(responses, resp)
+		return nil
+	}))
+
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(responses), 2)
+	// The forwarded body must be decompressed plaintext NDJSON, and the encoding
+	// header must not advertise gzip for the now-plaintext bytes.
+	require.Empty(t, http.Header(responses[0].Headers).Get("Content-Encoding"))
+
+	var body strings.Builder
+	for _, resp := range responses[1:] {
+		body.Write(resp.Body)
+	}
+	require.Equal(t, payload, body.String())
 }
 
 func TestResourceExecuteSearchPassesThroughErrorResponse(t *testing.T) {

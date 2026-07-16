@@ -1,11 +1,13 @@
 package resource
 
 import (
+	"compress/gzip"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 )
@@ -25,12 +27,14 @@ func (r *Resource) ExecuteSearch(
 ) error {
 	r.log.FromContext(ctx).Debug("Sending search resource query", "URL", req.URL)
 
-	// Clone the request because it may be reused by the caller. Search responses
-	// must stay uncompressed so chunks can be forwarded without a buffering
-	// decompression step such as the one used by Resource.Execute.
+	// Clone the request because it may be reused by the caller. Pin the upstream
+	// encoding to gzip: the browser's Accept-Encoding (gzip, deflate, br, zstd)
+	// is forwarded to the datasource by the SDK header middleware, and Go only
+	// transparently decompresses gzip. Requesting gzip explicitly keeps the wire
+	// compressed while letting us decode it with a streaming gzip.Reader below.
 	streamReq := *req
 	streamReq.Headers = map[string][]string(req.GetHTTPHeaders().Clone())
-	streamReq.Headers["Accept-Encoding"] = []string{"identity"}
+	streamReq.Headers["Accept-Encoding"] = []string{"gzip"}
 
 	resp, err := r.promClient.QueryResource(ctx, &streamReq)
 	if err != nil {
@@ -73,6 +77,19 @@ func (r *Resource) ExecuteSearch(
 	headers.Del("Content-Encoding")
 	headers.Del("Transfer-Encoding")
 
+	// We requested gzip explicitly, so Go's transport does not auto-decompress.
+	// Decode it here with a streaming reader that yields plaintext NDJSON without
+	// buffering the whole body. Any other encoding is forwarded as-is.
+	body := io.Reader(resp.Body)
+	if strings.EqualFold(resp.Header.Get("Content-Encoding"), "gzip") {
+		gzReader, err := gzip.NewReader(resp.Body)
+		if err != nil {
+			return fmt.Errorf("error creating gzip reader for search stream: %v", err)
+		}
+		defer gzReader.Close()
+		body = gzReader
+	}
+
 	// Grafana applies status and headers only from the first streamed response.
 	// Later Send calls intentionally contain body bytes only.
 	if err := sender.Send(&backend.CallResourceResponse{
@@ -84,7 +101,7 @@ func (r *Resource) ExecuteSearch(
 
 	buffer := make([]byte, searchStreamBufferSize)
 	for {
-		n, readErr := resp.Body.Read(buffer)
+		n, readErr := body.Read(buffer)
 		if n > 0 {
 			// Send may outlive this iteration, so do not expose the reusable read buffer.
 			chunk := append([]byte(nil), buffer[:n]...)
