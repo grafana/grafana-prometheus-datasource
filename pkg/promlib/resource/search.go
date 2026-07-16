@@ -46,9 +46,16 @@ func (r *Resource) ExecuteSearch(
 		if err != nil {
 			return fmt.Errorf("error reading search error response: %v", err)
 		}
+		// The buffered body no longer matches the upstream framing/encoding
+		// headers, so strip them to avoid a length/encoding mismatch that a
+		// downstream proxy would reject.
+		errorHeaders := resp.Header.Clone()
+		errorHeaders.Del("Content-Length")
+		errorHeaders.Del("Content-Encoding")
+		errorHeaders.Del("Transfer-Encoding")
 		return sender.Send(&backend.CallResourceResponse{
 			Status:  resp.StatusCode,
-			Headers: resp.Header,
+			Headers: errorHeaders,
 			Body:    body,
 		})
 	}

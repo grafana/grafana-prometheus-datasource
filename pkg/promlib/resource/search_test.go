@@ -92,6 +92,39 @@ func TestResourceExecuteSearchPassesThroughErrorResponse(t *testing.T) {
 	require.Equal(t, "application/json", http.Header(responses[0].Headers).Get("Content-Type"))
 }
 
+func TestResourceExecuteSearchStripsFramingHeadersFromErrorResponse(t *testing.T) {
+	errorBody := `{"status":"error","error":"boom"}`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Encoding", "gzip")
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = w.Write([]byte(errorBody))
+	}))
+	defer server.Close()
+
+	res := newSearchResource(t, server.URL)
+	var responses []*backend.CallResourceResponse
+	err := res.ExecuteSearch(context.Background(), &backend.CallResourceRequest{
+		Method: http.MethodGet,
+		Path:   "api/v1/search/metric_names",
+		URL:    "/api/v1/search/metric_names",
+	}, backend.CallResourceResponseSenderFunc(func(resp *backend.CallResourceResponse) error {
+		responses = append(responses, resp)
+		return nil
+	}))
+
+	require.NoError(t, err)
+	require.Len(t, responses, 1)
+	require.Equal(t, http.StatusBadGateway, responses[0].Status)
+	require.Equal(t, errorBody, string(responses[0].Body))
+	require.Equal(t, "application/json", http.Header(responses[0].Headers).Get("Content-Type"))
+	// Stale framing headers describe the upstream payload, not what we forward,
+	// so a downstream proxy would reject the mismatch.
+	require.Empty(t, http.Header(responses[0].Headers).Get("Content-Encoding"))
+	require.Empty(t, http.Header(responses[0].Headers).Get("Content-Length"))
+	require.Empty(t, http.Header(responses[0].Headers).Get("Transfer-Encoding"))
+}
+
 func TestResourceExecuteSearchLimitsErrorBodySize(t *testing.T) {
 	oversized := strings.Repeat("x", resource.MaxSearchErrorBodyBytes+1024)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
