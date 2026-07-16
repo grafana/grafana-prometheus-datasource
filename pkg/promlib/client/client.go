@@ -137,6 +137,9 @@ func (c *Client) QueryResource(ctx context.Context, req *backend.CallResourceReq
 	if err != nil {
 		return nil, err
 	}
+	if acceptEncoding := req.GetHTTPHeaders().Get("Accept-Encoding"); acceptEncoding != "" {
+		httpRequest.Header.Set("Accept-Encoding", acceptEncoding)
+	}
 
 	return c.doer.Do(httpRequest)
 }
