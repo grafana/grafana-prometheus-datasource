@@ -45,6 +45,9 @@ func (r *Resource) ExecuteSearch(
 	}
 
 	headers := resp.Header.Clone()
+	if headers == nil {
+		headers = make(http.Header)
+	}
 	headers.Set("Content-Type", "application/x-ndjson; charset=utf-8")
 	headers.Del("Content-Length")
 	headers.Del("Content-Encoding")

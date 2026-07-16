@@ -14,9 +14,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type fakeSender struct{}
+type fakeSender struct {
+	Responses []*backend.CallResourceResponse
+}
 
 func (sender *fakeSender) Send(resp *backend.CallResourceResponse) error {
+	sender.Responses = append(sender.Responses, resp)
 	return nil
 }
 
@@ -30,7 +33,7 @@ func (rt *fakeRoundtripper) RoundTrip(req *http.Request) (*http.Response, error)
 		Status:        "200",
 		StatusCode:    200,
 		Header:        nil,
-		Body:          nil,
+		Body:          io.NopCloser(http.NoBody),
 		ContentLength: 0,
 	}, nil
 }
@@ -129,6 +132,27 @@ func TestService(t *testing.T) {
 		err := service.CallResource(context.Background(), req, sender)
 		require.NoError(t, err)
 		require.Equal(t, `http://localhost:9090/api/v1/labels?end=2022-06-01T12%3A00%3A00Z&limit=10&match%5B%5D=go_cgo_go_to_c_calls_calls_total%7Bjob%3D~%22.%2B%22%7D&match%5B%5D=up%7Bjob%3D~%22.%2B%22%7D&start=2022-06-01T00%3A00%3A00Z`, f.Roundtripper.Req.URL.String())
+	})
+
+	t.Run("search resource uses streaming handler", func(t *testing.T) {
+		f := &fakeHTTPClientProvider{}
+		httpProvider := getMockPromTestSDKProvider(f)
+		service := NewService(httpProvider, backend.NewLoggerWith("logger", "test"), mockExtendTransportOptions)
+
+		req := mockRequest()
+		req.Path = "api/v1/search/metric_names"
+		req.URL = "/api/v1/search/metric_names?limit=100"
+		req.Method = http.MethodGet
+		req.Body = nil
+		sender := &fakeSender{}
+
+		err := service.CallResource(context.Background(), req, sender)
+
+		require.NoError(t, err)
+		require.Equal(t, "identity", f.Roundtripper.Req.Header.Get("Accept-Encoding"))
+		require.Equal(t, "http://localhost:9090/api/v1/search/metric_names?limit=100", f.Roundtripper.Req.URL.String())
+		require.Len(t, sender.Responses, 1)
+		require.Equal(t, "application/x-ndjson; charset=utf-8", http.Header(sender.Responses[0].Headers).Get("Content-Type"))
 	})
 }
 

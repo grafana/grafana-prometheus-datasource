@@ -145,6 +145,8 @@ func (s *Service) CallResource(ctx context.Context, req *backend.CallResourceReq
 	}
 
 	switch {
+	case strings.HasPrefix(strings.TrimPrefix(req.Path, "/"), "api/v1/search/"):
+		return i.resource.ExecuteSearch(ctx, req, sender)
 	case strings.EqualFold(req.Path, "suggestions"):
 		resp, err := i.resource.GetSuggestions(ctx, req)
 		if err != nil {
