@@ -98,6 +98,7 @@ export async function readSearchStream<T>(
   const results: T[] = [];
   const warnings: string[] = [];
   let hasMore = false;
+  let sawTrailer = false;
   let buffer = '';
 
   const processLine = (line: string, tolerateIncomplete: boolean) => {
@@ -121,6 +122,7 @@ export async function readSearchStream<T>(
       if (parsed.status === 'error') {
         throw new SearchApiError(parsed.error || 'Search API request failed', results.slice(), parsed.errorType);
       }
+      sawTrailer = true;
       hasMore = parsed.has_more;
       if (parsed.warnings) {
         warnings.push(...parsed.warnings);
@@ -155,6 +157,14 @@ export async function readSearchStream<T>(
     for (const line of lines) {
       processLine(line, false);
     }
+  }
+
+  // A stream that never delivered the success trailer was cut short (a dropped
+  // connection is indistinguishable from a clean EOF at the byte level), so
+  // callers must not treat the partial results as the complete set.
+  if (!sawTrailer) {
+    hasMore = true;
+    warnings.push('Search stream ended before completion; results may be incomplete.');
   }
 
   return { results, warnings, hasMore };
@@ -212,7 +222,9 @@ export class SearchApiClient extends BaseResourceClient implements ResourceApiCl
     // Unlike the legacy /label/{name}/values endpoint, Search API carries the
     // label name in a query parameter and therefore expects the unescaped name.
     const labelName = removeQuotesIfExist(interpolatedName);
-    const effectiveMatch = `${match ?? ''}-${labelName}`;
+    // Encode the cache key as JSON so a label name or match containing the
+    // delimiter cannot collide with a different (labelName, match) pair.
+    const effectiveMatch = JSON.stringify(['label_values', labelName, match ?? '']);
     const cached = this._cache.getLabelValues(timeRange, effectiveMatch, effectiveLimit);
     if (cached) {
       return cached.slice();

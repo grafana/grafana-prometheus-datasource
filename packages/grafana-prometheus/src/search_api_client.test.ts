@@ -53,13 +53,13 @@ describe('readSearchStream', () => {
     });
   });
 
-  it('treats abrupt EOF as partial success', async () => {
+  it('flags a truncated stream (missing trailer) as incomplete', async () => {
     const response = streamResponse(['{"results":[{"name":"up"}]}\n{"status":"succ']);
 
     await expect(readSearchStream<SearchMetricResult>(response)).resolves.toEqual({
       results: [{ name: 'up' }],
-      warnings: [],
-      hasMore: false,
+      warnings: ['Search stream ended before completion; results may be incomplete.'],
+      hasMore: true,
     });
   });
 
