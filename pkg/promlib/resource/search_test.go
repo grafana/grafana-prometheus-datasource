@@ -3,6 +3,7 @@ package resource_test
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -197,6 +198,41 @@ func TestResourceExecuteSearchReturnsSenderError(t *testing.T) {
 
 	require.ErrorIs(t, err, senderErr)
 }
+
+func TestResourceExecuteSearchHandlesNilResponseHeader(t *testing.T) {
+	client := &http.Client{Transport: roundTripFunc(func(_ *http.Request) (*http.Response, error) {
+		// A RoundTripper is allowed to return a response with a nil Header.
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     nil,
+			Body:       io.NopCloser(strings.NewReader("{\"results\":[\"up\"]}\n")),
+		}, nil
+	})}
+	res, err := resource.New(client, backend.DataSourceInstanceSettings{
+		URL:      "http://prometheus.example",
+		JSONData: []byte(`{"httpMethod":"GET"}`),
+	}, log.DefaultLogger)
+	require.NoError(t, err)
+
+	var responses []*backend.CallResourceResponse
+	err = res.ExecuteSearch(context.Background(), &backend.CallResourceRequest{
+		Method: http.MethodGet,
+		Path:   "api/v1/search/metric_names",
+		URL:    "/api/v1/search/metric_names",
+	}, backend.CallResourceResponseSenderFunc(func(resp *backend.CallResourceResponse) error {
+		responses = append(responses, resp)
+		return nil
+	}))
+
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(responses), 1)
+	require.Equal(t, http.StatusOK, responses[0].Status)
+	require.Equal(t, "application/x-ndjson; charset=utf-8", http.Header(responses[0].Headers).Get("Content-Type"))
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
 
 func TestResourceExecuteSearchLogsNonEOFReadError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

@@ -61,7 +61,13 @@ func (r *Resource) ExecuteSearch(
 		})
 	}
 
+	// resp.Header may be nil (a RoundTripper is permitted to return one), and
+	// http.Header(nil).Clone() stays nil, so start from an empty header set to
+	// keep the writes below safe.
 	headers := resp.Header.Clone()
+	if headers == nil {
+		headers = http.Header{}
+	}
 	headers.Set("Content-Type", "application/x-ndjson; charset=utf-8")
 	headers.Del("Content-Length")
 	headers.Del("Content-Encoding")
