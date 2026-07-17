@@ -5,6 +5,7 @@ import { type GrafanaTheme2, type SelectableValue, type TimeRange } from '@grafa
 import { selectors } from '@grafana/e2e-selectors';
 import { Trans, t } from '@grafana/i18n';
 import { EditorField, EditorFieldGroup } from '@grafana/plugin-ui';
+import { reportInteraction } from '@grafana/runtime';
 import { Button, InlineField, InlineFieldRow, Combobox, type ComboboxOption, useTheme2 } from '@grafana/ui';
 
 import { METRIC_LABEL } from '../../constants';
@@ -105,7 +106,13 @@ export function MetricCombobox({
           variant="secondary"
           icon="book-open"
           className={styles.button}
-          onClick={() => setMetricsModalOpen(true)}
+          disabled={datasource.lookupsDisabled}
+          onClick={() => {
+            reportInteraction('grafana_prometheus_metrics_explorer_opened', {
+              hasSelectedMetric: !!query.metric,
+            });
+            setMetricsModalOpen(true);
+          }}
         />
       </div>
     );
