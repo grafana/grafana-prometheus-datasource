@@ -28,6 +28,11 @@ func (d *Datasource) QueryData(ctx context.Context, req *backend.QueryDataReques
 	return d.Service.QueryData(ctx, req)
 }
 
+func (d *Datasource) QueryChunkedData(ctx context.Context, req *backend.QueryChunkedDataRequest, w backend.ChunkedDataWriter) error {
+	ctx = d.contextualMiddlewares(ctx)
+	return d.Service.QueryChunkedData(ctx, req, w)
+}
+
 func (d *Datasource) CallResource(ctx context.Context, req *backend.CallResourceRequest, sender backend.CallResourceResponseSender) error {
 	ctx = d.contextualMiddlewares(ctx)
 	return d.Service.CallResource(ctx, req, sender)
