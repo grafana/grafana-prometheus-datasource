@@ -174,8 +174,9 @@ func (s *QueryData) streamMatrixData(ctx context.Context, q *models.Query, iter 
 					return false, iter.Error
 				}
 				frameID := fmt.Sprintf("range/%d", seriesOrdinal)
+				includeQueryMetadata := seriesOrdinal == 0
 				seriesOrdinal++
-				wrote, err := s.streamSeries(ctx, q, iter, w, frameID)
+				wrote, err := s.streamSeries(ctx, q, iter, w, frameID, includeQueryMetadata)
 				if err != nil {
 					return false, err
 				}
@@ -198,7 +199,7 @@ func (s *QueryData) streamMatrixData(ctx context.Context, q *models.Query, iter 
 	return emitted, nil
 }
 
-func (s *QueryData) streamSeries(ctx context.Context, q *models.Query, iter *jsoniter.Iterator, w backend.ChunkedDataWriter, frameID string) (bool, error) {
+func (s *QueryData) streamSeries(ctx context.Context, q *models.Query, iter *jsoniter.Iterator, w backend.ChunkedDataWriter, frameID string, includeQueryMetadata bool) (bool, error) {
 	var labels data.Labels
 	seenMetric, seenValues := false, false
 	wrote := false
@@ -230,11 +231,13 @@ func (s *QueryData) streamSeries(ctx context.Context, q *models.Query, iter *jso
 					TypeVersion: data.FrameTypeVersion{0, 1},
 				}
 				addMetadataToMultiFrame(q, frame)
-				frame.Meta.ExecutedQueryString = executedQueryString(q)
-				if frame.Meta.Custom == nil {
-					frame.Meta.Custom = map[string]any{}
+				if includeQueryMetadata {
+					frame.Meta.ExecutedQueryString = executedQueryString(q)
+					if frame.Meta.Custom == nil {
+						frame.Meta.Custom = map[string]any{}
+					}
+					frame.Meta.Custom.(map[string]any)["calculatedMinStep"] = q.Step.Milliseconds()
 				}
-				frame.Meta.Custom.(map[string]any)["calculatedMinStep"] = q.Step.Milliseconds()
 				if err := w.WriteFrame(ctx, q.RefId, frameID, frame); err != nil {
 					return err
 				}

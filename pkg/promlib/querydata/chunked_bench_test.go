@@ -6,12 +6,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"runtime"
 	"testing"
 	"time"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/tracing"
 	"github.com/grafana/grafana-plugin-sdk-go/data"
+	"github.com/grafana/grafana-plugin-sdk-go/genproto/pluginv2"
 
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/experiments/queryresponsejson"
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/models"
@@ -79,23 +81,49 @@ func BenchmarkResponseConversion(b *testing.B) {
 		b.Run(variant.name, func(b *testing.B) {
 			var totalFirstChunk time.Duration
 			var totalBytesAtFirstChunk int64
+			var totalChunkCount int64
+			var maxEncodedChunkSize int
+			var totalGCCycles uint32
+			var totalGCPause time.Duration
+			var totalHeapAlloc uint64
+			var totalHeapInuse uint64
 			b.ResetTimer()
 			for range b.N {
+				var before runtime.MemStats
+				runtime.ReadMemStats(&before)
 				response, err := client.Get(server.URL + "/api/v1/query_range")
 				if err != nil {
 					b.Fatal(err)
 				}
-				writer := &countingChunkWriter{started: time.Now()}
+				writer := newCountingChunkWriter(time.Now())
 				if err := variant.run(response, writer); err != nil {
 					b.Fatal(err)
 				}
 				totalFirstChunk += writer.firstChunk
 				totalBytesAtFirstChunk += writer.bytesAtFirstChunk
+				totalChunkCount += writer.chunkCount
+				if writer.maxEncodedChunkSize > maxEncodedChunkSize {
+					maxEncodedChunkSize = writer.maxEncodedChunkSize
+				}
+				var after runtime.MemStats
+				runtime.ReadMemStats(&after)
+				totalGCCycles += after.NumGC - before.NumGC
+				totalGCPause += time.Duration(after.PauseTotalNs - before.PauseTotalNs)
+				totalHeapAlloc += after.HeapAlloc
+				totalHeapInuse += after.HeapInuse
 			}
 			b.StopTimer()
+			if b.N > 0 {
+				b.ReportMetric(float64(totalGCCycles)/float64(b.N), "gc-cycles/op")
+				b.ReportMetric(float64(totalGCPause.Microseconds())/float64(b.N), "gc-pause-us/op")
+				b.ReportMetric(float64(totalHeapAlloc)/float64(b.N), "heap-alloc-bytes")
+				b.ReportMetric(float64(totalHeapInuse)/float64(b.N), "heap-inuse-bytes")
+			}
 			if variant.name == "chunked" && b.N > 0 {
 				b.ReportMetric(float64(totalFirstChunk.Microseconds())/float64(b.N), "first-chunk-us")
 				b.ReportMetric(float64(totalBytesAtFirstChunk)/float64(b.N), "first-chunk-bytes")
+				b.ReportMetric(float64(totalChunkCount)/float64(b.N), "chunks/op")
+				b.ReportMetric(float64(maxEncodedChunkSize), "max-chunk-bytes")
 			}
 		})
 	}
@@ -113,20 +141,35 @@ func (reader *countingReadCloser) Read(p []byte) (int, error) {
 }
 
 type countingChunkWriter struct {
-	started           time.Time
-	firstChunk        time.Duration
-	bytesAtFirstChunk int64
-	upstreamBytes     int64
+	started             time.Time
+	firstChunk          time.Duration
+	bytesAtFirstChunk   int64
+	upstreamBytes       int64
+	chunkCount          int64
+	maxEncodedChunkSize int
+	writer              backend.ChunkedDataWriter
 }
 
-func (writer *countingChunkWriter) WriteFrame(_ context.Context, _ string, _ string, _ *data.Frame) error {
-	if writer.firstChunk == 0 {
-		writer.firstChunk = time.Since(writer.started)
-		writer.bytesAtFirstChunk = writer.upstreamBytes
-	}
-	return nil
+func newCountingChunkWriter(started time.Time) *countingChunkWriter {
+	writer := &countingChunkWriter{started: started}
+	writer.writer = backend.NewChunkedDataWriter(backend.DataFrameFormat_JSON, func(chunk *pluginv2.QueryChunkedDataResponse) error {
+		if writer.firstChunk == 0 {
+			writer.firstChunk = time.Since(writer.started)
+			writer.bytesAtFirstChunk = writer.upstreamBytes
+		}
+		writer.chunkCount++
+		if len(chunk.Frame) > writer.maxEncodedChunkSize {
+			writer.maxEncodedChunkSize = len(chunk.Frame)
+		}
+		return nil
+	})
+	return writer
 }
 
-func (*countingChunkWriter) WriteError(_ context.Context, _ string, _ backend.Status, err error) error {
-	return err
+func (writer *countingChunkWriter) WriteFrame(ctx context.Context, refID, frameID string, frame *data.Frame) error {
+	return writer.writer.WriteFrame(ctx, refID, frameID, frame)
+}
+
+func (writer *countingChunkWriter) WriteError(ctx context.Context, refID string, status backend.Status, err error) error {
+	return writer.writer.WriteError(ctx, refID, status, err)
 }
