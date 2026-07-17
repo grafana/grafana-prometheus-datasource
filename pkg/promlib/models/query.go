@@ -219,7 +219,7 @@ func Parse(ctx context.Context, log glog.Logger, span trace.Span, query backend.
 	span.SetAttributes(attribute.String("rawExpr", model.Expr))
 
 	// Final step value for prometheus
-	calculatedStep, err := calculatePrometheusInterval(model.Interval, dsScrapeInterval, int64(model.IntervalMS), model.IntervalFactor, query, intervalCalculator)
+	calculatedStep, err := CalculatePrometheusInterval(model.Interval, dsScrapeInterval, int64(model.IntervalMS), model.IntervalFactor, query, intervalCalculator)
 	if err != nil {
 		return nil, err
 	}
@@ -352,7 +352,7 @@ func normalizeIntervalFactor(factor int64) int64 {
 	return factor
 }
 
-// calculatePrometheusInterval calculates the optimal step interval for a Prometheus query.
+// CalculatePrometheusInterval calculates the optimal step interval for a Prometheus query.
 //
 // The function determines the query step interval by considering multiple factors:
 //   - The minimum step specified in the query (queryInterval)
@@ -377,7 +377,7 @@ func normalizeIntervalFactor(factor int64) int64 {
 // Returns:
 //   - The calculated step interval as a time.Duration
 //   - An error if the interval cannot be calculated (e.g., invalid interval string)
-func calculatePrometheusInterval(
+func CalculatePrometheusInterval(
 	queryInterval, dsScrapeInterval string,
 	intervalMs, intervalFactor int64,
 	query backend.DataQuery,
@@ -440,7 +440,7 @@ func calculateRateInterval(
 // InterpolateVariables interpolates built-in variables
 // expr PromQL query
 // queryInterval Requested interval in milliseconds. This value may be overridden by MinStep in query options
-// calculatedStep Calculated final step value. It was calculated in calculatePrometheusInterval
+// calculatedStep Calculated final step value. It was calculated in CalculatePrometheusInterval
 // requestedMinStep Requested minimum step value. QueryModel.interval
 // dsScrapeInterval Data source scrape interval in the config
 // timeRange Requested time range for the query
