@@ -1,8 +1,9 @@
 # Chunked Prometheus query PoC
 
-This PoC streams the supported Prometheus `query_range` response subset through
-the external plugin's `QueryChunkedData` gRPC endpoint. It is not used by the
-normal Grafana Explore or dashboard query path.
+This streams the supported Prometheus `query_range` response subset through the
+external plugin's `QueryChunkedData` gRPC endpoint. In Grafana 13.1 and later,
+the datasource can also use it for normal Explore and dashboard requests when
+the datasource-level **Chunked queries (experimental)** option is enabled.
 
 ## Requirements
 
@@ -38,6 +39,43 @@ event must arrive while the upstream `query_range` response is still open; the
 same `(refId, frameId)` pair repeats as later sample batches append to that
 frame. Calling the ordinary `/api/ds/query` endpoint exercises buffered
 `QueryData`, not this PoC.
+
+## Production opt-in and fallback
+
+Chunked routing requires all of the following:
+
+- a stable Grafana version 13.1 or newer;
+- the datasource-level opt-in;
+- the feature toggles listed above; and
+- a request containing only supported range targets.
+
+Supported requests progressively emit complete accumulated frame snapshots while
+the response is still being read. The normal cache, transform, and query
+tracking pipeline runs after each snapshot.
+
+Instant, exemplar, `Both`, heatmap, SQL/flattened, non-range, mixed-datasource,
+expression, and public-dashboard requests use the ordinary buffered query path.
+A 404 or 406 before the first JSONL frame also falls back once to the buffered
+path, which supports mixed Grafana/plugin deployments. Errors after a frame is
+received are surfaced directly and are not replayed, avoiding duplicate queries
+or mixed partial responses. Native histograms are detected by the backend only,
+so they follow this latter error behaviour.
+
+`BackendSrv.chunked()` intentionally bypasses portions of Grafana's regular
+fetch queue. The plugin reproduces the request payload, cancellation, and
+user-visible response semantics needed by this transport, but does not depend
+on Grafana private queue implementation details.
+
+## Browser debug consumer
+
+The saved datasource configuration page contains a collapsed **Experimental
+chunked query consumer** section. It is an opt-in diagnostic UI that submits one
+supported range query to the same plugin-specific endpoint, consumes partial
+UTF-8/JSONL boundaries, and accumulates repeated `(refId, frameId)` events. It
+shows first-frame time, received chunk count, and the accumulated frames.
+
+It remains separate from the production response state and is intended for
+transport diagnostics.
 
 ## Supported subset
 

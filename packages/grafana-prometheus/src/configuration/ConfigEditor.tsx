@@ -12,6 +12,7 @@ import { AlertingSettingsOverhaul } from './AlertingSettingsOverhaul';
 import { DataSourceHttpSettingsOverhaul } from './DataSourceHttpSettingsOverhaul';
 import { PromSettings } from './PromSettings';
 import { overhaulStyles } from './shared/utils';
+import { ChunkedQueryDebug } from './ChunkedQueryDebug';
 type PrometheusConfigProps = DataSourcePluginOptionsEditorProps<PromOptions>;
 
 export const ConfigEditor = (props: PrometheusConfigProps) => {
@@ -55,6 +56,7 @@ export const ConfigEditor = (props: PrometheusConfigProps) => {
         <AlertingSettingsOverhaul<PromOptions> options={options} onOptionsChange={onOptionsChange} />
         <PromSettings options={options} onOptionsChange={onOptionsChange} />
       </ConfigSection>
+      <ChunkedQueryDebug datasourceUID={options.uid} />
     </>
   );
 };

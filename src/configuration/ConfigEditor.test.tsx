@@ -49,4 +49,9 @@ describe('ConfigEditor', () => {
     render(<ConfigEditor onOptionsChange={() => {}} options={createDefaultConfigOptions()} />);
     expect(screen.getByText('Advanced settings')).toBeInTheDocument();
   });
+
+  it('renders the experimental chunked query consumer', () => {
+    render(<ConfigEditor onOptionsChange={() => {}} options={createDefaultConfigOptions()} />);
+    expect(screen.getByText('Experimental chunked query consumer')).toBeInTheDocument();
+  });
 });

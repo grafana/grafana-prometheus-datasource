@@ -43,6 +43,7 @@ export interface PromOptions extends DataSourceJsonData {
   prometheusVersion?: string;
   cacheLevel?: PrometheusCacheLevel;
   defaultEditor?: QueryEditorMode;
+  chunkedQueries?: boolean;
   incrementalQuerying?: boolean;
   incrementalQueryOverlapWindow?: string;
   disableRecordingRules?: boolean;

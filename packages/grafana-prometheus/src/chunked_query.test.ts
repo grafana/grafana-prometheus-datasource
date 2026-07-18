@@ -68,6 +68,7 @@ describe('chunked query transport', () => {
       of(
         { ok: true, data: bytes.slice(0, 27) },
         { ok: true, data: bytes.slice(27) },
+        { ok: true, data: new TextEncoder().encode('{"complete":true}\n') },
         { ok: true, data: undefined }
       )
     );

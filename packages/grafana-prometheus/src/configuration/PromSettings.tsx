@@ -27,6 +27,7 @@ import {
 import { QueryEditorMode } from '../querybuilder/shared/types';
 import { defaultPrometheusQueryOverlapWindow } from '../querycache/QueryCache';
 import { PromApplication, PrometheusCacheLevel, type PromOptions } from '../types';
+import { supportsChunkedQueries } from '../chunked_query';
 
 import { ExemplarsSettings } from './ExemplarsSettings';
 import { PromFlavorVersions } from './PromFlavorVersions';
@@ -425,6 +426,30 @@ export const PromSettings = (props: Props) => {
                 id={selectors.components.DataSource.Prometheus.configPage.incrementalQuerying}
               />
             </InlineField>
+
+            {supportsChunkedQueries() && (
+              <InlineField
+                label={t(
+                  'grafana-prometheus.configuration.prom-settings.label-chunked-queries-experimental',
+                  'Chunked queries (experimental)'
+                )}
+                labelWidth={PROM_CONFIG_LABEL_WIDTH}
+                tooltip={
+                  <Trans i18nKey="grafana-prometheus.configuration.prom-settings.tooltip-chunked-queries-experimental">
+                    Stream supported range-query results as they arrive. Unsupported queries continue to use the standard
+                    query path.
+                  </Trans>
+                }
+                interactive={true}
+                className={styles.switchField}
+                disabled={optionsWithDefaults.readOnly}
+              >
+                <Switch
+                  value={optionsWithDefaults.jsonData.chunkedQueries ?? false}
+                  onChange={onUpdateDatasourceJsonDataOptionChecked(props, 'chunkedQueries')}
+                />
+              </InlineField>
+            )}
 
             {optionsWithDefaults.jsonData.incrementalQuerying && (
               <InlineField

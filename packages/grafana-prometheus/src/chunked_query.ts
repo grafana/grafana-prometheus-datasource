@@ -2,6 +2,7 @@ import {
   dataFrameFromJSON,
   type DataSourceRef,
   type DataFrameJSON,
+  type DataQueryError,
   type DataQueryRequest,
   type DataQueryResponse,
   LoadingState,
@@ -13,6 +14,7 @@ import { gte, prerelease, valid } from 'semver';
 import { type PromQuery } from './types';
 
 const minimumGrafanaVersion = '13.1.0';
+const maximumJSONLLineLength = 1024 * 1024;
 
 export interface ChunkedQueryEvent {
   refId: string;
@@ -20,6 +22,8 @@ export interface ChunkedQueryEvent {
   frame?: DataFrameJSON;
   error?: string;
   errorSource?: string;
+  status?: number;
+  complete?: boolean;
 }
 
 export class ChunkedInfrastructureError extends Error {
@@ -130,8 +134,10 @@ export function buildChunkedQueryBody(datasource: ChunkedQueryDatasource, reques
 class ChunkedResponseAccumulator {
   private readonly decoder = new TextDecoder();
   private readonly frames = new Map<string, DataFrameJSON>();
+  private readonly errors: DataQueryError[] = [];
   private remainder = '';
   private emitted = false;
+  private completed = false;
   private terminated = false;
 
   constructor(private readonly subscriber: Subscriber<DataQueryResponse>) {}
@@ -142,6 +148,10 @@ class ChunkedResponseAccumulator {
     }
 
     this.remainder += this.decoder.decode(chunk, { stream: true });
+    if (this.remainder.length > maximumJSONLLineLength) {
+      this.fail(new Error('Chunked query returned an oversized JSONL event.'));
+      return;
+    }
     this.consumeLines(false);
   }
 
@@ -152,10 +162,8 @@ class ChunkedResponseAccumulator {
 
     this.remainder += this.decoder.decode();
     this.consumeLines(true);
-    if (!this.terminated) {
-      this.terminated = true;
-      this.subscriber.next({ data: this.data(), state: LoadingState.Done });
-      this.subscriber.complete();
+    if (!this.terminated && !this.completed) {
+      this.fail(new Error('Chunked query stream ended before successful completion.'));
     }
   }
 
@@ -204,19 +212,37 @@ class ChunkedResponseAccumulator {
       return;
     }
 
-    if (!event || typeof event.refId !== 'string' || event.refId.length === 0) {
+    if (!event) {
+      this.fail(new Error('Chunked query returned an invalid event.'));
+      return;
+    }
+
+    if (event.complete === true) {
+      this.completed = true;
+      this.terminated = true;
+      this.subscriber.next({
+        data: this.data(),
+        errors: this.errors,
+        error: this.errors[0],
+        state: this.errors.length > 0 ? LoadingState.Error : LoadingState.Done,
+      });
+      this.subscriber.complete();
+      return;
+    }
+
+    if (typeof event.refId !== 'string' || event.refId.length === 0) {
       this.fail(new Error('Chunked query event is missing a refId.'));
       return;
     }
 
     if (event.error) {
-      this.terminated = true;
-      this.subscriber.next({
-        data: this.data(),
-        error: { message: event.error, refId: event.refId },
-        state: LoadingState.Done,
-      });
-      this.subscriber.complete();
+      this.errors.push({
+        message: event.error,
+        refId: event.refId,
+        status: event.status,
+        errorSource: event.errorSource,
+      } as DataQueryError);
+      this.subscriber.next({ data: this.data(), errors: this.errors, state: LoadingState.Streaming });
       return;
     }
 

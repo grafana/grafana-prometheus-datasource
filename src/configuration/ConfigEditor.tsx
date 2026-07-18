@@ -2,7 +2,7 @@ import { css } from '@emotion/css';
 
 import { type DataSourcePluginOptionsEditorProps, type GrafanaTheme2 } from '@grafana/data';
 import { AdvancedHttpSettings, ConfigSection, DataSourceDescription } from '@grafana/plugin-ui';
-import { AlertingSettingsOverhaul, type PromOptions, PromSettings } from '@grafana/prometheus';
+import { AlertingSettingsOverhaul, ChunkedQueryDebug, type PromOptions, PromSettings } from '@grafana/prometheus';
 import { config } from '@grafana/runtime';
 import { Alert, useTheme2 } from '@grafana/ui';
 
@@ -46,6 +46,7 @@ export const ConfigEditor = (props: Props) => {
         <AlertingSettingsOverhaul<PromOptions> options={options} onOptionsChange={onOptionsChange} />
         <PromSettings options={options} onOptionsChange={onOptionsChange} />
       </ConfigSection>
+      <ChunkedQueryDebug datasourceUID={options.uid} />
     </>
   );
 };

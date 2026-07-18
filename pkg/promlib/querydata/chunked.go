@@ -54,7 +54,7 @@ func (s *QueryData) ExecuteChunked(ctx context.Context, req *backend.QueryChunke
 
 		res, err := s.client.QueryRange(traceCtx, query)
 		if err != nil {
-			if writeErr := w.WriteError(ctx, bq.RefID, backend.StatusBadGateway, err); writeErr != nil {
+			if writeErr := w.WriteError(ctx, bq.RefID, backend.StatusBadGateway, backend.DownstreamError(err)); writeErr != nil {
 				return writeErr
 			}
 			continue
@@ -66,7 +66,7 @@ func (s *QueryData) ExecuteChunked(ctx context.Context, req *backend.QueryChunke
 			err = closeErr
 		}
 		if err != nil {
-			if writeErr := w.WriteError(ctx, bq.RefID, backend.StatusBadGateway, err); writeErr != nil {
+			if writeErr := w.WriteError(ctx, bq.RefID, backend.StatusBadGateway, backend.DownstreamError(err)); writeErr != nil {
 				return writeErr
 			}
 		}

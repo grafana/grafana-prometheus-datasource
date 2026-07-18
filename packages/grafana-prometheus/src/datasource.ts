@@ -1,7 +1,7 @@
 import { defaults } from 'lodash';
 import { tz } from 'moment-timezone';
-import { lastValueFrom, type Observable, throwError } from 'rxjs';
-import { map, tap } from 'rxjs/operators';
+import { lastValueFrom, of, type Observable, throwError } from 'rxjs';
+import { catchError, map, tap } from 'rxjs/operators';
 import { gte } from 'semver';
 
 import {
@@ -42,6 +42,12 @@ import {
 import { addLabelToQuery } from './add_label_to_query';
 import { applyModifyQuery } from './modify_query';
 import { PrometheusAnnotationSupport } from './annotations';
+import {
+  isChunkedInfrastructureError,
+  isChunkedQueryEligible,
+  queryChunked,
+  supportsChunkedQueries,
+} from './chunked_query';
 import { DEFAULT_SERIES_LIMIT, GET_AND_POST_METADATA_ENDPOINTS, InstantQueryRefIdIndex } from './constants';
 import { interpolateQueryExpr, prometheusRegularEscape } from './escaping';
 import {
@@ -483,8 +489,23 @@ export class PrometheusDatasource
     }
 
     const targets = fullOrPartialRequest.targets.map((target) => this.processTargetV2(target, fullOrPartialRequest));
+    const processedRequest = { ...fullOrPartialRequest, targets: targets.flat() };
+    const useChunkedQueries =
+      this.instanceSettings.jsonData.chunkedQueries === true &&
+      supportsChunkedQueries() &&
+      !config.publicDashboardAccessToken &&
+      Boolean(this.uid) &&
+      isChunkedQueryEligible(processedRequest, this.uid);
     const startTime = new Date();
-    return super.query({ ...fullOrPartialRequest, targets: targets.flat() }).pipe(
+    const query = useChunkedQueries ? queryChunked(this, processedRequest) : super.query(processedRequest);
+
+    return query.pipe(
+      catchError((error) => {
+        if (useChunkedQueries && isChunkedInfrastructureError(error)) {
+          return super.query(processedRequest);
+        }
+        return of({ data: [], error: { message: error instanceof Error ? error.message : String(error) } });
+      }),
       map((response) => {
         const amendedResponse = {
           ...response,

@@ -15,6 +15,10 @@ services:
     extends:
       file: .config/docker-compose-base.yaml
       service: grafana
+    build:
+      args:
+        # QueryChunkedData's JSONL HTTP bridge requires Grafana 13.1 or newer.
+        grafana_version: 13.1.0
     depends_on:
       - prometheus
     environment:

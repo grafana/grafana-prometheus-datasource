@@ -23,6 +23,7 @@ export { overhaulStyles, validateInput, docsTip } from './configuration/shared/u
 export { PROM_CONFIG_LABEL_WIDTH, InstantQueryRefIdIndex } from './constants';
 // The parts
 export { AlertingSettingsOverhaul } from './configuration/AlertingSettingsOverhaul';
+export { ChunkedQueryDebug } from './configuration/ChunkedQueryDebug';
 export { DataSourceHttpSettingsOverhaul } from './configuration/DataSourceHttpSettingsOverhaul';
 export { ExemplarSetting } from './configuration/ExemplarSetting';
 export { ExemplarsSettings } from './configuration/ExemplarsSettings';
