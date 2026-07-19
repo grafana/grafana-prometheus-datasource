@@ -626,6 +626,8 @@ func readScalar(iter *sdkjsoniter.Iterator) backend.DataResponse {
 func readMatrixOrVectorMulti(iter *sdkjsoniter.Iterator, resultType string, opt Options) backend.DataResponse {
 	rsp := backend.DataResponse{}
 	size := 0
+	previousHistogramSize := -1
+	histogramCapacityHint := 0
 
 	for more, err := iter.ReadArray(); more; more, err = iter.ReadArray() {
 		if err != nil {
@@ -671,7 +673,7 @@ func readMatrixOrVectorMulti(iter *sdkjsoniter.Iterator, resultType string, opt 
 
 			case "histogram":
 				if histogram == nil {
-					histogram = newHistogramInfo()
+					histogram = newHistogramInfo(histogramCapacityHint)
 				}
 				err = readHistogram(iter, histogram)
 				if err != nil {
@@ -680,7 +682,7 @@ func readMatrixOrVectorMulti(iter *sdkjsoniter.Iterator, resultType string, opt 
 
 			case "histograms":
 				if histogram == nil {
-					histogram = newHistogramInfo()
+					histogram = newHistogramInfo(histogramCapacityHint)
 				}
 				for more, err := iter.ReadArray(); more; more, err = iter.ReadArray() {
 					if err != nil {
@@ -700,16 +702,25 @@ func readMatrixOrVectorMulti(iter *sdkjsoniter.Iterator, resultType string, opt 
 		}
 
 		if histogram != nil {
-			histogram.yMin.Labels = labels
-			histogram.yMax.Labels = labels
-			histogram.count.Labels = labels
-			histogram.yLayout.Labels = labels
-			histogram.time.Labels = labels
-			frame := data.NewFrame("", histogram.time, histogram.yMin, histogram.yMax, histogram.count, histogram.yLayout)
+			frame := data.NewFrame("",
+				data.NewField("xMax", labels, histogram.times),
+				data.NewField("yMin", labels, histogram.yMins),
+				data.NewField("yMax", labels, histogram.yMaxes),
+				data.NewField("count", labels, histogram.counts),
+				data.NewField("yLayout", labels, histogram.yLayouts),
+			)
 			frame.Meta = &data.FrameMeta{
 				Type: "heatmap-cells",
 			}
 			rsp.Frames = append(rsp.Frames, frame)
+			histogramSize := len(histogram.times)
+			// Require two equal series before preallocating so sharply ragged responses do not overallocate.
+			if histogramSize == previousHistogramSize {
+				histogramCapacityHint = histogramSize
+			} else {
+				histogramCapacityHint = 0
+			}
+			previousHistogramSize = histogramSize
 		} else {
 			frame := data.NewFrame("", data.NewField(data.TimeSeriesTimeFieldName, nil, tempTimes), data.NewField(data.TimeSeriesValueFieldName, labels, tempValues))
 			frame.Meta = &data.FrameMeta{
@@ -756,28 +767,21 @@ func readTimeValuePair(iter *sdkjsoniter.Iterator) (time.Time, float64, error) {
 }
 
 type histogramInfo struct {
-	// XMax (time)	YMin	Ymax	Count	YLayout
-	time    *data.Field
-	yMin    *data.Field // will have labels?
-	yMax    *data.Field
-	count   *data.Field
-	yLayout *data.Field
+	times    []time.Time
+	yMins    []float64
+	yMaxes   []float64
+	counts   []float64
+	yLayouts []int8
 }
 
-func newHistogramInfo() *histogramInfo {
-	hist := &histogramInfo{
-		time:    data.NewFieldFromFieldType(data.FieldTypeTime, 0),
-		yMin:    data.NewFieldFromFieldType(data.FieldTypeFloat64, 0),
-		yMax:    data.NewFieldFromFieldType(data.FieldTypeFloat64, 0),
-		count:   data.NewFieldFromFieldType(data.FieldTypeFloat64, 0),
-		yLayout: data.NewFieldFromFieldType(data.FieldTypeInt8, 0),
+func newHistogramInfo(size int) *histogramInfo {
+	return &histogramInfo{
+		times:    make([]time.Time, 0, size),
+		yMins:    make([]float64, 0, size),
+		yMaxes:   make([]float64, 0, size),
+		counts:   make([]float64, 0, size),
+		yLayouts: make([]int8, 0, size),
 	}
-	hist.time.Name = "xMax"
-	hist.yMin.Name = "yMin"
-	hist.yMax.Name = "yMax"
-	hist.count.Name = "count"
-	hist.yLayout.Name = "yLayout"
-	return hist
 }
 
 // This will read a single sparse histogram
@@ -818,7 +822,7 @@ func readHistogram(iter *sdkjsoniter.Iterator, hist *histogramInfo) error {
 				if err != nil {
 					return err
 				}
-				hist.time.Append(t)
+				hist.times = append(hist.times, t)
 
 				if _, err := iter.ReadArray(); err != nil {
 					return err
@@ -828,33 +832,37 @@ func readHistogram(iter *sdkjsoniter.Iterator, hist *histogramInfo) error {
 				if err != nil {
 					return err
 				}
-				hist.yLayout.Append(v)
+				hist.yLayouts = append(hist.yLayouts, v)
 
 				if _, err := iter.ReadArray(); err != nil {
 					return err
 				}
 
-				if err = appendValueFromString(iter, hist.yMin); err != nil {
-					return err
-				}
-
-				if _, err := iter.ReadArray(); err != nil {
-					return err
-				}
-
-				err = appendValueFromString(iter, hist.yMax)
+				yMin, err := readFloat64String(iter)
 				if err != nil {
 					return err
 				}
+				hist.yMins = append(hist.yMins, yMin)
 
 				if _, err := iter.ReadArray(); err != nil {
 					return err
 				}
 
-				err = appendValueFromString(iter, hist.count)
+				yMax, err := readFloat64String(iter)
 				if err != nil {
 					return err
 				}
+				hist.yMaxes = append(hist.yMaxes, yMax)
+
+				if _, err := iter.ReadArray(); err != nil {
+					return err
+				}
+
+				count, err := readFloat64String(iter)
+				if err != nil {
+					return err
+				}
+				hist.counts = append(hist.counts, count)
 
 				for more, err := iter.ReadArray(); more; more, err = iter.ReadArray() {
 					if err != nil {
@@ -879,16 +887,6 @@ func readHistogram(iter *sdkjsoniter.Iterator, hist *histogramInfo) error {
 		return fmt.Errorf("expected to be done")
 	}
 
-	return nil
-}
-
-func appendValueFromString(iter *sdkjsoniter.Iterator, field *data.Field) error {
-	v, err := readFloat64String(iter)
-	if err != nil {
-		return err
-	}
-
-	field.Append(v)
 	return nil
 }
 
