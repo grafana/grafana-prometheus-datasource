@@ -442,11 +442,7 @@ l1Fields:
 					switch l2Field {
 					// nolint:goconst
 					case "value":
-						s, err := iter.ReadString()
-						if err != nil {
-							return nil, nil, err
-						}
-						v, err := strconv.ParseFloat(s, 64)
+						v, err := readFloat64String(iter)
 						if err != nil {
 							return nil, nil, err
 						}
@@ -711,8 +707,8 @@ func readTimeValuePair(iter *sdkjsoniter.Iterator) (time.Time, float64, error) {
 		return time.Time{}, 0, err
 	}
 
-	var v string
-	if v, err = iter.ReadString(); err != nil {
+	v, err := readFloat64String(iter)
+	if err != nil {
 		return time.Time{}, 0, err
 	}
 
@@ -721,8 +717,7 @@ func readTimeValuePair(iter *sdkjsoniter.Iterator) (time.Time, float64, error) {
 	}
 
 	tt := timeFromFloat(t)
-	fv, err := strconv.ParseFloat(v, 64)
-	return tt, fv, err
+	return tt, v, nil
 }
 
 type histogramInfo struct {
@@ -853,22 +848,25 @@ func readHistogram(iter *sdkjsoniter.Iterator, hist *histogramInfo) error {
 }
 
 func appendValueFromString(iter *sdkjsoniter.Iterator, field *data.Field) error {
-	// Read the string directly into our buffer
-	buf, err := iter.ReadStringAsSlice()
-	if err != nil {
-		return err
-	}
-
-	// #nosec G103
-	// Convert string to float64 without allocation
-	// https://github.com/search?q=org%3Agrafana+yoloString&type=code
-	v, err := strconv.ParseFloat(*(*string)(unsafe.Pointer(&buf)), 64)
+	v, err := readFloat64String(iter)
 	if err != nil {
 		return err
 	}
 
 	field.Append(v)
 	return nil
+}
+
+func readFloat64String(iter *sdkjsoniter.Iterator) (float64, error) {
+	buf, err := iter.ReadStringAsSlice()
+	if err != nil {
+		return 0, err
+	}
+
+	// #nosec G103
+	// Convert string to float64 without allocation.
+	// https://github.com/search?q=org%3Agrafana+yoloString&type=code
+	return strconv.ParseFloat(*(*string)(unsafe.Pointer(&buf)), 64)
 }
 
 func readStream(iter *sdkjsoniter.Iterator) backend.DataResponse {
