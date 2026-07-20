@@ -4,7 +4,7 @@
   "name": "@grafana/prometheus",
   "version": "13.1.7",
   "description": "Grafana Prometheus Library",
-  "packageManager": "yarn@4.15.0",
+  "packageManager": "npm@11.18.0",
   "keywords": [
     "typescript",
     "prometheus",

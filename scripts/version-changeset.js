@@ -14,10 +14,10 @@
 //        - promlib                       → pkg/promlib (CHANGELOG only)
 //
 // Usage:
-//   yarn changeset:version                  # interactive
-//   yarn changeset:version --datasource     # version the plugin/datasource only
-//   yarn changeset:version --npm-package    # version @grafana/prometheus only
-//   yarn changeset:version --promlib        # version promlib (pkg/promlib) only
+//   npm run changeset:version                        # interactive
+//   npm run changeset:version -- --datasource        # version the plugin/datasource only
+//   npm run changeset:version -- --npm-package        # version @grafana/prometheus only
+//   npm run changeset:version -- --promlib            # version promlib (pkg/promlib) only
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
@@ -303,7 +303,7 @@ async function runVersion({
 }
 
 // Drives the full CLI flow: parse args, prompt if needed, then version.
-// Exposed so tests can exercise the entire `yarn changeset:version` pipeline
+// Exposed so tests can exercise the entire `npm run changeset:version` pipeline
 // (including the interactive picker) without spawning a shell.
 async function run({
   argv,

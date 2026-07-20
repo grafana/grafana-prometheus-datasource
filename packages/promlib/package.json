@@ -1,7 +1,7 @@
 {
   "name": "promlib",
   "version": "0.0.14",
-  "packageManager": "yarn@4.15.0",
+  "packageManager": "npm@11.18.0",
   "private": true,
   "engines": {
     "node": ">=24"

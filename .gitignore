@@ -7,12 +7,6 @@ yarn-error.log*
 .pnpm-debug.log*
 
 node_modules/
-
-# yarn
-.yarn/cache
-.yarn/unplugged
-.yarn/build-state.yml
-.yarn/install-state.gz
 .pnp.*
 
 # Runtime data
