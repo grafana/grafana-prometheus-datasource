@@ -40,8 +40,9 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          git fetch --no-tags --depth=1 origin "$BASE_SHA"
-          added_files=$(git diff --name-only --diff-filter=A "$BASE_SHA" "$HEAD_SHA" -- '.changeset/*.md' \
+          git fetch --no-tags origin "$BASE_SHA"
+          merge_base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
+          added_files=$(git diff --name-only --diff-filter=A "$merge_base" "$HEAD_SHA" -- '.changeset/*.md' \
             ':(exclude).changeset/README.md')
           if [ -z "$added_files" ]; then
             echo "::error::No changeset file was added in this PR."
@@ -64,8 +65,9 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          git fetch --no-tags --depth=1 origin "$BASE_SHA"
-          added_files=$(git diff --name-only --diff-filter=A "$BASE_SHA" "$HEAD_SHA" -- '.changeset/*.md' \
+          git fetch --no-tags origin "$BASE_SHA"
+          merge_base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
+          added_files=$(git diff --name-only --diff-filter=A "$merge_base" "$HEAD_SHA" -- '.changeset/*.md' \
             ':(exclude).changeset/README.md')
           while IFS= read -r file; do
             [[ -z "$file" ]] && continue
