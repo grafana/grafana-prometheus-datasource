@@ -1,11 +1,14 @@
 apiVersion: 1
 
 datasources:
+  # Points at the gzip-forcing proxy (see docker-compose.yaml) rather than
+  # Prometheus directly, so resource calls (labels, label values, rules) exercise
+  # the gzip-decode + header-stripping path that regressed in production.
   - name: 'prometheus'
     uid: 'prometheus'
     type: 'prometheus'
     access: proxy
-    url: 'http://prometheus:9090'
+    url: 'http://prometheus-gzip:9091'
     isDefault: false
     orgId: 1
     version: 1
