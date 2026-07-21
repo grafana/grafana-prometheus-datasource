@@ -179,6 +179,8 @@ func readPrometheusData(iter *sdkjsoniter.Iterator, opt Options) backend.DataRes
 	resultType := ""
 	resultTypeFound := false
 	var resultBytes []byte
+	var stats any
+	statsFound := false
 
 	encodingFlags := make([]string, 0)
 
@@ -226,20 +228,11 @@ l1Fields:
 			}
 
 		case "stats":
-			v, err := iter.Read()
+			stats, err = iter.Read()
 			if err != nil {
-				rspErr(err)
+				return rspErr(err)
 			}
-			if len(rsp.Frames) > 0 {
-				meta := rsp.Frames[0].Meta
-				if meta == nil {
-					meta = &data.FrameMeta{}
-					rsp.Frames[0].Meta = meta
-				}
-				meta.Custom = map[string]any{
-					"stats": v,
-				}
-			}
+			statsFound = true
 
 		case "":
 			if err != nil {
@@ -259,7 +252,49 @@ l1Fields:
 		}
 	}
 
+	if statsFound {
+		attachQueryStats(&rsp, stats)
+	}
+
 	return rsp
+}
+
+func attachQueryStats(rsp *backend.DataResponse, stats any) {
+	if len(rsp.Frames) == 0 {
+		rsp.Frames = append(rsp.Frames, data.NewFrame("Query statistics"))
+	}
+
+	frame := rsp.Frames[0]
+	if frame.Meta == nil {
+		frame.Meta = &data.FrameMeta{}
+	}
+
+	custom, ok := frame.Meta.Custom.(map[string]any)
+	if !ok {
+		custom = map[string]any{}
+	}
+	custom["stats"] = stats
+	frame.Meta.Custom = custom
+
+	if total, ok := totalQueryableSamples(stats); ok {
+		frame.Meta.Stats = append(frame.Meta.Stats, data.QueryStat{
+			FieldConfig: data.FieldConfig{DisplayName: "Total queryable samples"},
+			Value:       total,
+		})
+	}
+}
+
+func totalQueryableSamples(stats any) (float64, bool) {
+	statsMap, ok := stats.(map[string]any)
+	if !ok {
+		return 0, false
+	}
+	samples, ok := statsMap["samples"].(map[string]any)
+	if !ok {
+		return 0, false
+	}
+	total, ok := samples["totalQueryableSamples"].(float64)
+	return total, ok
 }
 
 // will read the result object based on the resultType and return a DataResponse

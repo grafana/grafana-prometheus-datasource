@@ -225,4 +225,74 @@ func TestCustomQueryParametersMiddleware(t *testing.T) {
 		require.Equal(t, "42", q.Get(warningThresholdKey))
 		require.Equal(t, "88", q.Get(errorThresholdKey))
 	})
+
+	t.Run("With query statistics disabled should not add stats", func(t *testing.T) {
+		mw := CustomQueryParameters(backend.NewLoggerWith("logger", "test"), &models.PromOptions{})
+		rt := mw.CreateMiddleware(httpclient.Options{}, finalRoundTripper)
+		req, err := http.NewRequest(http.MethodGet, "http://test.com/api/v1/query?query=up", nil)
+		require.NoError(t, err)
+
+		_, err = rt.RoundTrip(req)
+		require.NoError(t, err)
+		require.Empty(t, req.URL.Query().Get(queryStatsKey))
+	})
+
+	for _, tc := range []struct {
+		name   string
+		method string
+		path   string
+	}{
+		{name: "GET instant query", method: http.MethodGet, path: "/api/v1/query"},
+		{name: "POST instant query", method: http.MethodPost, path: "/api/v1/query"},
+		{name: "GET range query", method: http.MethodGet, path: "/api/v1/query_range"},
+		{name: "POST range query", method: http.MethodPost, path: "/api/v1/query_range"},
+		{name: "query with workspace base path", method: http.MethodPost, path: "/workspaces/ws-123/api/v1/query"},
+	} {
+		t.Run("With query statistics enabled should add stats for "+tc.name, func(t *testing.T) {
+			mw := CustomQueryParameters(backend.NewLoggerWith("logger", "test"), &models.PromOptions{QueryStatsEnabled: true})
+			rt := mw.CreateMiddleware(httpclient.Options{}, finalRoundTripper)
+			req, err := http.NewRequest(tc.method, "http://test.com"+tc.path+"?query=up&existing=value", nil)
+			require.NoError(t, err)
+
+			_, err = rt.RoundTrip(req)
+			require.NoError(t, err)
+			require.Equal(t, queryStatsValue, req.URL.Query().Get(queryStatsKey))
+			require.Equal(t, "up", req.URL.Query().Get("query"))
+			require.Equal(t, "value", req.URL.Query().Get("existing"))
+		})
+	}
+
+	for _, path := range []string{
+		"/api/v1/query_exemplars",
+		"/api/v1/metadata",
+		"/api/v1/labels",
+		"/api/v1/series",
+		"/api/v1/status/buildinfo",
+	} {
+		t.Run("With query statistics enabled should not add stats for "+path, func(t *testing.T) {
+			mw := CustomQueryParameters(backend.NewLoggerWith("logger", "test"), &models.PromOptions{QueryStatsEnabled: true})
+			rt := mw.CreateMiddleware(httpclient.Options{}, finalRoundTripper)
+			req, err := http.NewRequest(http.MethodGet, "http://test.com"+path, nil)
+			require.NoError(t, err)
+
+			_, err = rt.RoundTrip(req)
+			require.NoError(t, err)
+			require.Empty(t, req.URL.Query().Get(queryStatsKey))
+		})
+	}
+
+	t.Run("Explicit query statistics setting should override a custom stats value", func(t *testing.T) {
+		mw := CustomQueryParameters(backend.NewLoggerWith("logger", "test"), &models.PromOptions{
+			CustomQueryParameters: "stats=none&timeout=30s",
+			QueryStatsEnabled:     true,
+		})
+		rt := mw.CreateMiddleware(httpclient.Options{}, finalRoundTripper)
+		req, err := http.NewRequest(http.MethodPost, "http://test.com/api/v1/query_range", nil)
+		require.NoError(t, err)
+
+		_, err = rt.RoundTrip(req)
+		require.NoError(t, err)
+		require.Equal(t, []string{queryStatsValue}, req.URL.Query()[queryStatsKey])
+		require.Equal(t, "30s", req.URL.Query().Get("timeout"))
+	})
 }
