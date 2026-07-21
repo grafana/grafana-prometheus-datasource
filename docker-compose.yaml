@@ -4,7 +4,7 @@ services:
   # scrapes itself and the Grafana dev container, giving real metric names,
   # label names and label values to exercise the plugin against.
   prometheus:
-    image: prom/prometheus
+    image: prom/prometheus@sha256:3c42b892cf723fa54d2f262c37a0e1f80aa8c8ddb1da7b9b0df9455a35a7f893
     container_name: 'prometheus'
     volumes:
       - ./provisioning/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
