@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
+	"github.com/grafana/grafana-plugin-sdk-go/config"
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/models"
@@ -66,6 +67,11 @@ func BenchmarkRangeJson(b *testing.B) {
 	body, q := createJsonTestData(1642000000, 1, 300, 400)
 	tCtx, err := setup()
 	require.NoError(b, err)
+	grafanaCfg := config.NewGrafanaCfg(map[string]string{
+		config.ConcurrentQueryCount: "10",
+	})
+	q.PluginContext.GrafanaConfig = grafanaCfg
+	ctx := config.WithGrafanaConfig(context.Background(), grafanaCfg)
 
 	b.ResetTimer()
 
@@ -75,7 +81,7 @@ func BenchmarkRangeJson(b *testing.B) {
 			Body:       io.NopCloser(bytes.NewReader(body)),
 		}
 		tCtx.httpProvider.setResponse(&res, &res)
-		r, err = tCtx.queryData.Execute(context.Background(), q)
+		r, err = tCtx.queryData.Execute(ctx, q)
 		require.NoError(b, err)
 	}
 
