@@ -89,16 +89,19 @@ func BenchmarkMatrixFieldConstruction(b *testing.B) {
 	}
 	for name, lengths := range workloads {
 		b.Run(name+"/slices", func(b *testing.B) {
+			b.ReportAllocs()
 			for b.Loop() {
 				benchmarkFrames = buildMatrixFieldsWithSlices(lengths)
 			}
 		})
 		b.Run(name+"/scratch-copy", func(b *testing.B) {
+			b.ReportAllocs()
 			for b.Loop() {
 				benchmarkFrames = buildMatrixFieldsWithScratch(lengths)
 			}
 		})
 		b.Run(name+"/fields", func(b *testing.B) {
+			b.ReportAllocs()
 			for b.Loop() {
 				benchmarkFrames = buildMatrixFieldsDirectly(lengths)
 			}
@@ -113,11 +116,13 @@ func BenchmarkHistogramFieldConstruction(b *testing.B) {
 	}
 	for name, lengths := range workloads {
 		b.Run(name+"/typed-slices", func(b *testing.B) {
+			b.ReportAllocs()
 			for b.Loop() {
 				benchmarkFrames = buildHistogramFieldsWithSlices(lengths)
 			}
 		})
 		b.Run(name+"/fields", func(b *testing.B) {
+			b.ReportAllocs()
 			for b.Loop() {
 				benchmarkFrames = buildHistogramFieldsDirectly(lengths)
 			}
