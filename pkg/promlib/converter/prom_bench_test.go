@@ -16,6 +16,7 @@ import (
 )
 
 func readTestData(t *testing.B, filename string) []byte {
+	// Can ignore gosec G304 here, because this is a constant defined below benchmark test
 	// nolint:gosec
 	data, err := os.ReadFile("testdata/" + filename)
 	if err != nil {
