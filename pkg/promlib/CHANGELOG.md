@@ -1,5 +1,9 @@
 # promlib
 
+## 0.0.15
+
+🐛 Export CalculatePrometheusInterval so external datasources can reuse the Prometheus step/interval calculation ([#254](https://github.com/grafana/grafana-prometheus-datasource/pull/254))
+
 ## 0.0.14
 
 🐛 added settings model for customQueryParameters, maxSamplesProcessedWarningThreshold, maxSamplesProcessedErrorThreshold ([#225](https://github.com/grafana/grafana-prometheus-datasource/pull/225))
