@@ -19,16 +19,16 @@ workspace glob.
 
 ## Scripts
 
-### `add-changeset.js` — `yarn changeset`
+### `add-changeset.js` — `npm run changeset`
 
 Creates one `.changeset/<id>.md` for one package.
 
 ```bash
-yarn changeset                                    # fully interactive
-yarn changeset --datasource     --patch "Fix panel"
-yarn changeset --npm-package    --minor "Add util"
-yarn changeset --npm-package    --major "Breaking change"
-yarn changeset --promlib        --patch "Fix promlib bug"
+npm run changeset                                        # fully interactive
+npm run changeset -- --datasource     --patch "Fix panel"
+npm run changeset -- --npm-package    --minor "Add util"
+npm run changeset -- --npm-package    --major "Breaking change"
+npm run changeset -- --promlib        --patch "Fix promlib bug"
 ```
 
 Flags: `--datasource`, `--npm-package`,
@@ -36,7 +36,7 @@ Flags: `--datasource`, `--npm-package`,
 summary. Missing inputs are prompted for; an empty package selection is an
 error (no default).
 
-### `version-changeset.js` — `yarn changeset:version`
+### `version-changeset.js` — `npm run changeset:version`
 
 Versions exactly one package. `changeset version` always consumes every
 pending changeset for every referenced package, so this script:
@@ -49,10 +49,10 @@ pending changeset for every referenced package, so this script:
    real location.
 
 ```bash
-yarn changeset:version                # interactive
-yarn changeset:version --datasource   # plugin/root only
-yarn changeset:version --npm-package  # @grafana/prometheus only
-yarn changeset:version --promlib      # pkg/promlib only
+npm run changeset:version                        # interactive
+npm run changeset:version -- --datasource        # plugin/root only
+npm run changeset:version -- --npm-package       # @grafana/prometheus only
+npm run changeset:version -- --promlib           # pkg/promlib only
 ```
 
 If no pending changeset references the chosen package, the script is a no-op
@@ -87,5 +87,5 @@ multi-package isolation, and the stub → real-location mirroring.
 Run with:
 
 ```bash
-yarn jest scripts/__tests__ --no-watch
+npx jest scripts/__tests__ --no-watch
 ```

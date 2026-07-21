@@ -19,7 +19,7 @@ You can browse [existing issues](https://github.com/grafana/grafana-prometheus-d
 | [Go](https://go.dev/)             | See `go.mod` for minimum version            |
 | [Mage](https://magefile.org/)     | Backend build tool                          |
 | [Node.js](https://nodejs.org/)    | `>=22`; see `.nvmrc` for the pinned version |
-| [yarn](https://yarnpkg.com/)      | JavaScript package manager                  |
+| [npm](https://www.npmjs.com/)     | JavaScript package manager                  |
 | [Docker](https://www.docker.com/) | Required for local Grafana and e2e tests    |
 
 ## Frontend Development
@@ -27,39 +27,39 @@ You can browse [existing issues](https://github.com/grafana/grafana-prometheus-d
 Install dependencies:
 
 ```bash
-yarn install
+npm ci
 ```
 
 Build the plugin frontend (one-shot):
 
 ```bash
-yarn build
+npm run build
 ```
 
 Watch mode (rebuilds on file change):
 
 ```bash
-yarn dev
+npm run dev
 ```
 
 Run frontend unit tests:
 
 ```bash
-yarn test        # interactive watch mode
-yarn test:ci     # single-run, used in CI
+npm test              # interactive watch mode
+npm run test:ci       # single-run, used in CI
 ```
 
 Type-checking:
 
 ```bash
-yarn typecheck
+npm run typecheck
 ```
 
 Lint:
 
 ```bash
-yarn lint
-yarn lint:fix
+npm run lint
+npm run lint:fix
 ```
 
 ## Backend Development
@@ -91,15 +91,15 @@ Grafana will be available at `http://localhost:3000` (default credentials: `admi
 E2E tests use [Playwright](https://playwright.dev/) via `@grafana/plugin-e2e`. Start the server first, then run the tests:
 
 ```bash
-yarn server   # starts Grafana via Docker
-yarn e2e
+npm run server   # starts Grafana via Docker
+npm run e2e
 ```
 
 ## Changelog or Changeset
 
 Each PR must have a proper changeset that explains the PR's purpose in one line. That information will be used to generate a changelog when we release a new version of the respective package.
 
-To have a changeset, simply run `yarn changeset` and follow the CLI instructions.
+To have a changeset, simply run `npm run changeset` and follow the CLI instructions.
 When you are done commit the auto-generated changeset file to your PR.
 
 ## Project Structure
@@ -117,8 +117,8 @@ When you are done commit the auto-generated changeset file to your PR.
 
 - Keep PRs focused — one logical change per PR.
 - Add or update tests for any changed behaviour.
-- Run `yarn changeset` and commit the generated file — this replaces manual `CHANGELOG.md` edits.
-- Ensure `yarn lint`, `yarn typecheck`, and `yarn test:ci` all pass locally before opening a PR.
+- Run `npm run changeset` and commit the generated file — this replaces manual `CHANGELOG.md` edits.
+- Ensure `npm run lint`, `npm run typecheck`, and `npm run test:ci` all pass locally before opening a PR.
 
 ## Release Process
 
@@ -137,7 +137,7 @@ _**NOTE: if there is no changeset for the package you want to release, CLI will 
 ### Grafana Plugin Release `grafana-prometheus-datasource`
 
 - Create a new branch from latest `main`.
-- Run `yarn changeset:version --datasource` (or run `yarn changeset:version` and select `grafana-prometheus-datasource`)
+- Run `npm run changeset:version -- --datasource` (or run `npm run changeset:version` and select `grafana-prometheus-datasource`)
 - Follow the CLI instructions.
   - Changesets will be aggregated and a new changelog entry will be generated.
   - Aggregated changesets will be deleted.
@@ -152,7 +152,7 @@ _**NOTE: if there is no changeset for the package you want to release, CLI will 
 The library in `packages/grafana-prometheus/` is released independently via a manual GitHub Actions workflow.
 
 - Create a new branch from latest `main`.
-- Run `yarn changeset:version` and select `@grafana/prometheus`
+- Run `npm run changeset:version` and select `@grafana/prometheus`
 - Follow the CLI instructions.
   - Changesets will be aggregated and a new changelog entry will be generated.
   - Aggregated changesets will be deleted.
@@ -174,7 +174,7 @@ npm view @grafana/prometheus dist-tags
 The backend library in `pkg/promlib` is released (tagged) independently via a git tag.
 
 - Create a new branch from latest `main`.
-- Run `yarn changeset:version` and select `promlib`
+- Run `npm run changeset:version` and select `promlib`
 - Follow the CLI instructions.
   - Changesets will be aggregated and a new changelog entry will be generated.
   - Aggregated changesets will be deleted.

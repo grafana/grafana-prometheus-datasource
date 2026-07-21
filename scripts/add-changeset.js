@@ -9,11 +9,11 @@
 // is no default.
 //
 // Usage:
-//   yarn changeset                                     # fully interactive
-//   yarn changeset --datasource --patch "Fix panel"
-//   yarn changeset --npm-package --minor "Add new util"
-//   yarn changeset --npm-package --major "Breaking change"
-//   yarn changeset --promlib --patch "Fix promlib bug"
+//   npm run changeset                                         # fully interactive
+//   npm run changeset -- --datasource --patch "Fix panel"
+//   npm run changeset -- --npm-package --minor "Add new util"
+//   npm run changeset -- --npm-package --major "Breaking change"
+//   npm run changeset -- --promlib --patch "Fix promlib bug"
 const path = require('path');
 const readline = require('readline');
 const write = require('@changesets/write').default;
