@@ -136,5 +136,3 @@ require (
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
 	gopkg.in/fsnotify/fsnotify.v1 v1.4.7 // indirect
 )
-
-replace github.com/grafana/grafana-prometheus-datasource/pkg/promlib => ./pkg/promlib
