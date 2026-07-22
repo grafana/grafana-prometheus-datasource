@@ -1,5 +1,4 @@
 import { defaults } from 'lodash';
-import { tz } from 'moment-timezone';
 import { lastValueFrom, type Observable, throwError } from 'rxjs';
 import { map, tap } from 'rxjs/operators';
 import { gte } from 'semver';
@@ -17,6 +16,7 @@ import {
   type DataSourceWithQueryExportSupport,
   type DataSourceWithQueryImportSupport,
   dateTime,
+  dateTimeForTimeZone,
   getDefaultTimeRange,
   type LegacyMetricFindQueryOptions,
   type MetricFindValue,
@@ -418,7 +418,7 @@ export class PrometheusDatasource
       // for relative ranges we need utcOffset to adjust query range.
       utcOffset = this.isUsingRelativeTimeRange(request.range) ? utcOffset : 0;
     } else {
-      utcOffset = tz(request.timezone).utcOffset();
+      utcOffset = dateTimeForTimeZone(request.timezone).utcOffset();
     }
 
     const processedTargets: PromQuery[] = [];
