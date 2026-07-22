@@ -1,5 +1,11 @@
 # promlib
 
+## 0.0.16
+
+🐛 Improve benchmark tests
+
+🐛 Re-add GetJsonData function ([#265](https://github.com/grafana/grafana-prometheus-datasource/pull/265))
+
 ## 0.0.15
 
 🐛 Export CalculatePrometheusInterval so external datasources can reuse the Prometheus step/interval calculation ([#254](https://github.com/grafana/grafana-prometheus-datasource/pull/254))

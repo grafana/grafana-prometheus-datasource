@@ -1,7 +1,5 @@
 // Core Grafana history https://github.com/grafana/grafana/blob/v11.0.0-preview/public/app/plugins/datasource/prometheus/querycache/QueryCache.test.ts
-import moment from 'moment';
-
-import { type DataFrame, type DataQueryRequest, type DateTime, dateTime, type TimeRange } from '@grafana/data';
+import { type DataFrame, type DataQueryRequest, dateTime, type TimeRange } from '@grafana/data';
 
 import { QueryEditorMode } from '../querybuilder/shared/types';
 import { type PromQuery } from '../types';
@@ -31,8 +29,8 @@ const mockPromRequest = (request?: Partial<DataQueryRequest<PromQuery>>): DataQu
     requestId: '',
     timezone: '',
     range: {
-      from: moment('2023-01-30T19:33:01.332Z') as DateTime,
-      to: moment('2023-01-30T20:33:01.332Z') as DateTime,
+      from: dateTime('2023-01-30T19:33:01.332Z'),
+      to: dateTime('2023-01-30T20:33:01.332Z'),
       raw: { from: 'now-1h', to: 'now' },
     },
     interval: '15s',
@@ -455,8 +453,8 @@ describe('QueryCache: Prometheus', function () {
   it('will not modify request with absolute duration', () => {
     const request = mockPromRequest({
       range: {
-        from: moment('2023-01-30T19:33:01.332Z') as DateTime,
-        to: moment('2023-01-30T20:33:01.332Z') as DateTime,
+        from: dateTime('2023-01-30T19:33:01.332Z'),
+        to: dateTime('2023-01-30T20:33:01.332Z'),
         raw: { from: '2023-01-30T19:33:01.332Z', to: '2023-01-30T20:33:01.332Z' },
       },
       rangeRaw: { from: '2023-01-30T19:33:01.332Z', to: '2023-01-30T20:33:01.332Z' },
