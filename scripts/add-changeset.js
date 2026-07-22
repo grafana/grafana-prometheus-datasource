@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Creates a changeset for exactly one workspace package.
+// Creates changesets for a selected workspace package.
 //
 // The user MUST pick a package — either `grafana-prometheus-datasource` (the
 // stub package that mirrors the workspace root — see
@@ -7,6 +7,12 @@
 // that mirrors `pkg/promlib`'s CHANGELOG) — via `--datasource` /
 // `--npm-package` / `--promlib`, or interactively when no flag is passed. There
 // is no default.
+//
+// Changes to `@grafana/prometheus` and `promlib` are also shipped as part of
+// the datasource, so those selections create a second, independent datasource
+// patch changeset with the same summary. Keeping the changesets independent
+// lets version-changeset.js release either package without consuming the other
+// package's changelog entry.
 //
 // Usage:
 //   yarn changeset                                     # fully interactive
@@ -97,7 +103,11 @@ async function createChangeset({ pkg, bump, summary, repoRoot }) {
     throw new Error('A summary is required.');
   }
   const id = await write({ summary, releases: [{ name: pkg, type: bump }] }, repoRoot);
-  return id;
+  let datasourceId = null;
+  if (pkg !== DATASOURCE) {
+    datasourceId = await write({ summary, releases: [{ name: DATASOURCE, type: 'patch' }] }, repoRoot);
+  }
+  return { id, datasourceId };
 }
 
 // Drives the full CLI flow: parse args, fill in any missing inputs via the
@@ -119,11 +129,15 @@ async function run({ argv, repoRoot, prompt = defaultPrompt, log = console.log }
     summary = await prompt('Summary: ', '');
   }
 
-  const id = await createChangeset({ pkg, bump, summary, repoRoot });
+  const { id, datasourceId } = await createChangeset({ pkg, bump, summary, repoRoot });
 
   log(`Created .changeset/${id}.md`);
   log(`  - ${pkg}: ${bump}`);
-  return { id, pkg, bump, summary };
+  if (datasourceId) {
+    log(`Created .changeset/${datasourceId}.md`);
+    log(`  - ${DATASOURCE}: patch`);
+  }
+  return { id, datasourceId, pkg, bump, summary };
 }
 
 if (require.main === module) {

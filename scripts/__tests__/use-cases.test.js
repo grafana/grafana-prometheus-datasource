@@ -110,10 +110,15 @@ describe('Use case 1.1 — `yarn changeset` interactive', () => {
     expect(result.pkg).toBe(NPM_PACKAGE);
     expect(result.bump).toBe('minor');
 
-    const fm = readChangesetFrontmatter(root, listChangesetMdFiles(root)[0]);
+    expect(listChangesetMdFiles(root)).toHaveLength(2);
+    const fm = readChangesetFrontmatter(root, `${result.id}.md`);
     expect(fm.packages).toEqual(new Set([NPM_PACKAGE]));
     expect(fm.raw).toContain('Add new helper');
     expect(fm.raw).toMatch(/(['"]?)@grafana\/prometheus\1\s*:\s*minor/);
+
+    const datasourceFm = readChangesetFrontmatter(root, `${result.datasourceId}.md`);
+    expect(datasourceFm.packages).toEqual(new Set([DATASOURCE]));
+    expect(datasourceFm.raw).toContain('Add new helper');
   });
 
   it('user picks 1 (datasource), major, summary → produces a datasource major changeset', async () => {
@@ -173,12 +178,16 @@ describe('Use case 1.2 — `yarn changeset --npm-package --minor "..."`', () => 
     expect(prompt.calls).toEqual([]);
 
     const files = listChangesetMdFiles(root);
-    expect(files).toHaveLength(1);
+    expect(files).toHaveLength(2);
 
-    const fm = readChangesetFrontmatter(root, files[0]);
+    const fm = readChangesetFrontmatter(root, `${result.id}.md`);
     expect(fm.packages).toEqual(new Set([NPM_PACKAGE]));
     expect(fm.raw).toContain('some test for minor level change');
     expect(fm.raw).toMatch(/(['"]?)@grafana\/prometheus\1\s*:\s*minor/);
+
+    const datasourceFm = readChangesetFrontmatter(root, `${result.datasourceId}.md`);
+    expect(datasourceFm.packages).toEqual(new Set([DATASOURCE]));
+    expect(datasourceFm.raw).toContain('some test for minor level change');
   });
 });
 
@@ -270,7 +279,7 @@ describe('Use case 1.4 — `yarn changeset:version --datasource`', () => {
       log: () => {},
     });
 
-    expect(listChangesetMdFiles(root)).toHaveLength(5);
+    expect(listChangesetMdFiles(root)).toHaveLength(7);
 
     const result = await versionChangeset.run({
       argv: ['--datasource'],
@@ -309,7 +318,9 @@ describe('Use case 1.4 — `yarn changeset:version --datasource`', () => {
       .split('\n')
       .map((l) => l.trim())
       .filter((l) => l.length > 0);
-    expect(entryLines.sort()).toEqual(['- Add B', '- Break C', '- Fix A'].sort());
+    expect(entryLines.sort()).toEqual(
+      ['- Add B', '- Break C', '- Fix A', '- Lib unrelated 1', '- Lib unrelated 2'].sort()
+    );
 
     expect(fs.existsSync(path.join(root, '.changeset-hold'))).toBe(false);
   });
@@ -350,7 +361,7 @@ describe('Use case 1.5 — `yarn changeset:version --npm-package`', () => {
       log: () => {},
     });
 
-    expect(listChangesetMdFiles(root)).toHaveLength(3);
+    expect(listChangesetMdFiles(root)).toHaveLength(5);
 
     const result = await versionChangeset.run({
       argv: ['--npm-package'],
@@ -362,7 +373,7 @@ describe('Use case 1.5 — `yarn changeset:version --npm-package`', () => {
 
     expect(result.exitCode).toBe(0);
     expect(result.versioned).toBe(true);
-    expect(result.heldCount).toBe(1);
+    expect(result.heldCount).toBe(3);
 
     expect(readPackageVersion(root, LIB_REL)).toBe('13.2.0');
 
@@ -370,9 +381,11 @@ describe('Use case 1.5 — `yarn changeset:version --npm-package`', () => {
     expect(readPackageVersion(root, '.')).toBe('13.1.0');
 
     const remaining = listChangesetMdFiles(root);
-    expect(remaining).toHaveLength(1);
-    const { packages } = readChangesetFrontmatter(root, remaining[0]);
-    expect([...packages]).toEqual([DATASOURCE]);
+    expect(remaining).toHaveLength(3);
+    for (const file of remaining) {
+      const { packages } = readChangesetFrontmatter(root, file);
+      expect([...packages]).toEqual([DATASOURCE]);
+    }
 
     expect(fs.existsSync(path.join(root, '.changeset-hold'))).toBe(false);
   });
@@ -443,7 +456,7 @@ describe('Use case 1.6 — `yarn changeset:version --promlib`', () => {
       log: () => {},
     });
 
-    expect(listChangesetMdFiles(root)).toHaveLength(4);
+    expect(listChangesetMdFiles(root)).toHaveLength(7);
 
     const result = await versionChangeset.run({
       argv: ['--promlib'],
@@ -455,7 +468,7 @@ describe('Use case 1.6 — `yarn changeset:version --promlib`', () => {
 
     expect(result.exitCode).toBe(0);
     expect(result.versioned).toBe(true);
-    expect(result.heldCount).toBe(2);
+    expect(result.heldCount).toBe(5);
 
     expect(readPackageVersion(root, PROMLIB_STUB_REL)).toBe('0.1.0');
 
@@ -472,7 +485,7 @@ describe('Use case 1.6 — `yarn changeset:version --promlib`', () => {
     expect(fs.existsSync(path.join(root, PROMLIB_TARGET_REL, 'package.json'))).toBe(false);
 
     const remaining = listChangesetMdFiles(root);
-    expect(remaining).toHaveLength(2);
+    expect(remaining).toHaveLength(5);
     const remainingPackages = new Set();
     for (const file of remaining) {
       for (const pkg of versionChangeset.getChangesetPackages(path.join(root, '.changeset', file))) {
