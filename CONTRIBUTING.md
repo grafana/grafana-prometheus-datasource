@@ -100,7 +100,11 @@ yarn e2e
 Each PR must have a proper changeset that explains the PR's purpose in one line. That information will be used to generate a changelog when we release a new version of the respective package.
 
 To have a changeset, simply run `yarn changeset` and follow the CLI instructions.
-When you are done commit the auto-generated changeset file to your PR.
+When targeting `@grafana/prometheus` or `promlib`, the command intentionally
+creates two changeset files: one for the selected library and a datasource
+patch changeset with the same summary. Both libraries are shipped as part of
+the datasource, so commit both generated files. A direct datasource changeset
+still creates only one file.
 
 ## Project Structure
 
@@ -117,7 +121,7 @@ When you are done commit the auto-generated changeset file to your PR.
 
 - Keep PRs focused — one logical change per PR.
 - Add or update tests for any changed behaviour.
-- Run `yarn changeset` and commit the generated file — this replaces manual `CHANGELOG.md` edits.
+- Run `yarn changeset` and commit all generated files — this replaces manual `CHANGELOG.md` edits.
 - Ensure `yarn lint`, `yarn typecheck`, and `yarn test:ci` all pass locally before opening a PR.
 
 ## Release Process
@@ -156,6 +160,7 @@ The library in `packages/grafana-prometheus/` is released independently via a ma
 - Follow the CLI instructions.
   - Changesets will be aggregated and a new changelog entry will be generated.
   - Aggregated changesets will be deleted.
+  - Mirrored datasource changesets will remain pending for the next datasource release.
   - The version will be bumped in `packages/grafana-prometheus/package.json`.
   - Commit everything.
 - After merging the PR visit [Publish @grafana/prometheus to NPM](https://github.com/grafana/grafana-prometheus-datasource/actions/workflows/release-npm.yml) in actions.
@@ -178,6 +183,7 @@ The backend library in `pkg/promlib` is released (tagged) independently via a gi
 - Follow the CLI instructions.
   - Changesets will be aggregated and a new changelog entry will be generated.
   - Aggregated changesets will be deleted.
+  - Mirrored datasource changesets will remain pending for the next datasource release.
   - The version will be bumped in `packages/promlib`.
   - Commit everything.
 - After merging the PR checkout the commit you just merged. `git checkout <COMMIT_SHA>`

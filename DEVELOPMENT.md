@@ -134,9 +134,9 @@ The workflow will build the library and print a summary of what _would_ be publi
 
 1. **Create a release branch** from `main`, named like `release-grafana-prometheus-<version>`, and open a PR.
 
-2. **Apply pending changesets** on that branch by running `yarn changeset:version` and selecting `@grafana/prometheus` (or pass `--library`). This consumes the pending changesets, bumps the version in `packages/grafana-prometheus/package.json`, and updates its `CHANGELOG.md`.
+2. **Apply pending changesets** on that branch by running `yarn changeset:version` and selecting `@grafana/prometheus` (or pass `--npm-package`). This consumes the pending `@grafana/prometheus` changesets, bumps the version in `packages/grafana-prometheus/package.json`, and updates its `CHANGELOG.md`. The corresponding datasource changesets remain pending for the next datasource release.
 
-   > **Note:** Changesets are added in feature PRs via `yarn changeset`. Make sure every feature PR that should appear in the release includes one — without pending changesets there is nothing to version.
+   > **Note:** Changesets are added in feature PRs via `yarn changeset`. Selecting `@grafana/prometheus` intentionally creates two files with the same summary: the package changeset and a datasource patch changeset. Commit both files; without pending package changesets there is nothing to include in the package changelog.
 
    > **Note:** If a PR intentionally needs no changelog entry, add the `no-changelog` label to it so the changeset CI check passes.
 

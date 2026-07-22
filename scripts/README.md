@@ -21,7 +21,11 @@ workspace glob.
 
 ### `add-changeset.js` — `yarn changeset`
 
-Creates one `.changeset/<id>.md` for one package.
+Creates one `.changeset/<id>.md` for the selected package. Selecting
+`@grafana/prometheus` or `promlib` also creates a separate
+`grafana-prometheus-datasource` patch changeset with the same summary, because
+changes from both libraries are shipped in the datasource. The separate files
+allow each package to be released independently.
 
 ```bash
 yarn changeset                                    # fully interactive
@@ -34,7 +38,10 @@ yarn changeset --promlib        --patch "Fix promlib bug"
 Flags: `--datasource`, `--npm-package`,
 `--promlib`, plus `--patch` / `--minor` / `--major`. Anything left over is the
 summary. Missing inputs are prompted for; an empty package selection is an
-error (no default).
+error (no default). The selected package keeps the requested bump type. An
+automatically created datasource changeset is always a patch; an explicit
+datasource changeset can raise the eventual datasource release to minor or
+major.
 
 ### `version-changeset.js` — `yarn changeset:version`
 
