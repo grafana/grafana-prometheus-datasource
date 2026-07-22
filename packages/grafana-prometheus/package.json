@@ -109,6 +109,7 @@
     "typescript": "6.0.2"
   },
   "peerDependencies": {
+    "@grafana/assistant": ">=0.1.0",
     "@grafana/data": ">=11.5.0",
     "@grafana/e2e-selectors": ">=11.5.0",
     "@grafana/i18n": ">=12.3.0",
@@ -117,6 +118,11 @@
     "@grafana/ui": ">=11.5.0",
     "react": "^18.0.0",
     "react-dom": "^18.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@grafana/assistant": {
+      "optional": true
+    }
   },
   "overrides": {
     "@grafana/data": "$@grafana/data",
