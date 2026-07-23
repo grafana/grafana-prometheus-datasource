@@ -12,6 +12,7 @@ const createLanguageProviderMock = (existingMetadata: Record<string, unknown> = 
   queryMetricsMetadata: jest.fn().mockResolvedValue({}),
   retrieveMetrics: jest.fn().mockReturnValue([]),
   retrieveMetricsMetadata: jest.fn().mockReturnValue(existingMetadata),
+  getSearchApiClient: jest.fn().mockReturnValue(undefined),
 });
 
 const createDataProvider = (
@@ -112,6 +113,54 @@ describe('DataProvider', () => {
       const result = await dataProvider.queryMetricNames(timeRange, undefined);
 
       expect(result).toEqual([]);
+    });
+
+    it('uses fuzzy search and aborts the superseded metric request', async () => {
+      const languageProvider = createLanguageProviderMock();
+      const searchMetricNames = jest
+        .fn()
+        .mockResolvedValue({ results: [{ name: 'http_requests_total' }], warnings: [], hasMore: false });
+      languageProvider.getSearchApiClient.mockReturnValue({ searchMetricNames });
+      const dataProvider = createDataProvider(languageProvider);
+
+      await expect(dataProvider.queryMetricNames(timeRange, 'http req')).resolves.toEqual(['http_requests_total']);
+      const firstSignal = searchMetricNames.mock.calls[0][2].signal as AbortSignal;
+      await dataProvider.queryMetricNames(timeRange, 'http requ');
+
+      expect(searchMetricNames).toHaveBeenLastCalledWith(
+        timeRange,
+        'http requ',
+        expect.objectContaining({ limit: DEFAULT_COMPLETION_LIMIT, signal: expect.any(AbortSignal) })
+      );
+      expect(firstSignal.aborted).toBe(true);
+      expect(languageProvider.queryLabelValues).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('fuzzy label search', () => {
+    it('searches label values using the typed term', async () => {
+      const languageProvider = createLanguageProviderMock();
+      const searchLabelValues = jest
+        .fn()
+        .mockResolvedValue({ results: [{ value: 'production' }], warnings: [], hasMore: false });
+      languageProvider.getSearchApiClient.mockReturnValue({ searchLabelValues });
+      const dataProvider = createDataProvider(languageProvider);
+
+      await expect(
+        dataProvider.queryLabelValues(timeRange, 'environment', '{job="api"}', DEFAULT_COMPLETION_LIMIT, 'prod')
+      ).resolves.toEqual(['production']);
+
+      expect(searchLabelValues).toHaveBeenCalledWith(
+        timeRange,
+        'environment',
+        'prod',
+        expect.objectContaining({
+          match: '{job="api"}',
+          limit: DEFAULT_COMPLETION_LIMIT,
+          signal: expect.any(AbortSignal),
+        })
+      );
+      expect(languageProvider.queryLabelValues).not.toHaveBeenCalled();
     });
   });
 
