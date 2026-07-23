@@ -43,5 +43,6 @@ export const GET_AND_POST_METADATA_ENDPOINTS = [
   'api/v1/query_range',
   'api/v1/series',
   'api/v1/labels',
+  'api/v1/info_labels',
   'suggestions',
 ];

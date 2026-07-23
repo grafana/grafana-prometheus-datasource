@@ -19,7 +19,7 @@ import { type PrometheusDatasource } from './datasource';
 import { extractLabelMatchers, fixSummariesMetadata, toPromLikeQuery } from './language_utils';
 import { promqlGrammar } from './promql';
 import { buildVisualQueryFromString } from './querybuilder/parsing';
-import { LabelsApiClient, type ResourceApiClient, SeriesApiClient } from './resource_clients';
+import { type InfoLabelRecord, LabelsApiClient, type ResourceApiClient, SeriesApiClient } from './resource_clients';
 import { type PromMetricsMetadata, type PromQuery } from './types';
 
 interface PrometheusBaseLanguageProvider {
@@ -114,6 +114,21 @@ export interface PrometheusLanguageProviderInterface extends PrometheusBaseLangu
    * Use zero (0) to fetch all label values, but this might return huge amounts of data.
    */
   queryLabelValues: (timeRange: TimeRange, labelKey: string, match?: string, limit?: number) => Promise<string[]>;
+
+  /**
+   * Queries the experimental `/api/v1/info_labels` endpoint for the data-labels carried by info
+   * metrics in scope of `expr`. Template variables in `expr`/`metricMatch` are interpolated before
+   * the request is delegated to the resource client. Gated by the datasource `infoLabelsAutocomplete`
+   * opt-in at the call site.
+   */
+  queryInfoLabels: (
+    timeRange: TimeRange,
+    expr?: string,
+    metricMatch?: string,
+    limit?: number,
+    valuesLimit?: number,
+    search?: string
+  ) => Promise<InfoLabelRecord[]>;
 }
 
 export class PrometheusLanguageProvider implements PrometheusLanguageProviderInterface {
@@ -304,6 +319,40 @@ export class PrometheusLanguageProvider implements PrometheusLanguageProviderInt
       this.datasource.interpolateString(labelKey),
       interpolatedMatch,
       limit
+    );
+  };
+
+  /**
+   * Fetches info-metric data-labels for the PromQL `info()` function.
+   *
+   * Interpolates template variables in `expr`/`metricMatch` (mirroring {@link queryLabelValues})
+   * and delegates to the resource client. A single call returns both label names and their values.
+   *
+   * @param {TimeRange} timeRange - Time range to search.
+   * @param {string} [expr] - The `info()` first argument, used server-side to scope identifying labels.
+   * @param {string} [metricMatch] - Overrides the default info metric (`target_info`).
+   * @param {number} [limit] - Max number of label records.
+   * @param {number} [valuesLimit] - Max number of values per label.
+   * @param {string} [search] - Case-insensitive substring used to server-filter/rank label names.
+   * @returns {Promise<InfoLabelRecord[]>} Records of `{ name, values }` for in-scope info labels.
+   */
+  public queryInfoLabels = async (
+    timeRange: TimeRange,
+    expr?: string,
+    metricMatch?: string,
+    limit?: number,
+    valuesLimit?: number,
+    search?: string
+  ): Promise<InfoLabelRecord[]> => {
+    const interpolatedExpr = expr ? this.datasource.interpolateString(expr) : expr;
+    const interpolatedMetricMatch = metricMatch ? this.datasource.interpolateString(metricMatch) : metricMatch;
+    return await this.resourceClient.queryInfoLabels(
+      timeRange,
+      interpolatedExpr,
+      interpolatedMetricMatch,
+      limit,
+      valuesLimit,
+      search
     );
   };
 

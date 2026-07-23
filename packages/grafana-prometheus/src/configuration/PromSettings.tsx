@@ -496,6 +496,32 @@ export const PromSettings = (props: Props) => {
                 id={selectors.components.DataSource.Prometheus.configPage.disableRecordingRules}
               />
             </InlineField>
+
+            <InlineField
+              label={t(
+                'grafana-prometheus.configuration.prom-settings.label-info-labels-autocomplete',
+                'Info labels autocomplete (experimental)'
+              )}
+              labelWidth={PROM_CONFIG_LABEL_WIDTH}
+              tooltip={
+                <>
+                  <Trans i18nKey="grafana-prometheus.configuration.prom-settings.tooltip-info-labels-autocomplete">
+                    Enable code-editor autocomplete for the data-label selector of the PromQL info() function. Requires
+                    an experimental Prometheus build that exposes the /api/v1/info_labels endpoint. Leave this off for
+                    standard Prometheus instances.
+                  </Trans>
+                </>
+              }
+              interactive={true}
+              className={styles.switchField}
+              disabled={optionsWithDefaults.readOnly}
+            >
+              <Switch
+                value={optionsWithDefaults.jsonData.infoLabelsAutocomplete ?? false}
+                onChange={onUpdateDatasourceJsonDataOptionChecked(props, 'infoLabelsAutocomplete')}
+                data-testid="prometheus-info-labels-autocomplete"
+              />
+            </InlineField>
           </Stack>
         </Box>
       </ConfigSubSection>

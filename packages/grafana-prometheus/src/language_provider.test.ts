@@ -355,6 +355,59 @@ describe('PrometheusLanguageProvider', () => {
     });
   });
 
+  describe('queryInfoLabels', () => {
+    const timeRange = getMockTimeRange();
+
+    it('should delegate to resource client queryInfoLabels', async () => {
+      const provider = new PrometheusLanguageProvider(defaultDatasource);
+      const resourceClientSpy = jest
+        .spyOn(provider['resourceClient'], 'queryInfoLabels')
+        .mockResolvedValue([{ name: 'version', values: ['v1.0'] }]);
+
+      const result = await provider.queryInfoLabels(timeRange, 'up', 'build_info', 100, 10, 'ver');
+
+      expect(resourceClientSpy).toHaveBeenCalledWith(timeRange, 'up', 'build_info', 100, 10, 'ver');
+      expect(result).toEqual([{ name: 'version', values: ['v1.0'] }]);
+    });
+
+    it('should interpolate template variables in expr and metricMatch', async () => {
+      const provider = new PrometheusLanguageProvider({
+        ...defaultDatasource,
+        interpolateString: (string: string) => string.replace(/\$/g, 'interpolated_'),
+      } as PrometheusDatasource);
+      const resourceClientSpy = jest.spyOn(provider['resourceClient'], 'queryInfoLabels').mockResolvedValue([]);
+
+      await provider.queryInfoLabels(timeRange, 'up{job="$job"}', '$metric');
+
+      expect(resourceClientSpy).toHaveBeenCalledWith(
+        timeRange,
+        'up{job="interpolated_job"}',
+        'interpolated_metric',
+        undefined,
+        undefined,
+        undefined
+      );
+    });
+
+    it('should leave expr/metricMatch undefined when not provided', async () => {
+      const provider = new PrometheusLanguageProvider(defaultDatasource);
+      const resourceClientSpy = jest.spyOn(provider['resourceClient'], 'queryInfoLabels').mockResolvedValue([]);
+
+      await provider.queryInfoLabels(timeRange);
+
+      expect(resourceClientSpy).toHaveBeenCalledWith(timeRange, undefined, undefined, undefined, undefined, undefined);
+    });
+
+    it('forwards the search prefix without interpolating it', async () => {
+      const provider = new PrometheusLanguageProvider(defaultDatasource);
+      const resourceClientSpy = jest.spyOn(provider['resourceClient'], 'queryInfoLabels').mockResolvedValue([]);
+
+      await provider.queryInfoLabels(timeRange, 'up', undefined, undefined, undefined, 'ver');
+
+      expect(resourceClientSpy).toHaveBeenCalledWith(timeRange, 'up', undefined, undefined, undefined, 'ver');
+    });
+  });
+
   describe('retrieveMethods', () => {
     it('should delegate to resource client for metrics and labels', () => {
       const provider = new PrometheusLanguageProvider(defaultDatasource);

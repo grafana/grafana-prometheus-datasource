@@ -239,6 +239,16 @@ export class PrometheusDatasource
     );
   }
 
+  /**
+   * Whether the per-datasource opt-in for `info()` data-label autocomplete is enabled.
+   *
+   * This is purely a `jsonData` toggle; it does not probe the server. It must only be turned
+   * on against a Prometheus build that exposes the experimental `/api/v1/info_labels` endpoint.
+   */
+  hasInfoLabelsAutocompleteEnabled(): boolean {
+    return this.instanceSettings.jsonData.infoLabelsAutocomplete === true;
+  }
+
   _isDatasourceVersionGreaterOrEqualTo(targetVersion: string, targetFlavor: PromApplication): boolean {
     // User hasn't configured flavor/version yet, default behavior is to support labels match api support
     if (!this.datasourceConfigurationPrometheusVersion || !this.datasourceConfigurationPrometheusFlavor) {

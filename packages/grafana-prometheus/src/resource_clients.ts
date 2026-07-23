@@ -12,6 +12,19 @@ import { escapeForUtf8Support, utf8Support } from './utf8_support';
 type PrometheusSeriesResponse = Array<{ [key: string]: string }>;
 type PrometheusLabelsResponse = string[];
 
+/**
+ * A single record from the `/api/v1/info_labels` NDJSON stream. Each record describes one
+ * data-label carried by in-scope info metrics (e.g. `target_info`), together with the set of
+ * values that label takes for the queried `expr`. A single request therefore feeds BOTH
+ * label-name and label-value completions.
+ */
+export type InfoLabelRecord = {
+  name: string;
+  values: string[];
+  // Optional relevance score returned by the server; currently unused by the client.
+  score?: number;
+};
+
 export interface ResourceApiClient {
   metrics: string[];
   histogramMetrics: string[];
@@ -25,6 +38,86 @@ export interface ResourceApiClient {
   queryLabelValues: (timeRange: TimeRange, labelKey: string, match?: string, limit?: number) => Promise<string[]>;
 
   querySeries: (timeRange: TimeRange, match: string, limit: number) => Promise<PrometheusSeriesResponse>;
+
+  /**
+   * Queries the experimental `/api/v1/info_labels` endpoint for the data-labels carried by
+   * info metrics in scope of `expr`. Returns one record per label name (with its values).
+   */
+  queryInfoLabels: (
+    timeRange: TimeRange,
+    expr?: string,
+    metricMatch?: string,
+    limit?: number,
+    valuesLimit?: number,
+    search?: string
+  ) => Promise<InfoLabelRecord[]>;
+}
+
+/**
+ * Shape of a single NDJSON line returned by `/api/v1/info_labels`.
+ * - A batch line carries `results` (and optionally `warnings`).
+ * - The trailer line carries `status: 'success'` (and `has_more`).
+ * - A mid-stream failure (or a pre-stream Prometheus JSON error) carries `status: 'error'`.
+ */
+type InfoLabelsNdjsonLine = {
+  results?: InfoLabelRecord[];
+  warnings?: string[];
+  status?: 'success' | 'error';
+  errorType?: string;
+  error?: string;
+  has_more?: boolean;
+};
+
+/**
+ * Parses the `application/x-ndjson` body of `/api/v1/info_labels` into a flat list of records.
+ *
+ * The body is a sequence of newline-delimited JSON objects:
+ *   - zero or more batch lines `{ "results": [...], "warnings"?: [...] }`
+ *   - a success trailer `{ "status": "success", "has_more"?: bool }` (ignored)
+ *   - OR an error line `{ "status": "error", "errorType": "...", "error": "..." }` which throws.
+ *
+ * A pre-stream Prometheus error arrives as a single `status: 'error'` JSON object and is handled
+ * by the same branch. Warnings are surfaced via `console.warn` but do not abort parsing.
+ */
+export function parseInfoLabelsNdjson(body: string): InfoLabelRecord[] {
+  const records: InfoLabelRecord[] = [];
+
+  for (const rawLine of body.split('\n')) {
+    const line = rawLine.trim();
+    if (line === '') {
+      continue;
+    }
+
+    let parsed: InfoLabelsNdjsonLine;
+    try {
+      parsed = JSON.parse(line);
+    } catch {
+      // The contract guarantees JSON lines; tolerate (and report) anything else rather than crash.
+      console.warn('Skipping malformed /api/v1/info_labels NDJSON line:', line);
+      continue;
+    }
+
+    if (parsed.status === 'error') {
+      throw new Error(
+        `/api/v1/info_labels request failed: ${parsed.errorType ?? 'error'}: ${parsed.error ?? 'unknown error'}`
+      );
+    }
+
+    if (parsed.status === 'success') {
+      // Success trailer — nothing to collect.
+      continue;
+    }
+
+    if (Array.isArray(parsed.warnings) && parsed.warnings.length > 0) {
+      console.warn('/api/v1/info_labels warnings:', parsed.warnings);
+    }
+
+    if (Array.isArray(parsed.results)) {
+      records.push(...parsed.results);
+    }
+  }
+
+  return records;
 }
 
 type RequestFn = (
@@ -35,6 +128,10 @@ type RequestFn = (
 
 export abstract class BaseResourceClient {
   private seriesLimit: number;
+
+  // In-memory cache for info-labels responses, keyed by snapped time range + request params.
+  // Records are not plain string[], so we cannot reuse ResourceClientsCache; a small Map is enough.
+  private _infoLabelsCache: Map<string, InfoLabelRecord[]> = new Map();
 
   constructor(
     protected readonly request: RequestFn,
@@ -86,6 +183,78 @@ export abstract class BaseResourceClient {
     const searchParams = { ...timeParams, 'match[]': effectiveMatch, limit };
     return await this.requestSeries('/api/v1/series', searchParams, getDefaultCacheHeaders(this.datasource.cacheLevel));
   };
+
+  /**
+   * Queries the experimental `/api/v1/info_labels` endpoint. Implemented once on the base class so
+   * that both {@link LabelsApiClient} and {@link SeriesApiClient} inherit identical behaviour
+   * (the endpoint is flavor-independent).
+   *
+   * @param timeRange   - Time range used to derive `start`/`end` query params.
+   * @param expr        - PromQL `info()` first argument, sent as `expr` so the server scopes the
+   *                      harvested identifying labels to that base expression. Omitted when empty.
+   * @param metricMatch - Overrides the server default info metric (`target_info`). Omitted when empty.
+   * @param limit       - Max number of label records; falls back to the datasource series limit.
+   * @param valuesLimit - Optional cap on the number of values returned per label.
+   * @param search      - Optional case-insensitive substring used to server-filter and rank label
+   *                      names by relevance. When set, `case_sensitive=false` and `sort_by=score`
+   *                      are sent too, and the server's score ordering is preserved (no re-sort).
+   */
+  public queryInfoLabels = async (
+    timeRange: TimeRange,
+    expr?: string,
+    metricMatch?: string,
+    limit?: number,
+    valuesLimit?: number,
+    search?: string
+  ): Promise<InfoLabelRecord[]> => {
+    const timeParams = getRangeSnapInterval(this.datasource.cacheLevel, timeRange);
+    const effectiveLimit = this.getEffectiveLimit(limit);
+
+    const cacheKey = [
+      timeParams.start,
+      timeParams.end,
+      expr ?? '',
+      metricMatch ?? '',
+      effectiveLimit,
+      valuesLimit ?? '',
+      search ?? '',
+    ]
+      .map((v) => String(v))
+      .join('|');
+    const cached = this._infoLabelsCache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const params: Record<string, unknown> = {
+      ...timeParams,
+      ...(expr ? { expr } : {}),
+      ...(metricMatch ? { metric_match: metricMatch } : {}),
+      limit: effectiveLimit,
+      ...(valuesLimit ? { values_limit: valuesLimit } : {}),
+      ...(search ? { 'search[]': search, case_sensitive: false, sort_by: 'score' } : {}),
+    };
+
+    const records = await this.requestInfoLabels(params);
+    this._infoLabelsCache.set(cacheKey, records);
+    return records;
+  };
+
+  /**
+   * Fetches the raw `/api/v1/info_labels` body as text and parses the NDJSON stream.
+   *
+   * We must bypass the wrapped `request` fn (which unwraps `res.data.data` and assumes JSON) and
+   * call `metadataRequest` directly with `responseType: 'text'`, otherwise `backendSrv` would try to
+   * `JSON.parse` the multi-line NDJSON body and fail.
+   */
+  private async requestInfoLabels(params: Record<string, unknown>): Promise<InfoLabelRecord[]> {
+    const response = await this.datasource.metadataRequest('/api/v1/info_labels', params, {
+      ...getDefaultCacheHeaders(this.datasource.cacheLevel),
+      responseType: 'text',
+    });
+    const body = typeof response?.data === 'string' ? response.data : '';
+    return parseInfoLabelsNdjson(body);
+  }
 }
 
 export class LabelsApiClient extends BaseResourceClient implements ResourceApiClient {
