@@ -157,6 +157,7 @@
         "aria-label-prom-type-type": "{{promType}} type",
         "aria-label-prometheus-type": "Prometheus type",
         "aria-label-query-error-threshold": "Query error threshold",
+        "aria-label-query-statistics": "Query statistics",
         "aria-label-query-warning-threshold": "Query warning threshold",
         "aria-label-select-http-method": "Select HTTP method",
         "editor-options": {
@@ -174,6 +175,7 @@
         "label-prometheus-type": "Prometheus type",
         "label-query-error-threshold": "Query error threshold",
         "label-query-overlap-window": "Query overlap window",
+        "label-query-statistics": "Query statistics",
         "label-query-timeout": "Query timeout",
         "label-query-warning-threshold": "Query warning threshold",
         "label-scrape-interval": "Scrape interval",
@@ -200,6 +202,7 @@
         "tooltip-prometheus-type": "Set this to the type of your prometheus database, e.g. Prometheus, Cortex, Mimir or Thanos. Changing this field will save your current settings. Certain types of Prometheus supports or does not support various APIs. For example, some types support regex matching for label queries to improve performance. Some types have an API for metadata. If you set this incorrectly you may experience odd behavior when querying metrics and labels. Please check your Prometheus documentation to ensure you enter the correct type.",
         "tooltip-query-error-threshold": "When set, Grafana appends this value to Prometheus query requests as the max_samples_processed_error_threshold URL parameter. Leave empty to omit.",
         "tooltip-query-overlap-window": "Set a duration like {{example1}} or {{example2}} or {{example3}}. Default of {{default}}. This duration will be added to the duration of each incremental request.",
+        "tooltip-query-statistics": "Request query processing statistics and show the total queryable samples in Query Inspector. This can increase the response payload size.",
         "tooltip-query-timeout": "Set the Prometheus query timeout.",
         "tooltip-query-warning-threshold": "When set, Grafana appends this value to Prometheus query requests as the max_samples_processed_warning_threshold URL parameter. Leave empty to omit.",
         "tooltip-scrape-interval": "This interval is how frequently Prometheus scrapes targets. Set this to the typical scrape and evaluation interval configured in your Prometheus config file. If you set this to a greater value than your Prometheus config file interval, Grafana will evaluate the data according to this interval and you will see less data points. Defaults to {{default}}.",
