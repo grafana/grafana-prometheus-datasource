@@ -269,7 +269,7 @@ func TestCustomQueryParametersMiddleware(t *testing.T) {
 		"/api/v1/series",
 		"/api/v1/status/buildinfo",
 	} {
-		t.Run("With query statistics enabled should not add stats for "+path, func(t *testing.T) {
+		t.Run("With query statistics enabled should not add stats to non-query endpoint "+path, func(t *testing.T) {
 			mw := CustomQueryParameters(backend.NewLoggerWith("logger", "test"), &models.PromOptions{QueryStatsEnabled: true})
 			rt := mw.CreateMiddleware(httpclient.Options{}, finalRoundTripper)
 			req, err := http.NewRequest(http.MethodGet, "http://test.com"+path, nil)
