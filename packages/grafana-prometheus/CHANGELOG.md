@@ -2,7 +2,7 @@
 
 ## 13.1.9
 
-🐛 Add an opt-in query statistics setting
+🐛 Add an opt-in query statistics setting ([#259](https://github.com/grafana/grafana-prometheus-datasource/pull/259))
 
 ## 13.1.8
 
