@@ -1,5 +1,9 @@
 # Changelog
 
+## 13.1.9
+
+🐛 Add an opt-in query statistics setting
+
 ## 13.1.8
 
 🐛 Fix: fetch metrics on series limit blur instead of change ([#221](https://github.com/grafana/grafana-prometheus-datasource/pull/221))
