@@ -1,5 +1,9 @@
 # Changelog
 
+## 13.1.10
+
+🐛 Dependency updates
+
 ## 13.1.9
 
 🐛 Add an opt-in query statistics setting ([#259](https://github.com/grafana/grafana-prometheus-datasource/pull/259))
