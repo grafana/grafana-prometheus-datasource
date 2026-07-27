@@ -1698,16 +1698,15 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@grafana/sign-plugin@npm:3.3.1":
-  version: 3.3.1
-  resolution: "@grafana/sign-plugin@npm:3.3.1"
+"@grafana/sign-plugin@npm:3.3.3":
+  version: 3.3.3
+  resolution: "@grafana/sign-plugin@npm:3.3.3"
   dependencies:
-    find-up: "npm:8.0.0"
     minimist: "npm:1.2.8"
     proxy-agent: "npm:8.0.1"
   bin:
     sign-plugin: dist/bin/run.js
-  checksum: 10c0/296d47310823aeab9ac421d2cc5df0cd0b634ce8c00a1aff8a59a02ce006c4c3705a1d4f6b2f1926c2a825ced2b4b7e1b1fe3a6f2b1f8a895e41e561f016cf25
+  checksum: 10c0/ff522a67d7df8002f1ecc3a0ac6f32344c917f34564c77ca1b87c8034834879a32e5805cc8882cf23ae142f46beac5bf55b2433dd8e182ec9a13c7fa72f3d5a7
   languageName: node
   linkType: hard
 
@@ -7466,16 +7465,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"find-up@npm:8.0.0":
-  version: 8.0.0
-  resolution: "find-up@npm:8.0.0"
-  dependencies:
-    locate-path: "npm:^8.0.0"
-    unicorn-magic: "npm:^0.3.0"
-  checksum: 10c0/4c6d2cb92f74bd42ec7344c881a46f6455010d3993f8f55b09bb64298c0a13e11e10200147624db8938590890a15ade69c40f0172698388d0999899f0f2a70a5
-  languageName: node
-  linkType: hard
-
 "find-up@npm:^4.0.0, find-up@npm:^4.1.0":
   version: 4.1.0
   resolution: "find-up@npm:4.1.0"
@@ -9799,15 +9788,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"locate-path@npm:^8.0.0":
-  version: 8.0.0
-  resolution: "locate-path@npm:8.0.0"
-  dependencies:
-    p-locate: "npm:^6.0.0"
-  checksum: 10c0/4c837878b6d1b8557c5d1c624d11d6721d77f4627c14bd84182c85cbb9ec8fc01b5b5f089e21fab17b30fc5ecc14216a3d31f754dfcc5299f1fe9f4c83482fee
-  languageName: node
-  linkType: hard
-
 "lodash.merge@npm:^4.6.2":
   version: 4.6.2
   resolution: "lodash.merge@npm:4.6.2"
@@ -10655,15 +10635,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"p-limit@npm:^4.0.0":
-  version: 4.0.0
-  resolution: "p-limit@npm:4.0.0"
-  dependencies:
-    yocto-queue: "npm:^1.0.0"
-  checksum: 10c0/a56af34a77f8df2ff61ddfb29431044557fcbcb7642d5a3233143ebba805fc7306ac1d448de724352861cb99de934bc9ab74f0d16fe6a5460bdbdf938de875ad
-  languageName: node
-  linkType: hard
-
 "p-locate@npm:^4.1.0":
   version: 4.1.0
   resolution: "p-locate@npm:4.1.0"
@@ -10679,15 +10650,6 @@ __metadata:
   dependencies:
     p-limit: "npm:^3.0.2"
   checksum: 10c0/2290d627ab7903b8b70d11d384fee714b797f6040d9278932754a6860845c4d3190603a0772a663c8cb5a7b21d1b16acb3a6487ebcafa9773094edc3dfe6009a
-  languageName: node
-  linkType: hard
-
-"p-locate@npm:^6.0.0":
-  version: 6.0.0
-  resolution: "p-locate@npm:6.0.0"
-  dependencies:
-    p-limit: "npm:^4.0.0"
-  checksum: 10c0/d72fa2f41adce59c198270aa4d3c832536c87a1806e0f69dffb7c1a7ca998fb053915ca833d90f166a8c082d3859eabfed95f01698a3214c20df6bb8de046312
   languageName: node
   linkType: hard
 
@@ -11172,7 +11134,7 @@ __metadata:
     "@grafana/prometheus": "workspace:*"
     "@grafana/runtime": "npm:13.1.1"
     "@grafana/schema": "npm:13.1.1"
-    "@grafana/sign-plugin": "npm:3.3.1"
+    "@grafana/sign-plugin": "npm:3.3.3"
     "@grafana/tsconfig": "npm:2.0.1"
     "@grafana/ui": "npm:13.1.1"
     "@playwright/test": "npm:1.59.1"
@@ -14443,13 +14405,6 @@ __metadata:
   version: 0.1.0
   resolution: "yocto-queue@npm:0.1.0"
   checksum: 10c0/dceb44c28578b31641e13695d200d34ec4ab3966a5729814d5445b194933c096b7ced71494ce53a0e8820685d1d010df8b2422e5bf2cdea7e469d97ffbea306f
-  languageName: node
-  linkType: hard
-
-"yocto-queue@npm:^1.0.0":
-  version: 1.2.2
-  resolution: "yocto-queue@npm:1.2.2"
-  checksum: 10c0/36d4793e9cf7060f9da543baf67c55e354f4862c8d3d34de1a1b1d7c382d44171315cc54abf84d8900b8113d742b830108a1434f4898fb244f9b7e8426d4b8f5
   languageName: node
   linkType: hard
 
