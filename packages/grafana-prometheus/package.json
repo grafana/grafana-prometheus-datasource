@@ -48,7 +48,7 @@
   },
   "dependencies": {
     "@emotion/css": "^11.13.5",
-    "@floating-ui/react": "^0.27.19",
+    "@floating-ui/react": "0.27.19",
     "@grafana/plugin-ui": "^0.17.3",
     "@hello-pangea/dnd": "^18.0.1",
     "@leeoniya/ufuzzy": "^1.0.19",
