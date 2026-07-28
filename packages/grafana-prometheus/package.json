@@ -124,6 +124,7 @@
     "@grafana/i18n": "$@grafana/i18n"
   },
   "engines": {
-    "node": ">=24"
+    "node": ">=24",
+    "npm": ">=11.18.0"
   }
 }
