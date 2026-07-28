@@ -1,5 +1,9 @@
 # Changelog
 
+## 13.1.11
+
+🐛 Unpin dependencies
+
 ## 13.1.10
 
 🐛 Dependency updates
