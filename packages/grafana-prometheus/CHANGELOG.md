@@ -1,5 +1,9 @@
 # Changelog
 
+## 13.1.12
+
+🐛 Revert bundling of Assistant ([#269](https://github.com/grafana/grafana-prometheus-datasource/pull/269))
+
 ## 13.1.11
 
 🐛 Unpin dependencies
