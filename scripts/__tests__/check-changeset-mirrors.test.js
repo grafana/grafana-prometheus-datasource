@@ -11,11 +11,11 @@ function changeset(filePath, releases, body) {
 }
 
 describe('check-changeset-mirrors', () => {
-  it('accepts an npm package changeset with a matching datasource patch changeset', () => {
+  it('accepts an npm package changeset with a matching datasource bump type', () => {
     expect(
       findMissingMirrors([
         changeset('.changeset/library.md', { '@grafana/prometheus': 'minor' }, 'Add a query helper'),
-        changeset('.changeset/datasource.md', { 'grafana-prometheus-datasource': 'patch' }, 'Add a query helper'),
+        changeset('.changeset/datasource.md', { 'grafana-prometheus-datasource': 'minor' }, 'Add a query helper'),
       ])
     ).toEqual([]);
   });
@@ -64,13 +64,13 @@ describe('check-changeset-mirrors', () => {
     ).toEqual(['.changeset/combined.md']);
   });
 
-  it('does not accept a non-patch datasource mirror', () => {
+  it('rejects an npm package mirror with a different datasource bump type', () => {
     expect(
       findMissingMirrors([
-        changeset('.changeset/promlib.md', { promlib: 'patch' }, 'Fix response parsing'),
-        changeset('.changeset/datasource.md', { 'grafana-prometheus-datasource': 'minor' }, 'Fix response parsing'),
+        changeset('.changeset/library.md', { '@grafana/prometheus': 'minor' }, 'Add a query helper'),
+        changeset('.changeset/datasource.md', { 'grafana-prometheus-datasource': 'patch' }, 'Add a query helper'),
       ])
-    ).toEqual(['.changeset/promlib.md']);
+    ).toEqual(['.changeset/library.md']);
   });
 
   it('normalizes line endings and surrounding body whitespace', () => {

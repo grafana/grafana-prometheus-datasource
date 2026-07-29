@@ -4,7 +4,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const { DATASOURCE, NPM_PACKAGE, PROMLIB, parseArgs, createChangeset, BUMP_TYPES } = require('../add-changeset');
+const { DATASOURCE, NPM_PACKAGE, PROMLIB, parseArgs, createChangeset, run, BUMP_TYPES } = require('../add-changeset');
 const { createFixture, destroyFixture, listChangesetMdFiles } = require('./fixture');
 
 describe('add-changeset / parseArgs', () => {
@@ -87,7 +87,7 @@ describe('add-changeset / createChangeset', () => {
   });
 
   it('writes a changeset for the npm-package with the right frontmatter', async () => {
-    const { id, datasourceId } = await createChangeset({
+    const { id, datasourceId, datasourceBump } = await createChangeset({
       pkg: NPM_PACKAGE,
       bump: 'minor',
       summary: 'Add util',
@@ -99,11 +99,12 @@ describe('add-changeset / createChangeset', () => {
     expect(content).toContain('Add util');
 
     const datasourceContent = fs.readFileSync(path.join(root, '.changeset', `${datasourceId}.md`), 'utf8');
-    expectFrontmatterEntry(datasourceContent, DATASOURCE, 'patch');
+    expectFrontmatterEntry(datasourceContent, DATASOURCE, 'minor');
     expect(datasourceContent).toContain('Add util');
+    expect(datasourceBump).toBe('minor');
   });
 
-  it('supports the major bump while keeping the datasource mirror at patch', async () => {
+  it('mirrors a major npm-package bump to the datasource', async () => {
     const { id, datasourceId } = await createChangeset({
       pkg: NPM_PACKAGE,
       bump: 'major',
@@ -113,7 +114,7 @@ describe('add-changeset / createChangeset', () => {
     const content = fs.readFileSync(path.join(root, '.changeset', `${id}.md`), 'utf8');
     expectFrontmatterEntry(content, NPM_PACKAGE, 'major');
     const datasourceContent = fs.readFileSync(path.join(root, '.changeset', `${datasourceId}.md`), 'utf8');
-    expectFrontmatterEntry(datasourceContent, DATASOURCE, 'patch');
+    expectFrontmatterEntry(datasourceContent, DATASOURCE, 'major');
   });
 
   it('produces files whose frontmatter is parseable by version-changeset getChangesetPackages', async () => {
@@ -138,6 +139,22 @@ describe('add-changeset / createChangeset', () => {
     await expect(createChangeset({ pkg: NPM_PACKAGE, bump: 'huge', summary: 'x', repoRoot: root })).rejects.toThrow(
       /Invalid bump type/
     );
+  });
+
+  it('rejects non-patch promlib changesets', async () => {
+    await expect(createChangeset({ pkg: PROMLIB, bump: 'minor', summary: 'x', repoRoot: root })).rejects.toThrow(
+      /promlib only supports patch/
+    );
+  });
+
+  it('does not offer a bump-type prompt after selecting promlib interactively', async () => {
+    const answers = ['3', 'Fix promlib'];
+    const prompt = async () => answers.shift();
+
+    const result = await run({ argv: [], repoRoot: root, prompt, log: () => {} });
+
+    expect(result).toMatchObject({ pkg: PROMLIB, bump: 'patch', summary: 'Fix promlib' });
+    expect(answers).toEqual([]);
   });
 
   it('rejects an empty summary', async () => {

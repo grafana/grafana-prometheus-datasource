@@ -10,9 +10,10 @@
 //
 // Changes to `@grafana/prometheus` and `promlib` are also shipped as part of
 // the datasource, so those selections create a second, independent datasource
-// patch changeset with the same summary. Keeping the changesets independent
-// lets version-changeset.js release either package without consuming the other
-// package's changelog entry.
+// changeset with the same summary. The npm package's mirror uses the same bump
+// type; promlib is patch-only, so its mirror is always a patch. Keeping the
+// changesets independent lets version-changeset.js release either package
+// without consuming the other package's changelog entry.
 //
 // Usage:
 //   yarn changeset                                     # fully interactive
@@ -99,15 +100,20 @@ async function createChangeset({ pkg, bump, summary, repoRoot }) {
   if (!BUMP_TYPES.includes(bump)) {
     throw new Error(`Invalid bump type: "${bump}". Expected one of: ${BUMP_TYPES.join(', ')}.`);
   }
+  if (pkg === PROMLIB && bump !== 'patch') {
+    throw new Error('promlib only supports patch changesets.');
+  }
   if (!summary) {
     throw new Error('A summary is required.');
   }
   const id = await write({ summary, releases: [{ name: pkg, type: bump }] }, repoRoot);
   let datasourceId = null;
+  let datasourceBump = null;
   if (pkg !== DATASOURCE) {
-    datasourceId = await write({ summary, releases: [{ name: DATASOURCE, type: 'patch' }] }, repoRoot);
+    datasourceBump = pkg === PROMLIB ? 'patch' : bump;
+    datasourceId = await write({ summary, releases: [{ name: DATASOURCE, type: datasourceBump }] }, repoRoot);
   }
-  return { id, datasourceId };
+  return { id, datasourceId, datasourceBump };
 }
 
 // Drives the full CLI flow: parse args, fill in any missing inputs via the
@@ -120,6 +126,9 @@ async function run({ argv, repoRoot, prompt = defaultPrompt, log = console.log }
   const pkg = args.pkg || (await pickPackageInteractively(prompt, log));
 
   let bump = args.bump;
+  if (pkg === PROMLIB && !bump) {
+    bump = 'patch';
+  }
   if (!bump) {
     bump = (await prompt('Bump type [patch/minor/major] (patch): ', 'patch')).toLowerCase();
   }
@@ -129,13 +138,13 @@ async function run({ argv, repoRoot, prompt = defaultPrompt, log = console.log }
     summary = await prompt('Summary: ', '');
   }
 
-  const { id, datasourceId } = await createChangeset({ pkg, bump, summary, repoRoot });
+  const { id, datasourceId, datasourceBump } = await createChangeset({ pkg, bump, summary, repoRoot });
 
   log(`Created .changeset/${id}.md`);
   log(`  - ${pkg}: ${bump}`);
   if (datasourceId) {
     log(`Created .changeset/${datasourceId}.md`);
-    log(`  - ${DATASOURCE}: patch`);
+    log(`  - ${DATASOURCE}: ${datasourceBump}`);
   }
   return { id, datasourceId, pkg, bump, summary };
 }

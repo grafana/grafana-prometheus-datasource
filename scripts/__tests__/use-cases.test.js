@@ -438,7 +438,7 @@ describe('Use case 1.6 — `yarn changeset:version --promlib`', () => {
       log: () => {},
     });
     await addChangeset.run({
-      argv: ['--promlib', '--minor', 'Promlib feature'],
+      argv: ['--promlib', '--patch', 'Promlib feature'],
       repoRoot: root,
       prompt: makePrompt([]),
       log: () => {},
@@ -470,14 +470,14 @@ describe('Use case 1.6 — `yarn changeset:version --promlib`', () => {
     expect(result.versioned).toBe(true);
     expect(result.heldCount).toBe(5);
 
-    expect(readPackageVersion(root, PROMLIB_STUB_REL)).toBe('0.1.0');
+    expect(readPackageVersion(root, PROMLIB_STUB_REL)).toBe('0.0.11');
 
     expect(readPackageVersion(root, LIB_REL)).toBe('13.1.0');
     expect(readPackageVersion(root, STUB_REL)).toBe('13.1.0');
     expect(readPackageVersion(root, '.')).toBe('13.1.0');
 
     const promlibChangelog = fs.readFileSync(path.join(root, PROMLIB_TARGET_REL, 'CHANGELOG.md'), 'utf8');
-    expect(promlibChangelog).toContain('0.1.0');
+    expect(promlibChangelog).toContain('0.0.11');
     expect(promlibChangelog).toContain('Promlib bugfix 1');
     expect(promlibChangelog).toContain('Promlib feature');
 
@@ -557,7 +557,7 @@ describe('Use case 1.7 — `yarn changeset:version --datasource` with no pending
     expect(rootChangelog).not.toMatch(/### (?:Major|Minor|Patch) Changes/);
   });
 
-  it('preserves npm-package changesets and does not bump the npm-package version', async () => {
+  it('uses the npm-package mirror bump for the datasource while preserving the npm-package changeset', async () => {
     await addChangeset.run({
       argv: ['--npm-package', '--minor', 'Lib unrelated'],
       repoRoot: root,
@@ -576,8 +576,8 @@ describe('Use case 1.7 — `yarn changeset:version --datasource` with no pending
     expect(result.exitCode).toBe(0);
     expect(result.versioned).toBe(true);
 
-    expect(readPackageVersion(root, STUB_REL)).toBe('13.1.1');
-    expect(readPackageVersion(root, '.')).toBe('13.1.1');
+    expect(readPackageVersion(root, STUB_REL)).toBe('13.2.0');
+    expect(readPackageVersion(root, '.')).toBe('13.2.0');
     expect(readPackageVersion(root, LIB_REL)).toBe('13.1.0');
 
     const remaining = listChangesetMdFiles(root);

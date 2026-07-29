@@ -27,9 +27,7 @@ function parseChangeset(filePath, content) {
 
 function findMissingMirrors(changesets) {
   const parsed = changesets.map(({ filePath, content }) => parseChangeset(filePath, content));
-  const datasourceChangesets = parsed.filter(
-    ({ releases }) => releases.size === 1 && releases.get(DATASOURCE) === 'patch'
-  );
+  const datasourceChangesets = parsed.filter(({ releases }) => releases.size === 1 && releases.has(DATASOURCE));
 
   return parsed
     .filter(({ releases }) => [...LIBRARIES].some((library) => releases.has(library)))
@@ -38,7 +36,12 @@ function findMissingMirrors(changesets) {
         !datasourceChangesets.some(
           (datasourceChangeset) =>
             datasourceChangeset.filePath !== libraryChangeset.filePath &&
-            datasourceChangeset.body === libraryChangeset.body
+            datasourceChangeset.body === libraryChangeset.body &&
+            [...LIBRARIES].some(
+              (library) =>
+                libraryChangeset.releases.has(library) &&
+                datasourceChangeset.releases.get(DATASOURCE) === libraryChangeset.releases.get(library)
+            )
         )
     )
     .map(({ filePath }) => filePath);
@@ -55,13 +58,13 @@ function main(filePaths) {
     for (const filePath of missingMirrors) {
       console.error(
         `::error file=${filePath}::Library changeset '${filePath}' must have a separate ` +
-          `${DATASOURCE} patch changeset with the same content. Run 'yarn changeset' to generate both files.`
+          `${DATASOURCE} changeset with the same bump type and content. Run 'yarn changeset' to generate both files.`
       );
     }
     return 1;
   }
 
-  console.log('All library changesets have matching datasource patch changesets.');
+  console.log('All library changesets have matching datasource changesets.');
   return 0;
 }
 
