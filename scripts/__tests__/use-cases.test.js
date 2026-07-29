@@ -4,7 +4,7 @@
 // End-to-end coverage for the user-facing flows. Each test drives the full CLI
 // `run({...})` function with a real fixture monorepo and (where applicable)
 // the real `@changesets/cli` binary, so what we exercise here matches what the
-// user gets when typing `yarn changeset` / `yarn changeset:version` in a shell.
+// user gets when typing `npm run changeset` / `npm run changeset:version` in a shell.
 const fs = require('fs');
 const path = require('path');
 
@@ -62,7 +62,7 @@ function readChangesetFrontmatter(root, fileName) {
   };
 }
 
-describe('Use case 1.1 — `yarn changeset` interactive', () => {
+describe('Use case 1.1 — `npm run changeset` interactive', () => {
   let root;
 
   beforeEach(() => {
@@ -144,7 +144,7 @@ describe('Use case 1.1 — `yarn changeset` interactive', () => {
   });
 });
 
-describe('Use case 1.2 — `yarn changeset --npm-package --minor "..."`', () => {
+describe('Use case 1.2 — `npm run changeset -- --npm-package --minor "..."`', () => {
   let root;
 
   beforeEach(() => {
@@ -182,7 +182,7 @@ describe('Use case 1.2 — `yarn changeset --npm-package --minor "..."`', () => 
   });
 });
 
-describe('Use case 1.3 — `yarn changeset --datasource --patch "Fix panel"`', () => {
+describe('Use case 1.3 — `npm run changeset -- --datasource --patch "Fix panel"`', () => {
   let root;
 
   beforeEach(() => {
@@ -220,7 +220,7 @@ describe('Use case 1.3 — `yarn changeset --datasource --patch "Fix panel"`', (
   });
 });
 
-describe('Use case 1.4 — `yarn changeset:version --datasource`', () => {
+describe('Use case 1.4 — `npm run changeset:version -- --datasource`', () => {
   let root;
 
   beforeEach(() => {
@@ -315,7 +315,7 @@ describe('Use case 1.4 — `yarn changeset:version --datasource`', () => {
   });
 });
 
-describe('Use case 1.5 — `yarn changeset:version --npm-package`', () => {
+describe('Use case 1.5 — `npm run changeset:version -- --npm-package`', () => {
   let root;
 
   beforeEach(() => {
@@ -401,7 +401,7 @@ describe('Use case 1.5 — `yarn changeset:version --npm-package`', () => {
   });
 });
 
-describe('Use case 1.6 — `yarn changeset:version --promlib`', () => {
+describe('Use case 1.6 — `npm run changeset:version -- --promlib`', () => {
   let root;
 
   beforeEach(() => {
@@ -508,7 +508,7 @@ describe('Use case 1.6 — `yarn changeset:version --promlib`', () => {
   });
 });
 
-describe('Use case 1.7 — `yarn changeset:version --datasource` with no pending changesets', () => {
+describe('Use case 1.7 — `npm run changeset:version -- --datasource` with no pending changesets', () => {
   let root;
 
   beforeEach(() => {

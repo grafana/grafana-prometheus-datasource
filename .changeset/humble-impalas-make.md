@@ -2,4 +2,4 @@
 'grafana-prometheus-datasource': patch
 ---
 
-Revert bundling of Assistant
+Use npm as package manager
