@@ -37,28 +37,31 @@ when memory-profiling this benchmark, these commands are recommended:
 	benchstat read-prometheus-style-result-from-file-baseline.txt read-prometheus-style-result-from-file-candidate.txt
 */
 func BenchmarkReadPrometheusStyleResult_FromFile(b *testing.B) {
-	workloads := map[string][]byte{
-		"matrix-small":      readTestData(b, "prom-query-range.json"),
-		"matrix-large":      readTestData(b, "prom-query-range-big.json"),
-		"matrix-nan-inf":    makeMatrixWorkload([]int{4096}, true),
-		"matrix-uniform":    makeMatrixWorkload(repeatedLengths(32, 256), false),
-		"matrix-increasing": makeMatrixWorkload(increasingLengths(32, 16), false),
-		"matrix-decreasing": makeMatrixWorkload(decreasingLengths(32, 16), false),
-		"matrix-ragged":     makeMatrixWorkload(raggedLengths(32, 8, 512), false),
-		"vector":            readTestData(b, "prom-vector.json"),
-		"exemplars":         readTestData(b, "prom-exemplars-a.json"),
-		"histogram-fixture": readTestData(b, "prom-matrix-histogram-partitioned.json"),
-		"histogram-uniform": makeHistogramWorkload(repeatedLengths(16, 32), 8),
-		"histogram-ragged":  makeHistogramWorkload(raggedLengths(16, 4, 64), 8),
+	workloads := []struct {
+		name  string
+		input []byte
+	}{
+		{"matrix-small", readTestData(b, "prom-query-range.json")},
+		{"matrix-large", readTestData(b, "prom-query-range-big.json")},
+		{"matrix-nan-inf", makeMatrixWorkload([]int{4096}, true)},
+		{"matrix-uniform", makeMatrixWorkload(repeatedLengths(32, 256), false)},
+		{"matrix-increasing", makeMatrixWorkload(increasingLengths(32, 16), false)},
+		{"matrix-decreasing", makeMatrixWorkload(decreasingLengths(32, 16), false)},
+		{"matrix-ragged", makeMatrixWorkload(raggedLengths(32, 8, 512), false)},
+		{"vector", readTestData(b, "prom-vector.json")},
+		{"exemplars", readTestData(b, "prom-exemplars-a.json")},
+		{"histogram-fixture", readTestData(b, "prom-matrix-histogram-partitioned.json")},
+		{"histogram-uniform", makeHistogramWorkload(repeatedLengths(16, 32), 8)},
+		{"histogram-ragged", makeHistogramWorkload(raggedLengths(16, 4, 64), 8)},
 	}
 
 	opt := Options{}
-	for name, input := range workloads {
-		b.Run(name+"/reader-1024", func(b *testing.B) {
+	for _, workload := range workloads {
+		b.Run(workload.name+"/reader-1024", func(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for b.Loop() {
-				iter := jsoniter.Parse(jsoniter.ConfigDefault, bytes.NewReader(input), 1024)
+				iter := jsoniter.Parse(jsoniter.ConfigDefault, bytes.NewReader(workload.input), 1024)
 				rsp := ReadPrometheusStyleResult(iter, opt)
 				require.NoError(b, rsp.Error)
 			}
