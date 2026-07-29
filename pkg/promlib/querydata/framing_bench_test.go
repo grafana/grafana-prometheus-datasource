@@ -52,8 +52,8 @@ func BenchmarkExemplarJson(b *testing.B) {
 	})
 	query.PluginContext.GrafanaConfig = grafanaCfg
 	ctx := config.WithGrafanaConfig(context.Background(), grafanaCfg)
-	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
+
+	for b.Loop() {
 		res := http.Response{
 			StatusCode: 200,
 			Body:       io.NopCloser(bytes.NewReader(responseBytes)),
@@ -95,9 +95,7 @@ func BenchmarkRangeJson(b *testing.B) {
 	q.PluginContext.GrafanaConfig = grafanaCfg
 	ctx := config.WithGrafanaConfig(context.Background(), grafanaCfg)
 
-	b.ResetTimer()
-
-	for n := 0; n < b.N; n++ {
+	for b.Loop() {
 		res := http.Response{
 			StatusCode: 200,
 			Body:       io.NopCloser(bytes.NewReader(body)),
@@ -130,7 +128,7 @@ func makeJsonTestValue(r *rand.Rand) string {
 // create one time-series
 func makeJsonTestSeries(start int64, step int64, timestampCount int, r *rand.Rand, seriesIndex int) string {
 	var values []string
-	for i := 0; i < timestampCount; i++ {
+	for i := range timestampCount {
 		// create out of order timestamps to test sorting
 		if seriesIndex == 0 && i%2 == 0 {
 			continue
@@ -146,10 +144,10 @@ func createJsonTestData(start int64, step int64, timestampCount int, seriesCount
 	// every time we call this, so we create a random source.
 	r := rand.New(rand.NewSource(42))
 	var allSeries []string
-	for i := 0; i < seriesCount; i++ {
+	for i := range seriesCount {
 		allSeries = append(allSeries, makeJsonTestSeries(start, step, timestampCount, r, i))
 	}
-	bytes := []byte(fmt.Sprintf(`{"status":"success","data":{"resultType":"matrix","result":[%v]}}`, strings.Join(allSeries, ",")))
+	bytes := fmt.Appendf(nil, `{"status":"success","data":{"resultType":"matrix","result":[%v]}}`, strings.Join(allSeries, ","))
 
 	qm := models.QueryModel{
 		PrometheusQueryProperties: models.PrometheusQueryProperties{
