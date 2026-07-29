@@ -1,5 +1,29 @@
 # promlib
 
+## 0.0.16
+
+🐛 Improve benchmark tests
+
+🐛 Re-add GetJsonData function ([#265](https://github.com/grafana/grafana-prometheus-datasource/pull/265))
+
+## 0.0.15
+
+🐛 Export CalculatePrometheusInterval so external datasources can reuse the Prometheus step/interval calculation ([#254](https://github.com/grafana/grafana-prometheus-datasource/pull/254))
+
+## 0.0.14
+
+🐛 added settings model for customQueryParameters, maxSamplesProcessedWarningThreshold, maxSamplesProcessedErrorThreshold ([#225](https://github.com/grafana/grafana-prometheus-datasource/pull/225))
+
+⚙️ Bump grafana-plugin-sdk-go v0.292.2 to have support AlertForwarderMiddleware ([#226](https://github.com/grafana/grafana-prometheus-datasource/pull/226))
+
+🐛 Enable forwarding http headers ([#229](https://github.com/grafana/grafana-prometheus-datasource/pull/229))
+
+🐛 replace schemaless jsonData map with typed PromOptions model ([#220](https://github.com/grafana/grafana-prometheus-datasource/pull/220))
+
+🐛 Fix GetSuggestions silently dropping X-Grafana-Cache so suggestion responses now respect the caller's cache-control directive. ([#234](https://github.com/grafana/grafana-prometheus-datasource/pull/234))
+
+🐛 Fix resource-handler 500s caused by header/body mismatch and tighten upstream header forwarding. ([#232](https://github.com/grafana/grafana-prometheus-datasource/pull/232))
+
 ## 0.0.13
 
 🐛 Bug: Fix running backend tests (#199)

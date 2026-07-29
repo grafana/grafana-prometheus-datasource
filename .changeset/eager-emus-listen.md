@@ -2,4 +2,4 @@
 'grafana-prometheus-datasource': patch
 ---
 
-Add hover titles for label filter operators
+Chore: Remove moment and moment-timezone deps

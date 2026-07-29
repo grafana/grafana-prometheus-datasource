@@ -1,6 +1,7 @@
 import { createContext, type PropsWithChildren, useCallback, useContext, useMemo } from 'react';
 
 import { type TimeRange } from '@grafana/data';
+import { reportInteraction } from '@grafana/runtime';
 
 import { type PrometheusLanguageProviderInterface } from '../../language_provider';
 
@@ -99,6 +100,46 @@ export function MetricsBrowserProvider({
     [selectedLabelValues, selectedMetric]
   );
 
+  const onMetricClick = useCallback(
+    (name: string) => {
+      reportInteraction('grafana_prometheus_metrics_browser_metric_clicked', {
+        action: selectedMetric === name ? 'deselected' : 'selected',
+      });
+      return handleSelectedMetricChange(name);
+    },
+    [handleSelectedMetricChange, selectedMetric]
+  );
+
+  const onLabelKeyClick = useCallback(
+    (name: string) => {
+      reportInteraction('grafana_prometheus_metrics_browser_label_key_clicked', {
+        action: selectedLabelKeys.includes(name) ? 'deselected' : 'selected',
+      });
+      return handleSelectedLabelKeyChange(name);
+    },
+    [handleSelectedLabelKeyChange, selectedLabelKeys]
+  );
+
+  const onLabelValueClick = useCallback(
+    (labelKey: string, labelValue: string, isSelected: boolean) => {
+      reportInteraction('grafana_prometheus_metrics_browser_label_value_clicked', {
+        action: isSelected ? 'selected' : 'deselected',
+      });
+      return handleSelectedLabelValueChange(labelKey, labelValue, isSelected);
+    },
+    [handleSelectedLabelValueChange]
+  );
+
+  const onValidationClick = useCallback(() => {
+    reportInteraction('grafana_prometheus_metrics_browser_validate_clicked');
+    return handleValidation();
+  }, [handleValidation]);
+
+  const onClearClick = useCallback(() => {
+    reportInteraction('grafana_prometheus_metrics_browser_clear_clicked');
+    return handleClear();
+  }, [handleClear]);
+
   // Memoize the context value to prevent unnecessary re-renders
   const value = useMemo(
     () => ({
@@ -119,11 +160,11 @@ export function MetricsBrowserProvider({
       selectedMetric,
       selectedLabelKeys,
       selectedLabelValues,
-      onMetricClick: handleSelectedMetricChange,
-      onLabelKeyClick: handleSelectedLabelKeyChange,
-      onLabelValueClick: handleSelectedLabelValueChange,
-      onValidationClick: handleValidation,
-      onClearClick: handleClear,
+      onMetricClick,
+      onLabelKeyClick,
+      onLabelValueClick,
+      onValidationClick,
+      onClearClick,
     }),
     [
       err,
@@ -143,11 +184,11 @@ export function MetricsBrowserProvider({
       selectedMetric,
       selectedLabelKeys,
       selectedLabelValues,
-      handleSelectedMetricChange,
-      handleSelectedLabelKeyChange,
-      handleSelectedLabelValueChange,
-      handleValidation,
-      handleClear,
+      onMetricClick,
+      onLabelKeyClick,
+      onLabelValueClick,
+      onValidationClick,
+      onClearClick,
     ]
   );
 
