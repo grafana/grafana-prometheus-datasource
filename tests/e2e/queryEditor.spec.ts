@@ -14,7 +14,7 @@ function getQueryEditorRow(page: Page, refId: string): Locator {
 
 test.describe('Query editor', () => {
   test('smoke: renders query editor controls', { tag: '@plugins' }, async ({ explorePage, page }) => {
-    await explorePage.datasource.set('prometheus');
+    await explorePage.datasource.set('prometheus-gzip');
 
     const queryRow = getQueryEditorRow(page, 'A');
     await expect(queryRow.getByRole('button', { name: 'Kick start your query' })).toBeVisible();

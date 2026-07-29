@@ -7,13 +7,13 @@ import { expect, test } from '@grafana/plugin-e2e';
 // hit a framing mismatch and returned HTTP 500. Queries were unaffected because
 // they never relay raw upstream framing.
 //
-// The provisioned 'prometheus' datasource points at the gzip-forcing proxy (see
-// docker-compose.yaml), so every response here is gzip-compressed with an
+// The provisioned 'prometheus-gzip' datasource points at the gzip-forcing proxy
+// (see docker-compose.yaml), so every response here is gzip-compressed with an
 // explicit Content-Length — the exact shape that triggers the bug. A plain
 // smoke test that only checks UI rendering would stay green while this path is
 // broken; asserting a real 200 + decoded JSON body is what catches it.
 
-const DATASOURCE_UID = 'prometheus';
+const DATASOURCE_UID = 'prometheus-gzip';
 const resourcePath = (p: string) => `/api/datasources/uid/${DATASOURCE_UID}/resources${p}`;
 
 // Deliberately assert only on the framing/decoding contract (200 + a
