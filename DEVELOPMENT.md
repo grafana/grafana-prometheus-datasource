@@ -76,7 +76,8 @@ level = debug
 
 ### 3. Start Grafana
 
-Start grafana/grafana with `yarn install && yarn start` for the frontend in one terminal and `make run` for the backend in another. Grafana will use the plugin from `workspace/plugins/grafana-prometheus-datasource`, and you can iterate on frontend or backend changes directly.
+Start grafana/grafana with `npm ci && npm run start` for the frontend in one terminal and `make run` for the backend in another. Grafana will use 
+the plugin from `workspace/plugins/grafana-prometheus-datasource`, and you can iterate on frontend or backend changes directly.
 
 ### 4. Build the plugin
 
