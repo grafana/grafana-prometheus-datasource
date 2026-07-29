@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
 	sdkhttpclient "github.com/grafana/grafana-plugin-sdk-go/backend/httpclient"
 
@@ -16,6 +17,8 @@ const (
 	customQueryParametersMiddlewareName = "prom-custom-query-parameters"
 	warningThresholdKey                 = "max_samples_processed_warning_threshold"
 	errorThresholdKey                   = "max_samples_processed_error_threshold"
+	queryStatsKey                       = "stats"
+	queryStatsValue                     = "all"
 )
 
 // CustomQueryParameters returns a middleware that appends user-configured custom
@@ -31,8 +34,9 @@ func CustomQueryParameters(logger log.Logger, jsonData *models.PromOptions) sdkh
 		customQueryParams := jsonData.CustomQueryParameters
 		warnVal := jsonData.MaxSamplesProcessedWarningThreshold
 		errVal := jsonData.MaxSamplesProcessedErrorThreshold
+		queryStatsEnabled := jsonData.QueryStatsEnabled
 
-		if customQueryParams == "" && warnVal == 0 && errVal == 0 {
+		if customQueryParams == "" && warnVal == 0 && errVal == 0 && !queryStatsEnabled {
 			return next
 		}
 
@@ -61,9 +65,16 @@ func CustomQueryParameters(logger log.Logger, jsonData *models.PromOptions) sdkh
 					q.Add(k, value)
 				}
 			}
+			if queryStatsEnabled && isQueryEndpoint(req.URL.Path) {
+				q.Set(queryStatsKey, queryStatsValue)
+			}
 			req.URL.RawQuery = q.Encode()
 
 			return next.RoundTrip(req)
 		})
 	})
+}
+
+func isQueryEndpoint(path string) bool {
+	return strings.HasSuffix(path, "/api/v1/query") || strings.HasSuffix(path, "/api/v1/query_range")
 }

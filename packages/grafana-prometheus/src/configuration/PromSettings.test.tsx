@@ -1,5 +1,5 @@
 // Core Grafana history https://github.com/grafana/grafana/blob/v11.0.0-preview/public/app/plugins/datasource/prometheus/configuration/PromSettings.test.tsx
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { type SyntheticEvent } from 'react';
 
 import { type SelectableValue } from '@grafana/data';
@@ -117,6 +117,54 @@ describe('PromSettings', () => {
       render(<PromSettings onOptionsChange={() => {}} options={options} showQuerySamplesProcessedThresholdFields />);
 
       expect(screen.queryByText('Query threshold already set in custom query parameters')).not.toBeInTheDocument();
+    });
+
+    it('should hide query statistics by default', () => {
+      render(<PromSettings onOptionsChange={() => {}} options={defaultProps} />);
+
+      expect(screen.queryByRole('switch', { name: 'Query statistics' })).not.toBeInTheDocument();
+    });
+
+    it('should show query statistics disabled by default when enabled by the consumer', () => {
+      render(<PromSettings onOptionsChange={() => {}} options={defaultProps} showQueryStats />);
+
+      expect(screen.getByRole('switch', { name: 'Query statistics' })).not.toBeChecked();
+    });
+
+    it('should initialize query statistics from saved options', () => {
+      const options = createDefaultConfigOptions();
+      options.jsonData.queryStatsEnabled = true;
+
+      render(<PromSettings onOptionsChange={() => {}} options={options} showQueryStats />);
+
+      expect(screen.getByRole('switch', { name: 'Query statistics' })).toBeChecked();
+    });
+
+    it.each([
+      { initial: false, expected: true },
+      { initial: true, expected: false },
+    ])('should persist query statistics as $expected', ({ initial, expected }) => {
+      const options = createDefaultConfigOptions();
+      options.jsonData.queryStatsEnabled = initial;
+      const onOptionsChange = jest.fn();
+
+      render(<PromSettings onOptionsChange={onOptionsChange} options={options} showQueryStats />);
+      fireEvent.click(screen.getByRole('switch', { name: 'Query statistics' }));
+
+      expect(onOptionsChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          jsonData: expect.objectContaining({ queryStatsEnabled: expected }),
+        })
+      );
+    });
+
+    it('should disable query statistics for a read-only data source', () => {
+      const options = createDefaultConfigOptions();
+      options.readOnly = true;
+
+      render(<PromSettings onOptionsChange={() => {}} options={options} showQueryStats />);
+
+      expect(screen.getByRole('switch', { name: 'Query statistics' })).toBeDisabled();
     });
   });
 });
