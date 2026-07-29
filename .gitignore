@@ -37,3 +37,6 @@ ci/
 .idea
 .eslintcache
 .DS_Store
+
+# Local agent settings
+.claude/settings.local.json
