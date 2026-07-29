@@ -3,6 +3,12 @@ name: Publish @grafana/prometheus to NPM
 permissions: {}
 
 on:
+  # zizmor: ignore[dangerous-triggers] this workflow validates pull request
+  # metadata and republishes a prebuilt tarball; it never checks out, installs
+  # from, builds or executes pull request code.
+  workflow_run:
+    workflows: ['Build @grafana/prometheus canary']
+    types: [completed]
   workflow_dispatch:
     inputs:
       dry-run:
@@ -10,14 +16,21 @@ on:
         type: boolean
         default: false
 
+concurrency:
+  # Serialise canaries per source pull request. Manual releases fall back to the
+  # run ID, which is unique, so they are never queued behind one another.
+  group: ${{ github.workflow }}-${{ github.event.workflow_run.pull_requests[0].number || github.run_id }}
+  cancel-in-progress: false
+
 jobs:
   publish:
+    if: github.event_name == 'workflow_dispatch'
     name: Publish @grafana/prometheus
     runs-on: github-hosted-ubuntu-x64-small
     environment: npm-publish
     permissions:
       contents: read
-      id-token: write
+      id-token: write # Required for npm trusted publishing.
     steps:
       - name: Verify branch is main
         run: |
@@ -106,3 +119,231 @@ jobs:
         run: |
           echo "## Dry run complete" >> "$GITHUB_STEP_SUMMARY"
           echo "Would publish @grafana/prometheus@${VERSION} with tag ${TAG}" >> "$GITHUB_STEP_SUMMARY"
+
+  # Runs on the default branch copy of this workflow, so every check below is
+  # trusted code acting on trusted inputs. It decides whether a canary built by
+  # npm-canary-build.yml may be offered for publish approval at all.
+  authorize-canary:
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request'
+    name: Authorize @grafana/prometheus canary
+    runs-on: github-hosted-ubuntu-x64-small
+    permissions:
+      actions: read # Download the artifact from the exact source workflow run.
+      contents: read
+      pull-requests: read # Re-read the pull request's current, trusted metadata.
+    outputs:
+      publish: ${{ steps.verify.outputs.publish }}
+      pr-number: ${{ steps.authorize.outputs.pr-number }}
+      head-sha: ${{ steps.authorize.outputs.head-sha }}
+      source-run-id: ${{ github.event.workflow_run.id }}
+      source-run-attempt: ${{ github.event.workflow_run.run_attempt }}
+    steps:
+      - name: Checkout trusted publisher
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }} # workflow_run: the default branch tip, never the pull request.
+
+      # No dependency install: verify-npm-canary-tarball.js has no dependencies so
+      # this job stays small and quick to audit.
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: '.nvmrc'
+          package-manager-cache: false
+
+      # The pull request is re-read from the API rather than taken from the
+      # triggering event, so a canary cannot be published for a pull request that
+      # has since been closed, unlabelled, or pushed to. The base branch tip is
+      # deliberately not compared: it moves whenever anything else merges, which
+      # would otherwise invalidate canaries while they wait for approval.
+      - name: Authorize pull request
+        id: authorize
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+          BUILT_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
+            {
+              echo "## Canary publish skipped"
+              echo "The source workflow run is not associated with a pull request."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          reason=$(gh api "repos/${REPO}/pulls/${PR_NUMBER}" | jq -r \
+            --arg repo "$REPO" \
+            --arg defaultBranch "$DEFAULT_BRANCH" \
+            --arg builtHeadSha "$BUILT_HEAD_SHA" \
+            '
+              if .state != "open" then "The pull request is no longer open."
+              elif .head.repo.full_name != $repo then "Fork pull requests cannot publish canaries."
+              elif .base.repo.full_name != $repo or .base.ref != $defaultBranch then
+                "Canaries must target the repository default branch."
+              elif .head.sha != $builtHeadSha then "The pull request head changed after the canary was built."
+              elif ([.labels[].name] | index("npm-canary") | not) then "The npm-canary label is no longer present."
+              else "" end
+            ')
+
+          if [[ -n "$reason" ]]; then
+            {
+              echo "## Canary publish skipped"
+              echo "$reason"
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          echo "eligible=true" >> "$GITHUB_OUTPUT"
+          echo "pr-number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "head-sha=$BUILT_HEAD_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Download canary artifact
+        if: steps.authorize.outputs.eligible == 'true'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: npm-canary-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}
+          path: ${{ runner.temp }}/npm-canary-artifact
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      # Verified before requesting approval so a maintainer is never asked to sign
+      # off on an artifact that cannot be published. publish-canary repeats this
+      # immediately before publishing, which is the check that actually gates npm.
+      - name: Verify canary tarball
+        if: steps.authorize.outputs.eligible == 'true'
+        id: verify
+        env:
+          ARTIFACT_DIR: ${{ runner.temp }}/npm-canary-artifact
+          PR_NUMBER: ${{ steps.authorize.outputs.pr-number }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+        run: |
+          set -euo pipefail
+          version=$(./.github/scripts/verify-npm-canary-tarball.sh)
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Canary ready for approval"
+            printf 'Validated `@grafana/prometheus@%s` from source workflow run `%s`.\n' "$version" "$RUN_ID"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  publish-canary:
+    if: needs.authorize-canary.outputs.publish == 'true'
+    needs: authorize-canary
+    name: Publish @grafana/prometheus canary
+    runs-on: github-hosted-ubuntu-x64-small
+    environment: npm-publish
+    permissions:
+      actions: read # Download the already-authorized artifact from the exact source run.
+      contents: read
+      id-token: write # Required for npm trusted publishing.
+      pull-requests: write # Re-read the pull request after approval, then comment the install command.
+    steps:
+      - name: Checkout trusted publisher
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }} # workflow_run: the default branch tip, never the pull request.
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: '.nvmrc'
+          package-manager-cache: false # Disable cache!
+
+      # Trusted Publishing is only available in npm v11.5.1 and later
+      - name: Update npm
+        run: npm install -g npm@11.15.0
+
+      - name: Configure npm registry
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          registry-url: 'https://registry.npmjs.org'
+          package-manager-cache: false
+
+      # Approval can sit for a while, so confirm the pull request still wants this.
+      - name: Re-authorize pull request after approval
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          PR_NUMBER: ${{ needs.authorize-canary.outputs.pr-number }}
+          BUILT_HEAD_SHA: ${{ needs.authorize-canary.outputs.head-sha }}
+        run: |
+          set -euo pipefail
+          if ! gh api "repos/${REPO}/pulls/${PR_NUMBER}" | jq -e \
+            --arg repo "$REPO" \
+            --arg defaultBranch "$DEFAULT_BRANCH" \
+            --arg builtHeadSha "$BUILT_HEAD_SHA" \
+            '
+              .state == "open" and
+              .head.repo.full_name == $repo and
+              .head.sha == $builtHeadSha and
+              .base.repo.full_name == $repo and
+              .base.ref == $defaultBranch and
+              ([.labels[].name] | index("npm-canary") != null)
+            ' >/dev/null; then
+            echo "::error::Pull request #${PR_NUMBER} is no longer eligible for this canary."
+            exit 1
+          fi
+
+      - name: Download canary artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: npm-canary-${{ needs.authorize-canary.outputs.source-run-id }}-${{ needs.authorize-canary.outputs.source-run-attempt }}
+          path: ${{ runner.temp }}/npm-canary-artifact
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ needs.authorize-canary.outputs.source-run-id }}
+
+      - name: Verify canary tarball
+        id: verify
+        env:
+          ARTIFACT_DIR: ${{ runner.temp }}/npm-canary-artifact
+          PR_NUMBER: ${{ needs.authorize-canary.outputs.pr-number }}
+          RUN_ID: ${{ needs.authorize-canary.outputs.source-run-id }}
+          RUN_ATTEMPT: ${{ needs.authorize-canary.outputs.source-run-attempt }}
+        run: |
+          set -euo pipefail
+          version=$(./.github/scripts/verify-npm-canary-tarball.sh)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tarball=${ARTIFACT_DIR}/grafana-prometheus-${version}.tgz" >> "$GITHUB_OUTPUT"
+
+      - name: Publish canary to NPM
+        env:
+          TARBALL: ${{ steps.verify.outputs.tarball }}
+          # The tarball is built by npm-canary-build.yml from the pull request head,
+          # but published from here, where GITHUB_SHA is the default branch tip.
+          # Automatic provenance would therefore attest a commit that does not
+          # contain the published code, and record that permanently in Sigstore's
+          # public transparency log.
+          NPM_CONFIG_PROVENANCE: 'false'
+        run: npm publish "$TARBALL" --access public --tag canary --ignore-scripts
+
+      - name: Comment the install command on the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ needs.authorize-canary.outputs.pr-number }}
+          HEAD_SHA: ${{ needs.authorize-canary.outputs.head-sha }}
+          CANARY_VERSION: ${{ steps.verify.outputs.version }}
+        run: |
+          set -euo pipefail
+          comment="$RUNNER_TEMP/npm-canary-comment.md"
+          {
+            printf ':bird: Published a canary of `@grafana/prometheus` from %s.\n\n' "$HEAD_SHA"
+            printf '```bash\n'
+            printf 'yarn add @grafana/prometheus@%s\n' "$CANARY_VERSION"
+            printf '```\n'
+          } > "$comment"
+          gh pr comment "$PR_NUMBER" --repo "$REPO" --body-file "$comment"
+          cat "$comment" >> "$GITHUB_STEP_SUMMARY"
