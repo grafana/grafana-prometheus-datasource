@@ -34,6 +34,7 @@ type PromOptions struct {
 	CustomQueryParameters               string  `json:"customQueryParameters"`
 	MaxSamplesProcessedWarningThreshold float64 `json:"maxSamplesProcessedWarningThreshold"`
 	MaxSamplesProcessedErrorThreshold   float64 `json:"maxSamplesProcessedErrorThreshold"`
+	QueryStatsEnabled                   bool    `json:"queryStatsEnabled"`
 
 	// Frontend only types
 	PrometheusType                string                       `json:"prometheusType"`

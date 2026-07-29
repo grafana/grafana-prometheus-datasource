@@ -1,6 +1,6 @@
 {
   "name": "prometheus",
-  "version": "13.1.5",
+  "version": "13.1.6",
   "workspaces": [
     "packages/*"
   ],
@@ -83,14 +83,14 @@
   },
   "dependencies": {
     "@emotion/css": "11.10.6",
-    "@grafana/data": "13.1.0-25893932881",
-    "@grafana/e2e-selectors": "13.1.0-25893932881",
-    "@grafana/i18n": "13.1.0-25893932881",
-    "@grafana/plugin-ui": "0.13.1",
+    "@grafana/data": "13.1.1",
+    "@grafana/e2e-selectors": "13.1.1",
+    "@grafana/i18n": "13.1.1",
+    "@grafana/plugin-ui": "0.17.3",
     "@grafana/prometheus": "workspace:*",
-    "@grafana/runtime": "13.1.0-25893932881",
-    "@grafana/schema": "13.1.0-25893932881",
-    "@grafana/ui": "13.1.0-25893932881",
+    "@grafana/runtime": "13.1.1",
+    "@grafana/schema": "13.1.1",
+    "@grafana/ui": "13.1.1",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "rxjs": "7.8.2",
