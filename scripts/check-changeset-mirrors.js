@@ -58,7 +58,7 @@ function main(filePaths) {
     for (const filePath of missingMirrors) {
       console.error(
         `::error file=${filePath}::Library changeset '${filePath}' must have a separate ` +
-          `${DATASOURCE} changeset with the same bump type and content. Run 'yarn changeset' to generate both files.`
+          `${DATASOURCE} changeset with the same bump type and content. Run 'npm run changeset' to generate both files.`
       );
     }
     return 1;
