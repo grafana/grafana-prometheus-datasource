@@ -54,18 +54,9 @@ func BenchmarkReadPrometheusStyleResult_FromFile(b *testing.B) {
 
 	opt := Options{}
 	for name, input := range workloads {
-		b.Run(name+"/bytes", func(b *testing.B) {
-			iter := jsoniter.ParseBytes(jsoniter.ConfigDefault, input)
-			b.ReportAllocs()
-			b.ResetTimer()
-			for b.Loop() {
-				rsp := ReadPrometheusStyleResult(iter, opt)
-				require.NoError(b, rsp.Error)
-				iter.ResetBytes(input)
-			}
-		})
 		b.Run(name+"/reader-1024", func(b *testing.B) {
 			b.ReportAllocs()
+			b.ResetTimer()
 			for b.Loop() {
 				iter := jsoniter.Parse(jsoniter.ConfigDefault, bytes.NewReader(input), 1024)
 				rsp := ReadPrometheusStyleResult(iter, opt)
