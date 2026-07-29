@@ -898,7 +898,7 @@ func readFloat64String(iter *sdkjsoniter.Iterator) (float64, error) {
 		return 0, err
 	}
 
-	// #nosec G103
+	// #nosec G103 nosemgrep: go.lang.security.audit.xss.unsafe-string-conversion.unsafe-string-conversion
 	// Convert string to float64 without allocation.
 	// https://github.com/search?q=org%3Agrafana+yoloString&type=code
 	return strconv.ParseFloat(*(*string)(unsafe.Pointer(&buf)), 64)
