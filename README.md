@@ -45,7 +45,7 @@ Please report bugs and feature requests at
 Follow the
 [Grafana plugin development guide](https://grafana.com/developers/plugin-tools/)
 for local development. Run `mage -v` to build the backend and
-`yarn dev` (or `yarn build`) for the frontend.
+`npm run dev` (or `npm run build`) for the frontend.
 
 ## License
 
