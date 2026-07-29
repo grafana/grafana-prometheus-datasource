@@ -21,9 +21,18 @@ import (
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/models"
 )
 
-// when memory-profiling this benchmark, these commands are recommended:
-// - go test -benchmem -run=^$ -bench ^BenchmarkExemplarJson$ github.com/grafana/grafana-prometheus-datasource/pkg/promlib/querydata -memprofile memprofile.out -count 6 | tee old.txt
-// - go tool pprof -http=localhost:6061 memprofile.out
+/*
+when memory-profiling this benchmark, these commands are recommended:
+
+	go test -benchmem -run=^$ \
+		-bench ^BenchmarkExemplarJson$ github.com/grafana/grafana-prometheus-datasource/pkg/promlib/querydata \
+		-memprofile exemplar-json-mem.out -count 6 \
+		| tee exemplar-json-baseline.txt
+
+	go tool pprof -http=localhost:6061 exemplar-json-mem.out
+
+	benchstat exemplar-json-baseline.txt exemplar-json-candidate.txt
+*/
 func BenchmarkExemplarJson(b *testing.B) {
 	queryFileName := filepath.Join("../testdata", "exemplar.query.json")
 	query, err := loadStoredQuery(queryFileName)
@@ -38,6 +47,11 @@ func BenchmarkExemplarJson(b *testing.B) {
 
 	tCtx, err := setup()
 	require.NoError(b, err)
+	grafanaCfg := config.NewGrafanaCfg(map[string]string{
+		config.ConcurrentQueryCount: "10",
+	})
+	query.PluginContext.GrafanaConfig = grafanaCfg
+	ctx := config.WithGrafanaConfig(context.Background(), grafanaCfg)
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		res := http.Response{
@@ -45,7 +59,7 @@ func BenchmarkExemplarJson(b *testing.B) {
 			Body:       io.NopCloser(bytes.NewReader(responseBytes)),
 		}
 		tCtx.httpProvider.setResponse(&res, &res)
-		resp, err := tCtx.queryData.Execute(context.Background(), query)
+		resp, err := tCtx.queryData.Execute(ctx, query)
 		require.NoError(b, err)
 		for _, r := range resp.Responses {
 			require.NoError(b, r.Error)
@@ -55,10 +69,18 @@ func BenchmarkExemplarJson(b *testing.B) {
 
 var resp *backend.QueryDataResponse
 
-// when memory-profiling this benchmark, these commands are recommended:
-// - go test -benchmem -run=^$ -bench ^BenchmarkRangeJson$ github.com/grafana/grafana-prometheus-datasource/pkg/promlib/querydata -memprofile memprofile.out -count 6 | tee old.txt
-// - go tool pprof -http=localhost:6061 memprofile.out
-// - benchstat old.txt new.txt
+/*
+when memory-profiling this benchmark, these commands are recommended:
+
+	go test -benchmem -run=^$ \
+		-bench ^BenchmarkRangeJson$ github.com/grafana/grafana-prometheus-datasource/pkg/promlib/querydata \
+		-memprofile range-json-mem.out -count 6 \
+		| tee range-json-baseline.txt
+
+	go tool pprof -http=localhost:6061 range-json-mem.out
+
+	benchstat range-json-baseline.txt range-json-candidate.txt
+*/
 func BenchmarkRangeJson(b *testing.B) {
 	var (
 		r   *backend.QueryDataResponse
