@@ -1,7 +1,7 @@
 import { expect, test } from '@grafana/plugin-e2e';
 
-// These tests exercise the datasource *resource* path (labels, label values,
-// rules) end-to-end through Grafana's externalized-plugin proxy. This is the
+// These tests exercise the datasource *resource* path (labels, label values)
+// end-to-end through Grafana's externalized-plugin proxy. This is the
 // path that regressed in production: the plugin decoded the gzip body but
 // relayed the upstream's stale Content-Encoding/Content-Length, so the proxy
 // hit a framing mismatch and returned HTTP 500. Queries were unaffected because
