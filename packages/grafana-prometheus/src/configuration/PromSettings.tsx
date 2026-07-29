@@ -39,6 +39,8 @@ type Props = Pick<DataSourcePluginOptionsEditorProps<PromOptions>, 'options' | '
   hideExemplars?: boolean;
   /** Show fields to configure query samples processed thresholds */
   showQuerySamplesProcessedThresholdFields?: boolean;
+  /** Show the query statistics setting */
+  showQueryStats?: boolean;
 };
 
 const httpOptions = [
@@ -84,7 +86,13 @@ const getOptionsWithDefaults = (options: DataSourceSettings<PromOptions>) => {
 export const PromSettings = (props: Props) => {
   const theme = useTheme2();
   const styles = overhaulStyles(theme);
-  const { onOptionsChange, hidePrometheusTypeVersion, hideExemplars, showQuerySamplesProcessedThresholdFields } = props;
+  const {
+    onOptionsChange,
+    hidePrometheusTypeVersion,
+    hideExemplars,
+    showQuerySamplesProcessedThresholdFields,
+    showQueryStats,
+  } = props;
 
   const editorOptions = [
     {
@@ -616,6 +624,31 @@ export const PromSettings = (props: Props) => {
                 {validateInput(seriesLimit, NON_NEGATIVE_INTEGER_REGEX, seriesLimitError)}
               </>
             </InlineField>
+            {showQueryStats && (
+              <InlineField
+                labelWidth={PROM_CONFIG_LABEL_WIDTH}
+                label={t('grafana-prometheus.configuration.prom-settings.label-query-statistics', 'Query statistics')}
+                tooltip={
+                  <Trans i18nKey="grafana-prometheus.configuration.prom-settings.tooltip-query-statistics">
+                    Request query processing statistics and show the total queryable samples in Query Inspector. This
+                    can increase the response payload size.
+                  </Trans>
+                }
+                interactive={true}
+                disabled={optionsWithDefaults.readOnly}
+                className={styles.switchField}
+              >
+                <Switch
+                  value={optionsWithDefaults.jsonData.queryStatsEnabled ?? false}
+                  onChange={onUpdateDatasourceJsonDataOptionChecked(props, 'queryStatsEnabled')}
+                  disabled={optionsWithDefaults.readOnly}
+                  aria-label={t(
+                    'grafana-prometheus.configuration.prom-settings.aria-label-query-statistics',
+                    'Query statistics'
+                  )}
+                />
+              </InlineField>
+            )}
             {showQuerySamplesProcessedThresholdFields && (
               <>
                 {(hasWarningThresholdConflict || hasErrorThresholdConflict) && (

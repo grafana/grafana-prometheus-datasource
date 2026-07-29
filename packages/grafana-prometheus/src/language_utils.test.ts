@@ -1,7 +1,16 @@
 // Core Grafana history https://github.com/grafana/grafana/blob/v11.0.0-preview/public/app/plugins/datasource/prometheus/language_utils.test.ts
-import { type Moment } from 'moment';
+import {
+  AbstractLabelOperator,
+  type AbstractQuery,
+  type DateTime,
+  dateTime,
+  dateTimeAsMoment,
+  type TimeRange,
+} from '@grafana/data';
 
-import { AbstractLabelOperator, type AbstractQuery, type DateTime, dateTime, type TimeRange } from '@grafana/data';
+// moment-like interface as surfaced through @grafana/data, so this file does not need to depend
+// on the moment package directly
+type Moment = ReturnType<typeof dateTimeAsMoment>;
 
 import { escapeLabelValueInExactSelector, escapeLabelValueInRegexSelector } from './escaping';
 import {
@@ -272,7 +281,7 @@ describe('getRangeSnapInterval', () => {
     const nowPlusOneMinute = now + 1000 * 60;
     const nowPlusTwoMinute = now + 1000 * 60 * 2;
 
-    const nowTime = dateTime(now) as Moment;
+    const nowTime = dateTimeAsMoment(now);
 
     const expectedFrom = nowTime.clone().startOf('minute').subtract(queryDurationMinutes, 'minute');
     const expectedTo = nowTime.clone().startOf('minute').add(1, 'minute');
@@ -326,9 +335,9 @@ describe('getRangeSnapInterval', () => {
     const nowPlusOneMinute = now + 1000 * 60;
     const nowPlusTwoMinute = now + 1000 * 60 * 2;
 
-    const nowTime = dateTime(now) as Moment;
-    const nowTimePlusOne = dateTime(nowPlusOneMinute) as Moment;
-    const nowTimePlusTwo = dateTime(nowPlusTwoMinute) as Moment;
+    const nowTime = dateTimeAsMoment(now);
+    const nowTimePlusOne = dateTimeAsMoment(nowPlusOneMinute);
+    const nowTimePlusTwo = dateTimeAsMoment(nowPlusTwoMinute);
 
     const calculateClosest10 = (date: Moment): Moment => {
       const numberOfMinutes = Math.floor(date.minutes() / 10) * 10;
@@ -403,9 +412,9 @@ describe('getRangeSnapInterval', () => {
     const nowPlusOneMinute = now + 1000 * 60;
     const nowPlusTwoMinute = now + 1000 * 60 * 2;
 
-    const nowTime = dateTime(now) as Moment;
-    const nowTimePlusOne = dateTime(nowPlusOneMinute) as Moment;
-    const nowTimePlusTwo = dateTime(nowPlusTwoMinute) as Moment;
+    const nowTime = dateTimeAsMoment(now);
+    const nowTimePlusOne = dateTimeAsMoment(nowPlusOneMinute);
+    const nowTimePlusTwo = dateTimeAsMoment(nowPlusTwoMinute);
 
     const calculateClosest60 = (date: Moment): Moment => {
       const numberOfMinutes = Math.floor(date.minutes() / 60) * 60;
