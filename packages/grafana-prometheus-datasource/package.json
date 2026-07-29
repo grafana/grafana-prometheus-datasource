@@ -1,6 +1,6 @@
 {
   "name": "grafana-prometheus-datasource",
-  "version": "13.1.5",
+  "version": "13.1.6",
   "packageManager": "npm@11.18.0",
   "private": true,
   "engines": {
