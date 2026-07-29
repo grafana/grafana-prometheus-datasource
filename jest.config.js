@@ -48,7 +48,7 @@ const pluginProject = {
   },
   transform: { '^.+\\.(t|j)sx?$': swcTransform },
   // monaco-promql ships ESM only; add it to the transform allowlist
-  transformIgnorePatterns: [nodeModulesToTransform([...grafanaESModules, 'monaco-promql'])],
+  transformIgnorePatterns: [nodeModulesToTransform([...grafanaESModules, 'monaco-promql', '@marcbachmann/cel-js'])],
 };
 
 // Project 2: the @grafana/prometheus library source under packages/grafana-prometheus.

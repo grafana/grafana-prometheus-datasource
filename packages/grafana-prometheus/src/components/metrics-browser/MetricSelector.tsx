@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react';
+import { useDebounce } from 'react-use';
 import { FixedSizeList } from 'react-window';
 
 import { selectors } from '@grafana/e2e-selectors';
 import { Trans, t } from '@grafana/i18n';
+import { reportInteraction } from '@grafana/runtime';
 import { BrowserLabel as PromLabel, Input, Label, useStyles2 } from '@grafana/ui';
 
 import { LIST_ITEM_SIZE } from '../../constants';
@@ -22,6 +24,19 @@ export function MetricSelector() {
   const filteredMetrics = useMemo(() => {
     return metrics.filter((m) => m.name === selectedMetric || m.name.includes(metricSearchTerm));
   }, [metrics, selectedMetric, metricSearchTerm]);
+
+  useDebounce(
+    () => {
+      if (metricSearchTerm) {
+        reportInteraction('grafana_prometheus_metrics_browser_metric_search_performed', {
+          searchQuery: metricSearchTerm,
+          resultsCount: filteredMetrics.length,
+        });
+      }
+    },
+    500,
+    [metricSearchTerm]
+  );
 
   return (
     <div>

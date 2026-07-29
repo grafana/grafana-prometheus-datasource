@@ -3,6 +3,7 @@ import { userEvent } from '@testing-library/user-event';
 import { type ReactNode } from 'react';
 
 import { type TimeRange } from '@grafana/data';
+import { reportInteraction } from '@grafana/runtime';
 
 import { DEFAULT_SERIES_LIMIT, LAST_USED_LABELS_KEY, METRIC_LABEL } from '../../constants';
 import { type PrometheusDatasource } from '../../datasource';
@@ -10,6 +11,11 @@ import { type PrometheusLanguageProviderInterface } from '../../language_provide
 import { getMockTimeRange } from '../../test/mocks/datasource';
 
 import { MetricsBrowserProvider, useMetricsBrowser } from './MetricsBrowserContext';
+
+jest.mock('@grafana/runtime', () => ({
+  ...jest.requireActual('@grafana/runtime'),
+  reportInteraction: jest.fn(),
+}));
 
 const setupLocalStorageMock = () => {
   let store: Record<string, string> = {};
@@ -413,6 +419,87 @@ describe('MetricsBrowserContext', () => {
         expect(screen.getByTestId('selected-label-keys').textContent).toBe('');
         expect(screen.getByTestId('selector').textContent).toBe('{}');
       });
+    });
+  });
+
+  describe('interaction tracking', () => {
+    it('reports select and deselect for a metric click', async () => {
+      const user = userEvent.setup();
+      const { renderWithProvider } = setupTest();
+      renderWithProvider(<TestComponent />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('metrics-count').textContent).toBe('3');
+      });
+
+      await user.click(screen.getByTestId('select-metric'));
+      expect(reportInteraction).toHaveBeenCalledWith('grafana_prometheus_metrics_browser_metric_clicked', {
+        action: 'selected',
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('selected-metric').textContent).toBe('metric1');
+      });
+
+      await user.click(screen.getByTestId('select-metric'));
+      expect(reportInteraction).toHaveBeenCalledWith('grafana_prometheus_metrics_browser_metric_clicked', {
+        action: 'deselected',
+      });
+    });
+
+    it('reports select and deselect for a label key click', async () => {
+      const user = userEvent.setup();
+      const { renderWithProvider } = setupTest();
+      renderWithProvider(<TestComponent />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('metrics-count').textContent).toBe('3');
+      });
+
+      await user.click(screen.getByTestId('select-label'));
+      expect(reportInteraction).toHaveBeenCalledWith('grafana_prometheus_metrics_browser_label_key_clicked', {
+        action: 'selected',
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('selected-label-keys').textContent).toBe('job');
+      });
+
+      await user.click(screen.getByTestId('select-label'));
+      expect(reportInteraction).toHaveBeenCalledWith('grafana_prometheus_metrics_browser_label_key_clicked', {
+        action: 'deselected',
+      });
+    });
+
+    it('reports selected for a label value click', async () => {
+      const user = userEvent.setup();
+      const { renderWithProvider } = setupTest();
+      renderWithProvider(<TestComponent />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('metrics-count').textContent).toBe('3');
+      });
+
+      await user.click(screen.getByTestId('select-label-value'));
+      expect(reportInteraction).toHaveBeenCalledWith('grafana_prometheus_metrics_browser_label_value_clicked', {
+        action: 'selected',
+      });
+    });
+
+    it('reports validate and clear clicks', async () => {
+      const user = userEvent.setup();
+      const { renderWithProvider } = setupTest();
+      renderWithProvider(<TestComponent />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('metrics-count').textContent).toBe('3');
+      });
+
+      await user.click(screen.getByTestId('validate'));
+      expect(reportInteraction).toHaveBeenCalledWith('grafana_prometheus_metrics_browser_validate_clicked');
+
+      await user.click(screen.getByTestId('clear'));
+      expect(reportInteraction).toHaveBeenCalledWith('grafana_prometheus_metrics_browser_clear_clicked');
     });
   });
 

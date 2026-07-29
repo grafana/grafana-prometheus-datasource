@@ -3,6 +3,7 @@ import { type ReactElement, useMemo } from 'react';
 import Highlighter from 'react-highlight-words';
 
 import { t, Trans } from '@grafana/i18n';
+import { reportInteraction } from '@grafana/runtime';
 import { Icon, Tooltip, useStyles2 } from '@grafana/ui';
 
 import { docsTip } from '../../../configuration/shared/utils';
@@ -38,6 +39,12 @@ export function ResultsTable(props: ResultsTableProps) {
 
   function selectMetric(metric: MetricData) {
     if (metric.value) {
+      reportInteraction('grafana_prometheus_metrics_explorer_metric_selected', {
+        hasType: !!metric.type,
+        searchQuery: searchedText,
+        selectedTypesCount: selectedTypes.length,
+        pageNum,
+      });
       onChange({ ...query, metric: metric.value });
       onClose();
     }

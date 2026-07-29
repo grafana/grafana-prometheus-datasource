@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
+import { useDebounce } from 'react-use';
 
 import { selectors } from '@grafana/e2e-selectors';
 import { Trans, t } from '@grafana/i18n';
+import { reportInteraction } from '@grafana/runtime';
 import { BrowserLabel as PromLabel, Input, Label, useStyles2, Spinner } from '@grafana/ui';
 
 import { METRIC_LABEL } from '../../constants';
@@ -20,6 +22,19 @@ export function LabelSelector() {
       (lk) => lk !== METRIC_LABEL && (selectedLabelKeys.includes(lk) || lk.includes(labelSearchTerm))
     );
   }, [labelKeys, labelSearchTerm, selectedLabelKeys]);
+
+  useDebounce(
+    () => {
+      if (labelSearchTerm) {
+        reportInteraction('grafana_prometheus_metrics_browser_label_search_performed', {
+          searchQuery: labelSearchTerm,
+          resultsCount: filteredLabelKeys.length,
+        });
+      }
+    },
+    500,
+    [labelSearchTerm]
+  );
 
   return (
     <div className={styles.section}>

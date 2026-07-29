@@ -102,10 +102,10 @@ jobs:
           package-manager-cache: false # Disable cache!
 
       - name: Install dependencies
-        run: yarn install --immutable
+        run: npm ci
 
       - name: Build library
-        run: yarn workspace @grafana/prometheus build
+        run: npm run build --workspace=@grafana/prometheus
 
       - name: Determine npm tag
         id: npm_tag

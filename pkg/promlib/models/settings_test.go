@@ -108,6 +108,26 @@ func TestParsePromOptions_EmptyJSONData(t *testing.T) {
 	}
 }
 
+func TestParsePromOptions_QueryStatsEnabled(t *testing.T) {
+	tests := []struct {
+		name string
+		json map[string]any
+		want bool
+	}{
+		{name: "true", json: map[string]any{"queryStatsEnabled": true}, want: true},
+		{name: "false", json: map[string]any{"queryStatsEnabled": false}, want: false},
+		{name: "missing defaults to false", json: map[string]any{}, want: false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			opts, err := models.ParsePromOptions(settingsWithJSON(t, tc.json))
+			require.NoError(t, err)
+			require.Equal(t, tc.want, opts.QueryStatsEnabled)
+		})
+	}
+}
+
 func TestPromOptions_ApplyDefaults(t *testing.T) {
 	cases := []struct {
 		name       string
