@@ -1,5 +1,9 @@
 # promlib
 
+## 0.0.17
+
+🐛 Request and expose Prometheus query statistics ([#259](https://github.com/grafana/grafana-prometheus-datasource/pull/259))
+
 ## 0.0.16
 
 🐛 Improve benchmark tests
