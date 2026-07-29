@@ -898,10 +898,10 @@ func readFloat64String(iter *sdkjsoniter.Iterator) (float64, error) {
 		return 0, err
 	}
 
-	// #nosec G103 nosemgrep: G103
 	// Convert string to float64 without allocation.
 	// https://github.com/search?q=org%3Agrafana+yoloString&type=code
-	return strconv.ParseFloat(*(*string)(unsafe.Pointer(&buf)), 64)
+	// #nosec G103 -- the byte slice remains alive for the duration of ParseFloat.
+	return strconv.ParseFloat(*(*string)(unsafe.Pointer(&buf)), 64) // nosemgrep: go.lang.security.audit.unsafe.use-of-unsafe-block
 }
 
 func readStream(iter *sdkjsoniter.Iterator) backend.DataResponse {
