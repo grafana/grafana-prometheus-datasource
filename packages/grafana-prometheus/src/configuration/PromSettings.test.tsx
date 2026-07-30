@@ -71,6 +71,13 @@ describe('PromSettings', () => {
       expect(screen.getByText('Use series endpoint')).toBeInTheDocument();
     });
 
+    it('should have a search API configuration element', () => {
+      const options = defaultProps;
+
+      render(<PromSettings onOptionsChange={() => {}} options={options} />);
+      expect(screen.getByText('Search API')).toBeInTheDocument();
+    });
+
     it('should hide query samples processed threshold fields by default', () => {
       const options = defaultProps;
 

@@ -263,7 +263,7 @@ export class SeriesApiClient extends BaseResourceClient implements ResourceApiCl
   };
 }
 
-class ResourceClientsCache {
+export class ResourceClientsCache {
   private readonly MAX_CACHE_ENTRIES = 1000; // Maximum number of cache entries
   private readonly MAX_CACHE_SIZE_BYTES = 50 * 1024 * 1024; // 50MB max cache size
 

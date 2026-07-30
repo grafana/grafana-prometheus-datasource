@@ -1,5 +1,6 @@
 import { config } from '@grafana/runtime';
 
+import { DEFAULT_COMPLETION_LIMIT } from '../../../constants';
 import { getFunctions } from '../../../promql';
 import { getMockTimeRange } from '../../../test/mocks/datasource';
 
@@ -15,6 +16,7 @@ const dataProviderSettings = {
     queryMetricsMetadata: jest.fn().mockResolvedValue({}),
     retrieveLabelKeys: jest.fn(),
     retrieveMetricsMetadata: jest.fn().mockReturnValue({}),
+    getSearchApiClient: jest.fn().mockReturnValue(undefined),
   },
   historyProvider: history.map((expr, idx) => ({ query: { expr, refId: 'some-ref' }, ts: idx })),
 } as unknown as DataProviderParams;
@@ -189,6 +191,26 @@ describe('Label value completions', () => {
       expect(completions[1].insertText).toBe('"value\\"2"');
       expect(completions[2].insertText).toBe('"value\\\\3"');
       expect(completions[3].insertText).toBe('"value\'4"');
+    });
+
+    it('passes the typed term to label value search', async () => {
+      const queryLabelValues = jest.spyOn(dataProvider, 'queryLabelValues').mockResolvedValue(['production']);
+      const situation: Situation = {
+        type: 'IN_LABEL_SELECTOR_WITH_LABEL_NAME',
+        labelName: 'environment',
+        betweenQuotes: true,
+        otherLabels: [],
+      };
+
+      await getCompletions(situation, dataProvider, timeRange, 'prod');
+
+      expect(queryLabelValues).toHaveBeenCalledWith(
+        timeRange,
+        'environment',
+        undefined,
+        DEFAULT_COMPLETION_LIMIT,
+        'prod'
+      );
     });
   });
 

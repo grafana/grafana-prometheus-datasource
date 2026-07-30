@@ -11,6 +11,8 @@ import {
   PrometheusLanguageProvider,
 } from './language_provider';
 import { getPrometheusTime, getRangeSnapInterval } from './language_utils';
+import { LabelsApiClient, SeriesApiClient } from './resource_clients';
+import { SearchApiClient } from './search_api_client';
 import { PrometheusCacheLevel, type PromQuery } from './types';
 
 jest.mock('./language_utils', () => ({
@@ -62,6 +64,7 @@ describe('PrometheusLanguageProvider', () => {
     getTimeRangeParams: getTimeRangeParams,
     interpolateString: (string: string) => string,
     hasLabelsMatchAPISupport: () => false,
+    hasSearchApiSupport: () => false,
     getDaysToCacheMetadata: () => 1,
     getAdjustedInterval: () => getRangeSnapInterval(PrometheusCacheLevel.None, getMockQuantizedTimeRangeParams()),
     cacheLevel: PrometheusCacheLevel.None,
@@ -73,7 +76,7 @@ describe('PrometheusLanguageProvider', () => {
   describe('constructor', () => {
     it('should initialize with SeriesApiClient when labels match API is not supported', () => {
       const provider = new PrometheusLanguageProvider(defaultDatasource);
-      expect(provider).toBeInstanceOf(PrometheusLanguageProvider);
+      expect(provider['resourceClient']).toBeInstanceOf(SeriesApiClient);
     });
 
     it('should initialize with LabelsApiClient when labels match API is supported', () => {
@@ -82,7 +85,19 @@ describe('PrometheusLanguageProvider', () => {
         hasLabelsMatchAPISupport: () => true,
       } as unknown as PrometheusDatasource;
       const provider = new PrometheusLanguageProvider(datasourceWithLabelsAPI);
-      expect(provider).toBeInstanceOf(PrometheusLanguageProvider);
+      expect(provider['resourceClient']).toBeInstanceOf(LabelsApiClient);
+    });
+
+    it('should prefer SearchApiClient when search API is enabled', () => {
+      const datasourceWithSearchAPI = {
+        ...defaultDatasource,
+        hasSearchApiSupport: () => true,
+      } as unknown as PrometheusDatasource;
+      const provider = new PrometheusLanguageProvider(datasourceWithSearchAPI);
+
+      expect(provider['resourceClient']).toBeInstanceOf(SearchApiClient);
+      expect(provider.hasSearchSupport()).toBe(true);
+      expect(provider.getSearchApiClient()).toBeInstanceOf(SearchApiClient);
     });
   });
 

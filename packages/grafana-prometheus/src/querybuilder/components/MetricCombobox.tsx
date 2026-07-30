@@ -1,5 +1,5 @@
 import { css } from '@emotion/css';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { type GrafanaTheme2, type SelectableValue, type TimeRange } from '@grafana/data';
 import { selectors } from '@grafana/e2e-selectors';
@@ -8,7 +8,7 @@ import { EditorField, EditorFieldGroup } from '@grafana/plugin-ui';
 import { reportInteraction } from '@grafana/runtime';
 import { Button, InlineField, InlineFieldRow, Combobox, type ComboboxOption, useTheme2 } from '@grafana/ui';
 
-import { METRIC_LABEL } from '../../constants';
+import { DEFAULT_COMPLETION_LIMIT, METRIC_LABEL } from '../../constants';
 import { type PrometheusDatasource } from '../../datasource';
 import { type QueryBuilderLabelFilter } from '../shared/types';
 import { type PromVisualQuery } from '../types';
@@ -38,6 +38,7 @@ export function MetricCombobox({
   timeRange,
 }: Readonly<MetricComboboxProps>) {
   const [metricsModalOpen, setMetricsModalOpen] = useState(false);
+  const searchAbortControllerRef = useRef<AbortController>();
   const styles = getStyles(useTheme2());
 
   /**
@@ -45,6 +46,25 @@ export function MetricCombobox({
    */
   const getMetricLabels = useCallback(
     async (query: string) => {
+      const searchClient = datasource.languageProvider.getSearchApiClient();
+      if (searchClient) {
+        // The search endpoint ranks the user's raw text. Label filters remain a
+        // match[] selector, and cancellation prevents stale options winning.
+        searchAbortControllerRef.current?.abort();
+        const abortController = new AbortController();
+        searchAbortControllerRef.current = abortController;
+        const match = labelsFilters.length > 0 ? formatKeyValueStrings('', labelsFilters) : undefined;
+        const response = await searchClient.searchMetricNames(timeRange, query, {
+          limit: DEFAULT_COMPLETION_LIMIT,
+          match,
+          signal: abortController.signal,
+        });
+        return response.results.map((result) => ({
+          label: result.name,
+          value: result.name,
+        }));
+      }
+
       const match = formatKeyValueStrings(query, labelsFilters);
       const results = await datasource.languageProvider.queryLabelValues(timeRange, METRIC_LABEL, match);
 
@@ -58,6 +78,8 @@ export function MetricCombobox({
     },
     [datasource.languageProvider, labelsFilters, timeRange]
   );
+
+  useEffect(() => () => searchAbortControllerRef.current?.abort(), []);
 
   const onComboboxChange = useCallback(
     (opt: ComboboxOption<string> | null) => {
