@@ -17,7 +17,7 @@
     "server": "docker compose up --build",
     "sign": "sign-plugin",
     "changeset": "node scripts/add-changeset.js",
-    "changeset:version": "node scripts/version-changeset.js",
+    "changeset:version": "node scripts/version-changeset.js && npm install",
     "i18n-extract": "i18next-cli extract --sync-primary"
   },
   "author": "Grafana",
