@@ -31,7 +31,7 @@ require (
 	github.com/go-openapi/swag/typeutils v0.26.1 // indirect
 	github.com/go-openapi/swag/yamlutils v0.26.1 // indirect
 	github.com/google/gnostic-models v0.7.1 // indirect
-	github.com/grafana/dsconfig/dsconfig v0.0.7 // indirect
+	github.com/grafana/dsconfig/dsconfig v0.0.12 // indirect
 	github.com/grafana/dskit v0.0.0-20260427162712-0457a92dacc3 // indirect
 	github.com/grafana/grafana/apps/scope v0.0.0-20260427171703-d4f46decefcb // indirect
 	github.com/grafana/grafana/pkg/apimachinery v0.0.0-20260118065639-60cb766a97d6 // indirect
@@ -129,7 +129,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.44.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.10.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
-	golang.org/x/exp v0.0.0-20260312153236-7ab1446f8b90 // indirect
+	golang.org/x/exp v0.0.0-20260611194520-c48552f49976 // indirect
 	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/sync v0.21.0 // indirect
 	golang.org/x/sys v0.46.0 // indirect
