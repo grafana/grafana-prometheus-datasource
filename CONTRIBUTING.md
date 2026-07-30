@@ -14,13 +14,52 @@ You can browse [existing issues](https://github.com/grafana/grafana-prometheus-d
 ## Required Tools
 
 | Tool                              | Notes                                       |
-| --------------------------------- | ------------------------------------------- |
+| --------------------------------- |---------------------------------------------|
 | [Git](https://git-scm.com/)       | Version control                             |
 | [Go](https://go.dev/)             | See `go.mod` for minimum version            |
 | [Mage](https://magefile.org/)     | Backend build tool                          |
-| [Node.js](https://nodejs.org/)    | `>=22`; see `.nvmrc` for the pinned version |
+| [Node.js](https://nodejs.org/)    | `>=24`; see `.nvmrc` for the pinned version |
 | [npm](https://www.npmjs.com/)     | JavaScript package manager                  |
 | [Docker](https://www.docker.com/) | Required for local Grafana and e2e tests    |
+ 
+### Package manager version
+
+This repository defines the required package manager and its exact version in the
+`packageManager` field of `package.json`. You don't have to use it, but enabling
+[Corepack](https://github.com/nodejs/corepack) is a convenient way to make your
+terminal automatically use that version instead of whatever `npm` you have
+installed globally:
+
+Corepack is included with many Node.js distributions. Check whether it is
+available:
+
+```bash
+corepack --version
+```
+
+If the command is unavailable, install the standalone Corepack package:
+
+```bash
+npm install --global --ignore-scripts corepack
+```
+
+Then enable its npm shim:
+
+```bash
+corepack enable npm
+```
+
+Restart your terminal after enabling Corepack. No directory-change hook is
+required: once enabled, Corepack reads the nearest `package.json` whenever you
+run `npm`, in any directory. You can verify the selected version from the
+repository directory:
+
+```bash
+npm --version
+```
+
+Corepack manages the package manager version only; it does not install or select
+the Node.js version specified by the `engines` field.
 
 ## Frontend Development
 
