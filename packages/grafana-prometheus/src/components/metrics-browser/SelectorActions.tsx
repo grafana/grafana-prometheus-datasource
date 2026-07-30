@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 
 import { selectors } from '@grafana/e2e-selectors';
 import { Trans, t } from '@grafana/i18n';
+import { reportInteraction } from '@grafana/runtime';
 import { Button, Label, Stack, useStyles2 } from '@grafana/ui';
 
 import { EMPTY_SELECTOR } from '../../constants';
@@ -17,10 +18,12 @@ export function SelectorActions() {
   const selector = getSelector();
 
   const onClickRunQuery = () => {
+    reportInteraction('grafana_prometheus_metrics_browser_query_applied', { asRateQuery: false });
     onChange(selector);
   };
 
   const onClickRunRateQuery = () => {
+    reportInteraction('grafana_prometheus_metrics_browser_query_applied', { asRateQuery: true });
     const query = `rate(${selector}[$__rate_interval])`;
     onChange(query);
   };

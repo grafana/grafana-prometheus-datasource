@@ -40,6 +40,15 @@ func (s *QueryData) parseResponse(ctx context.Context, q *models.Query, res *htt
 		statusCode == http.StatusUnprocessableEntity,
 		statusCode == http.StatusServiceUnavailable:
 
+		// res.Body is read directly without calling utils.Decode because Go's
+		// http.Transport transparently decompresses gzip responses when it
+		// adds Accept-Encoding: gzip itself. At that point Content-Encoding is
+		// removed from the response headers and the body is already plaintext.
+		// The resource path (resource.go) requires an explicit utils.Decode call
+		// because browser-originated Accept-Encoding headers can reach the
+		// outgoing request via ForwardHTTPHeaders, bypassing Go's auto-decompression.
+		// Query requests are always constructed fresh inside the plugin (client.go)
+		// with no external Accept-Encoding, so Go's transparent decompression applies.
 		iter := jsoniter.Parse(jsoniter.ConfigDefault, res.Body, 1024)
 		r := converter.ReadPrometheusStyleResult(iter, converter.Options{})
 		r.Status = backend.Status(res.StatusCode)

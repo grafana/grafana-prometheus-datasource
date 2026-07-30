@@ -64,6 +64,15 @@ func (r *Resource) Execute(ctx context.Context, req *backend.CallResourceRequest
 	if err != nil {
 		return nil, err
 	}
+
+	// The body has been decoded to plaintext, so the framing/encoding headers that
+	// described the original (compressed) payload no longer apply. Leaving them in
+	// place makes the response advertise an encoding/length that no longer matches
+	// the body, which a downstream proxy rejects with an HTTP 500.
+	resp.Header.Del("Content-Encoding")
+	resp.Header.Del("Content-Length")
+	resp.Header.Del("Transfer-Encoding")
+
 	callResponse := &backend.CallResourceResponse{
 		Status:  resp.StatusCode,
 		Headers: resp.Header,
@@ -181,6 +190,12 @@ func (r *Resource) GetSuggestions(ctx context.Context, req *backend.CallResource
 
 	newReq := &backend.CallResourceRequest{
 		PluginContext: req.PluginContext,
+	}
+
+	// Execute reads X-Grafana-Cache to set Cache-Control on the response.
+	// Carry it forward from the original request so suggestion responses are cached.
+	if v := req.GetHTTPHeaders().Get("X-Grafana-Cache"); v != "" {
+		newReq.Headers = map[string][]string{"X-Grafana-Cache": {v}}
 	}
 
 	if sugReq.LabelName != "" {

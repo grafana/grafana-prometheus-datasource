@@ -2,4 +2,4 @@
 'grafana-prometheus-datasource': patch
 ---
 
-Updating CI/CD workflows
+Use npm as package manager

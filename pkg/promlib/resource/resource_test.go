@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"testing"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
@@ -111,6 +112,50 @@ func TestResource_ExecuteDecodesCompressedResponse(t *testing.T) {
 	require.Equal(t, body, resp.Body)
 }
 
+func TestResource_ExecuteStripsEncodingHeadersAfterDecode(t *testing.T) {
+	body := []byte(`{"status":"success","data":{"groups":[]}}`)
+	gzipped := gzipBody(t, body)
+	mockClient := &http.Client{
+		Transport: &mockRoundTripper{
+			Response: &http.Response{
+				StatusCode: 200,
+				Body:       io.NopCloser(bytes.NewReader(gzipped)),
+				Header: http.Header{
+					"Content-Encoding":  []string{"gzip"},
+					"Content-Length":    []string{strconv.Itoa(len(gzipped))},
+					"Transfer-Encoding": []string{"chunked"},
+					"Content-Type":      []string{"application/json"},
+				},
+			},
+		},
+	}
+	settings := backend.DataSourceInstanceSettings{
+		ID:       1,
+		URL:      "http://mock-server",
+		JSONData: []byte(`{}`),
+	}
+	res, err := resource.New(mockClient, settings, log.DefaultLogger)
+	require.NoError(t, err)
+
+	resp, err := res.Execute(context.Background(), &backend.CallResourceRequest{
+		URL: "/api/v1/rules",
+	})
+	require.NoError(t, err)
+
+	// Body is decoded to plaintext...
+	require.Equal(t, body, resp.Body)
+
+	// ...so the stale framing/encoding headers describing the compressed payload
+	// must be removed to avoid a length/encoding mismatch downstream (HTTP 500).
+	headers := http.Header(resp.Headers)
+	require.Empty(t, headers.Get("Content-Encoding"), "Content-Encoding must be stripped after decode")
+	require.Empty(t, headers.Get("Content-Length"), "Content-Length must be stripped after decode")
+	require.Empty(t, headers.Get("Transfer-Encoding"), "Transfer-Encoding must be stripped after decode")
+
+	// Unrelated headers must be preserved.
+	require.Equal(t, "application/json", headers.Get("Content-Type"))
+}
+
 func TestResource_GetSuggestions(t *testing.T) {
 	mockClient, _, logger := setup()
 	settings := backend.DataSourceInstanceSettings{
@@ -141,6 +186,45 @@ func TestResource_GetSuggestions(t *testing.T) {
 	resp, err := res.GetSuggestions(ctx, req)
 	require.NoError(t, err)
 	assert.NotNil(t, resp)
+}
+
+func TestResource_GetSuggestionsForwardsCacheHeader(t *testing.T) {
+	mockClient := &http.Client{
+		Transport: &mockRoundTripper{
+			Response: &http.Response{
+				StatusCode: 200,
+				Body:       io.NopCloser(bytes.NewReader([]byte(`{"status":"success","data":["instance"]}`))),
+				Header:     make(http.Header),
+			},
+		},
+	}
+	settings := backend.DataSourceInstanceSettings{
+		ID:       1,
+		URL:      "http://localhost:9090",
+		JSONData: []byte(`{"httpMethod": "GET"}`),
+	}
+	res, err := resource.New(mockClient, settings, log.DefaultLogger)
+	require.NoError(t, err)
+
+	suggestionReq := resource.SuggestionRequest{
+		LabelName: "instance",
+		Queries:   []string{"up"},
+	}
+	body, err := json.Marshal(suggestionReq)
+	require.NoError(t, err)
+
+	resp, err := res.GetSuggestions(context.Background(), &backend.CallResourceRequest{
+		Body:    body,
+		Headers: map[string][]string{"X-Grafana-Cache": {"max-age=300"}},
+	})
+	require.NoError(t, err)
+
+	// The X-Grafana-Cache directive from the original request must be honoured
+	// by the inner Execute call so that Cache-Control is present in the response.
+	headers := http.Header(resp.Headers)
+	require.Equal(t, "max-age=300", headers.Get("Cache-Control"),
+		"Cache-Control must be set when X-Grafana-Cache is forwarded")
+	require.Equal(t, "y", headers.Get("X-Grafana-Cache"))
 }
 
 func TestResource_GetSuggestionsWithEmptyQueriesButFilters(t *testing.T) {

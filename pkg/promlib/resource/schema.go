@@ -157,6 +157,10 @@ func (p *SchemaProvider) fetchPrometheusLabels(ctx context.Context, path string,
 	if len(params) > 0 {
 		reqURL = path + "?" + params.Encode()
 	}
+	// QueryResource is used directly (instead of resource.Execute) because schema
+	// calls only need the raw body bytes and do not need the cache-header
+	// side-effects that Execute applies. utils.Decode handles decompression
+	// explicitly, mirroring what Execute does for external resource calls.
 	resp, err := p.resource.promClient.QueryResource(ctx, &backend.CallResourceRequest{
 		Method: http.MethodGet,
 		Path:   path,
@@ -208,6 +212,7 @@ func (p *SchemaProvider) fetchMetricMetadata(ctx context.Context, metric string)
 	params.Set("metric", metric)
 	path := "api/v1/metadata"
 	reqURL := path + "?" + params.Encode()
+	// See fetchPrometheusLabels for why QueryResource is called directly here.
 	resp, err := p.resource.promClient.QueryResource(ctx, &backend.CallResourceRequest{
 		Method: http.MethodGet,
 		Path:   path,
