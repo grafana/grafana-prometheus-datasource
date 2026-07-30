@@ -45,9 +45,7 @@ jobs:
           package-manager-cache: false
 
       - name: Install dependencies
-        env:
-          YARN_ENABLE_HARDENED_MODE: '1'
-        run: yarn install --immutable
+        run: npm ci
 
       - name: Plan canary version
         id: plan
@@ -88,7 +86,7 @@ jobs:
 
       - name: Build library
         if: steps.plan.outputs.publish == 'true'
-        run: yarn workspace @grafana/prometheus build
+        run: npm run build --workspace=@grafana/prometheus
 
       - name: Set ephemeral canary version
         if: steps.plan.outputs.publish == 'true'

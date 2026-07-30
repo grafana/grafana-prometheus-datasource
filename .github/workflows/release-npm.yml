@@ -342,7 +342,7 @@ jobs:
           {
             printf ':bird: Published a canary of `@grafana/prometheus` from %s.\n\n' "$HEAD_SHA"
             printf '```bash\n'
-            printf 'yarn add @grafana/prometheus@%s\n' "$CANARY_VERSION"
+            printf 'npm install @grafana/prometheus@%s\n' "$CANARY_VERSION"
             printf '```\n'
           } > "$comment"
           gh pr comment "$PR_NUMBER" --repo "$REPO" --body-file "$comment"

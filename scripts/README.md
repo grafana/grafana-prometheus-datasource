@@ -88,7 +88,7 @@ changelog entry, add a throwaway `patch` Changeset for the package.
 Once published, the workflow comments the install command on the pull request:
 
 ```bash
-yarn add @grafana/prometheus@<exact-version>
+npm install @grafana/prometheus@<exact-version>
 ```
 
 #### How it works
