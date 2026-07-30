@@ -50,10 +50,7 @@ func (s *Service) GetBuildInfo(ctx context.Context, req BuildInfoRequest) (*Buil
 // getBuildInfo queries /api/v1/status/buildinfo
 func getBuildInfo(ctx context.Context, i *instance) (*BuildInfoResponse, error) {
 	resp, err := i.resource.Execute(ctx, &backend.CallResourceRequest{
-		Path: "api/v1/status/buildinfo",
-		// /api/v1/status/buildinfo is a GET-only endpoint. Force GET explicitly so the request
-		// does not inherit the datasource's configured HTTP method (POST by default), which would
-		// make GET-only status endpoints respond with 405 Method Not Allowed.
+		Path:   "api/v1/status/buildinfo",
 		Method: http.MethodGet,
 	})
 	if err != nil {
