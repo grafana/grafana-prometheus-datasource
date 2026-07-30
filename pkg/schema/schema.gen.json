@@ -162,6 +162,11 @@
               "type": "string",
               "x-dsconfig-depends-on": "jsonData_prometheusType != ''"
             },
+            "queryStatsEnabled": {
+              "description": "Request query processing statistics and show the total queryable samples in Query Inspector. This can increase the response payload size. When enabled the backend appends stats=all to /api/v1/query and /api/v1/query_range requests. Not exposed in the Prometheus config editor (the PromSettings component only renders this switch when its showQueryStats prop is true — the plugin never passes it), but the field is parsed by the backend.",
+              "type": "boolean",
+              "default": false
+            },
             "queryTimeout": {
               "description": "Set the Prometheus query timeout.",
               "type": "string"
