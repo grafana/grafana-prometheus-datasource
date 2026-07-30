@@ -101,10 +101,11 @@ Each PR must have a proper changeset that explains the PR's purpose in one line.
 
 To have a changeset, simply run `npm run changeset` and follow the CLI instructions.
 When targeting `@grafana/prometheus` or `promlib`, the command intentionally
-creates two changeset files: one for the selected library and a datasource
-patch changeset with the same summary. Both libraries are shipped as part of
-the datasource, so commit both generated files. A direct datasource changeset
-still creates only one file.
+creates two changeset files: one for the selected library and a mirrored
+datasource changeset with the same summary — matching the library's bump type
+for `@grafana/prometheus`, always patch for `promlib`. Both libraries are
+shipped as part of the datasource, so commit both generated files. A direct
+datasource changeset still creates only one file.
 
 ## Project Structure
 
