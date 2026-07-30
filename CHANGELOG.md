@@ -1,5 +1,13 @@
 # grafana-prometheus-datasource
 
+## 13.1.7
+
+🐛 Use npm as package manager ([#272](https://github.com/grafana/grafana-prometheus-datasource/pull/272))
+
+⚙️ Bump grafana-plugin-sdk-go to v0.294.0, enabling diagnostic bundle HTTP capture ([#288](https://github.com/grafana/grafana-prometheus-datasource/pull/288))
+
+🐛 Fix: force GET method for /api/v1/status/buildinfo to prevent 405 errors on POST-configured datasources ([#293](https://github.com/grafana/grafana-prometheus-datasource/pull/293))
+
 ## 13.1.6
 
 🐛 Dependency updates ([#91](https://github.com/grafana/grafana-prometheus-datasource/pull/91))
