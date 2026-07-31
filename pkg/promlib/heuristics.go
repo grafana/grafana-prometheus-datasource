@@ -50,7 +50,8 @@ func (s *Service) GetBuildInfo(ctx context.Context, req BuildInfoRequest) (*Buil
 // getBuildInfo queries /api/v1/status/buildinfo
 func getBuildInfo(ctx context.Context, i *instance) (*BuildInfoResponse, error) {
 	resp, err := i.resource.Execute(ctx, &backend.CallResourceRequest{
-		Path: "api/v1/status/buildinfo",
+		Path:   "api/v1/status/buildinfo",
+		Method: http.MethodGet,
 	})
 	if err != nil {
 		return nil, err

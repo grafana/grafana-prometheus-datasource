@@ -1,6 +1,6 @@
 {
   "name": "prometheus",
-  "version": "13.1.6",
+  "version": "13.1.7",
   "workspaces": [
     "packages/*"
   ],
@@ -99,7 +99,7 @@
   },
   "engines": {
     "node": ">=24",
-    "npm": ">=11.18.0"
+    "npm": ">=11.16.0"
   },
   "dependencies": {
     "@emotion/css": "11.10.6",

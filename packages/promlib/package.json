@@ -1,10 +1,10 @@
 {
   "name": "promlib",
-  "version": "0.0.17",
+  "version": "0.0.18",
   "packageManager": "npm@11.18.0",
   "private": true,
   "engines": {
     "node": ">=24",
-    "npm": ">=11.18.0"
+    "npm": ">=11.16.0"
   }
 }
