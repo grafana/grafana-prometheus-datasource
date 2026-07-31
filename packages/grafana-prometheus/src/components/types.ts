@@ -2,6 +2,9 @@
 import { type QueryEditorProps } from '@grafana/data';
 
 import { type PrometheusDatasource } from '../datasource';
+import { type QueryEditorCoauthoringRegistrar } from '../query_coauthoring/capability';
 import { type PromOptions, type PromQuery } from '../types';
 
-export type PromQueryEditorProps = QueryEditorProps<PrometheusDatasource, PromQuery, PromOptions>;
+export type PromQueryEditorProps = QueryEditorProps<PrometheusDatasource, PromQuery, PromOptions> & {
+  onRegisterQueryEditorCoauthoring?: QueryEditorCoauthoringRegistrar<PromQuery>;
+};

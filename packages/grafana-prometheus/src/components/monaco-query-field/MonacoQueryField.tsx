@@ -10,6 +10,7 @@ import { type GrafanaTheme2 } from '@grafana/data';
 import { selectors } from '@grafana/e2e-selectors';
 import { type Monaco, type monacoTypes, ReactMonacoEditor, useTheme2 } from '@grafana/ui';
 
+import { createPrometheusCoauthoringCapability } from '../../query_coauthoring/capability';
 import { type Props } from './MonacoQueryFieldProps';
 import { getOverrideServices } from './getOverrideServices';
 import { DataProvider } from './monaco-completion-provider/data_provider';
@@ -101,6 +102,61 @@ const getStyles = (theme: GrafanaTheme2, placeholder: string) => {
         opacity: 0.6,
       },
     }),
+    coauthoringWidget: css({
+      zIndex: theme.zIndex.portal,
+      minWidth: 288,
+      maxWidth: 360,
+      color: theme.colors.text.primary,
+      background: theme.colors.background.secondary,
+      border: `1px solid ${theme.colors.border.weak}`,
+      borderRadius: theme.shape.radius.default,
+      boxShadow: theme.shadows.z3,
+      overflow: 'hidden',
+    }),
+    coauthoringToolbar: css({
+      display: 'flex',
+      alignItems: 'center',
+      gap: theme.spacing(0.5),
+      padding: theme.spacing(0.5),
+    }),
+    coauthoringButton: css({
+      appearance: 'none',
+      border: 0,
+      borderRadius: theme.shape.radius.default,
+      color: theme.colors.text.primary,
+      background: 'transparent',
+      cursor: 'pointer',
+      font: 'inherit',
+      fontSize: theme.typography.bodySmall.fontSize,
+      lineHeight: theme.typography.bodySmall.lineHeight,
+      padding: theme.spacing(0.5, 1),
+      '&:hover': {
+        background: theme.colors.action.hover,
+      },
+      '&:focus-visible': {
+        outline: `2px solid ${theme.colors.primary.border}`,
+        outlineOffset: -2,
+      },
+    }),
+    coauthoringDivider: css({
+      width: 1,
+      alignSelf: 'stretch',
+      background: theme.colors.border.weak,
+    }),
+    coauthoringShortcut: css({
+      color: theme.colors.text.secondary,
+      fontSize: theme.typography.bodySmall.fontSize,
+      paddingRight: theme.spacing(0.5),
+      whiteSpace: 'nowrap',
+    }),
+    coauthoringPreviewChange: css({
+      color: theme.colors.primary.text,
+      background: theme.colors.action.selected,
+      borderBottom: `1px solid ${theme.colors.primary.border}`,
+    }),
+    coauthoringPreviewOriginal: css({
+      fontSize: 0,
+    }),
   };
 };
 
@@ -110,14 +166,27 @@ const MonacoQueryField = (props: Props) => {
   // we need only one instance of `overrideServices` during the lifetime of the react component
   const overrideServicesRef = useRef(getOverrideServices());
   const containerRef = useRef<HTMLDivElement>(null);
-  const { languageProvider, history, onBlur, onRunQuery, initialValue, placeholder, datasource, timeRange } = props;
+  const {
+    languageProvider,
+    history,
+    onBlur,
+    onRunQuery,
+    initialValue,
+    placeholder,
+    datasource,
+    timeRange,
+    onRegisterQueryEditorCoauthoring,
+    createQueryForCoauthoring,
+  } = props;
 
   const lpRef = useLatest(languageProvider);
   const historyRef = useLatest(history);
   const onRunQueryRef = useLatest(onRunQuery);
   const onBlurRef = useLatest(onBlur);
+  const createQueryForCoauthoringRef = useLatest(createQueryForCoauthoring);
 
   const autocompleteDisposeFun = useRef<(() => void) | null>(null);
+  const coauthoringDisposeFun = useRef<(() => void) | null>(null);
 
   const theme = useTheme2();
   const styles = getStyles(theme, placeholder);
@@ -126,6 +195,7 @@ const MonacoQueryField = (props: Props) => {
     // when we unmount, we unregister the autocomplete-function, if it was registered
     return () => {
       autocompleteDisposeFun.current?.();
+      coauthoringDisposeFun.current?.();
     };
   }, []);
 
@@ -147,6 +217,122 @@ const MonacoQueryField = (props: Props) => {
           ensurePromQL(monaco);
         }}
         onMount={(editor, monaco) => {
+          if (onRegisterQueryEditorCoauthoring && createQueryForCoauthoringRef.current) {
+            const capability = createPrometheusCoauthoringCapability({
+              editor,
+              createQuery: (value) => createQueryForCoauthoringRef.current!(value),
+              interpolate: (value) => datasource.interpolateString(value, placeHolderScopedVars),
+              retrieveMetricsMetadata: () => languageProvider.retrieveMetricsMetadata(),
+              queryMetricsMetadata: () => languageProvider.queryMetricsMetadata(),
+              queryMetricLabels: (metricName) => languageProvider.queryLabelKeys(timeRange, metricName, 30),
+              previewChangeClassName: styles.coauthoringPreviewChange,
+              previewOriginalClassName: styles.coauthoringPreviewOriginal,
+            });
+            const widgetNode = document.createElement('div');
+            const toolbarNode = document.createElement('div');
+            const hostNode = document.createElement('div');
+            const copyButton = document.createElement('button');
+            const divider = document.createElement('span');
+            const coauthorButton = document.createElement('button');
+            const shortcut = document.createElement('span');
+            let coauthoringActive = false;
+            let widgetPosition = editor.getPosition() ?? { lineNumber: 1, column: 1 };
+
+            widgetNode.className = styles.coauthoringWidget;
+            widgetNode.style.display = 'none';
+            toolbarNode.className = styles.coauthoringToolbar;
+            copyButton.className = styles.coauthoringButton;
+            copyButton.type = 'button';
+            copyButton.textContent = 'Copy';
+            divider.className = styles.coauthoringDivider;
+            coauthorButton.className = styles.coauthoringButton;
+            coauthorButton.type = 'button';
+            coauthorButton.textContent = '✦ Coauthor';
+            shortcut.className = styles.coauthoringShortcut;
+            shortcut.textContent = 'cmd+shift+q';
+            hostNode.style.display = 'none';
+            toolbarNode.append(copyButton, divider, coauthorButton, shortcut);
+            widgetNode.append(toolbarNode, hostNode);
+
+            const widget: monacoTypes.editor.IContentWidget = {
+              allowEditorOverflow: true,
+              getId: () => `prometheus-query-coauthoring-${id}`,
+              getDomNode: () => widgetNode,
+              getPosition: () => ({
+                position: widgetPosition,
+                preference: [
+                  monaco.editor.ContentWidgetPositionPreference.BELOW,
+                  monaco.editor.ContentWidgetPositionPreference.ABOVE,
+                ],
+              }),
+            };
+
+            const hasSelection = () => editor.getSelections()?.some((selection) => !selection.isEmpty()) ?? false;
+            const updateWidgetPosition = () => {
+              widgetPosition = editor.getSelection()?.getEndPosition() ?? editor.getPosition() ?? widgetPosition;
+            };
+            const showSelectionToolbar = () => {
+              updateWidgetPosition();
+              const visible = hasSelection() && !coauthoringActive;
+              widgetNode.style.display = visible ? 'block' : 'none';
+              toolbarNode.style.display = visible ? 'flex' : 'none';
+              hostNode.style.display = 'none';
+              editor.layoutContentWidget(widget);
+            };
+            const startCoauthoring = () => {
+              if (coauthoringActive || editor.getValue().trim().length === 0) {
+                return;
+              }
+              coauthoringActive = true;
+              updateWidgetPosition();
+              widgetNode.style.display = 'block';
+              toolbarNode.style.display = 'none';
+              hostNode.style.display = 'block';
+              editor.layoutContentWidget(widget);
+              capability.invoke({
+                anchorElement: hostNode,
+                dismiss: () => {
+                  coauthoringActive = false;
+                  showSelectionToolbar();
+                },
+              });
+            };
+            const preserveSelection = (event: MouseEvent) => event.preventDefault();
+
+            copyButton.addEventListener('mousedown', preserveSelection);
+            coauthorButton.addEventListener('mousedown', preserveSelection);
+            copyButton.addEventListener('click', () => {
+              const model = editor.getModel();
+              const selectedText =
+                model && editor.getSelections()
+                  ? editor
+                      .getSelections()!
+                      .filter((selection) => !selection.isEmpty())
+                      .map((selection) => model.getValueInRange(selection))
+                      .join('\n')
+                  : '';
+              if (selectedText) {
+                void navigator.clipboard.writeText(selectedText).catch(() => undefined);
+              }
+            });
+            coauthorButton.addEventListener('click', startCoauthoring);
+            editor.addContentWidget(widget);
+            const selectionDisposable = editor.onDidChangeCursorSelection(() => {
+              if (!coauthoringActive) {
+                showSelectionToolbar();
+              }
+            });
+            editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyQ, startCoauthoring);
+
+            onRegisterQueryEditorCoauthoring(capability);
+            coauthoringDisposeFun.current = () => {
+              capability.clearPreview();
+              selectionDisposable.dispose();
+              editor.removeContentWidget(widget);
+              onRegisterQueryEditorCoauthoring(undefined);
+            };
+          }
+
           const isEditorFocused = editor.createContextKey<boolean>('isEditorFocused' + id, false);
           // we setup on-blur
           editor.onDidBlurEditorWidget(() => {

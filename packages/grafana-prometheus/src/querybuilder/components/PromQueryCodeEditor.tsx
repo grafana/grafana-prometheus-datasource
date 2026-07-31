@@ -12,7 +12,8 @@ type PromQueryCodeEditorProps = PromQueryEditorProps & {
 };
 
 export function PromQueryCodeEditor(props: PromQueryCodeEditorProps) {
-  const { query, datasource, range, onRunQuery, onChange, data, app, showExplain } = props;
+  const { query, datasource, range, onRunQuery, onChange, data, app, showExplain, onRegisterQueryEditorCoauthoring } =
+    props;
 
   return (
     <Stack
@@ -30,6 +31,7 @@ export function PromQueryCodeEditor(props: PromQueryCodeEditorProps) {
         history={[]}
         data={data}
         app={app}
+        onRegisterQueryEditorCoauthoring={onRegisterQueryEditorCoauthoring}
       />
       {showExplain && <PromQueryBuilderExplained query={query.expr} />}
     </Stack>

@@ -89,6 +89,7 @@ const defaultProps = {
 describe('PromQueryEditorSelector', () => {
   beforeEach(() => {
     config.featureToggles.queryWithAssistant = true;
+    setQueryCoauthoringEnabled(false);
   });
 
   it('shows the assistant button when feature toggle is enabled and app is Explore', async () => {
@@ -103,6 +104,18 @@ describe('PromQueryEditorSelector', () => {
 
   it('shows the assistant button when feature toggle is enabled and app is PanelEditor', async () => {
     renderWithProps({}, { app: CoreApp.PanelEditor });
+    expect(await screen.findByTestId('query-with-assistant-button')).toBeInTheDocument();
+  });
+
+  it('does not show the assistant button in PanelEditor when query coauthoring is enabled', () => {
+    setQueryCoauthoringEnabled(true);
+    renderWithProps({}, { app: CoreApp.PanelEditor });
+    expect(screen.queryByTestId('query-with-assistant-button')).not.toBeInTheDocument();
+  });
+
+  it('still shows the assistant button in Explore when query coauthoring is enabled', async () => {
+    setQueryCoauthoringEnabled(true);
+    renderWithProps({}, { app: CoreApp.Explore });
     expect(await screen.findByTestId('query-with-assistant-button')).toBeInTheDocument();
   });
 
@@ -224,6 +237,10 @@ describe('PromQueryEditorSelector', () => {
 
 function renderWithMode(mode: QueryEditorMode) {
   return renderWithProps({ editorMode: mode });
+}
+
+function setQueryCoauthoringEnabled(enabled: boolean) {
+  Object.assign(config.featureToggles, { 'queryeditor.coauthoringUi': enabled });
 }
 
 function renderWithDatasourceDefaultEditorMode(mode: QueryEditorMode) {
