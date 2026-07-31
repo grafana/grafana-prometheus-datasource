@@ -164,6 +164,12 @@ the pull request head but published from the default branch, so npm's automatic
 provenance would attest a commit that does not contain the published code and
 record that permanently in a public transparency log.
 
+If the publish summary says the source run is not associated with a pull
+request, GitHub omitted the pull request link from the `workflow_run` event.
+Push another commit or remove and reapply `npm-canary` to start a fresh build.
+Canary artifacts are retained for seven days; if approval waits longer than
+that, trigger a fresh build the same way.
+
 Manual stable publishing remains a separate `workflow_dispatch` path with its
 existing tag selection. A canary always uses `--tag canary` and can never move
 `latest`.
