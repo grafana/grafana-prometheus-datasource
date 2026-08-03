@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 	"log"
-	// #nosec G404 -- This synthetic exporter only varies non-sensitive metric labels. nosemgrep: math-random-used
-	"math/rand/v2"
+	// #nosec G404 -- This synthetic exporter only varies non-sensitive metric labels.
+	"math/rand/v2" // nosemgrep: math-random-used
 	"net/http"
 	"time"
 
@@ -70,6 +70,6 @@ func main() {
 	}()
 
 	fmt.Println("High-cardinality exporter listening on :9111")
-	// #nosec G114 -- This local devenv metrics endpoint has no sensitive traffic. nosemgrep: use-tls
-	log.Fatal(http.ListenAndServe(":9111", nil))
+	// #nosec G114 -- This local devenv metrics endpoint has no sensitive traffic.
+	log.Fatal(http.ListenAndServe(":9111", nil)) // nosemgrep: local devenv only
 }
