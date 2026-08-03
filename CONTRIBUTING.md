@@ -124,6 +124,7 @@ specialized Prometheus data, use one of:
 npm run server:random-data
 npm run server:high-cardinality
 npm run server:utf8
+npm run server:search-api
 npm run server:full
 ```
 

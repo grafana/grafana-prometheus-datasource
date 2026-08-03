@@ -16,6 +16,11 @@ provisioning:
 - `prometheus.full.yml` enables every generator, node exporter,
   fake-data-gen, recording and alert rules, and Alertmanager.
 
+The Search API Compose override keeps the default scrape configuration and
+replaces Grafana's provisioning root with an override-only read-only directory
+containing the two standard datasources plus `prometheus-search-api`. It
+therefore does not alter datasource provisioning for normal or e2e runs.
+
 The default `prometheus.yml` intentionally contains only Prometheus and
 Grafana targets so e2e runs do not show inactive optional targets as `DOWN`.
 

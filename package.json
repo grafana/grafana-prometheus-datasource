@@ -18,6 +18,7 @@
     "server:random-data": "docker compose -f docker-compose.yaml -f docker-compose.random-data.yaml up --build",
     "server:high-cardinality": "docker compose -f docker-compose.yaml -f docker-compose.high-cardinality.yaml up --build",
     "server:utf8": "docker compose -f docker-compose.yaml -f docker-compose.utf8.yaml up --build",
+    "server:search-api": "docker compose -f docker-compose.yaml -f docker-compose.search-api.yaml up --build",
     "server:full": "docker compose -f docker-compose.yaml -f docker-compose.full.yaml up --build",
     "sign": "sign-plugin",
     "changeset": "node scripts/add-changeset.js",
