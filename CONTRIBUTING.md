@@ -14,14 +14,14 @@ You can browse [existing issues](https://github.com/grafana/grafana-prometheus-d
 ## Required Tools
 
 | Tool                              | Notes                                       |
-| --------------------------------- |---------------------------------------------|
+| --------------------------------- | ------------------------------------------- |
 | [Git](https://git-scm.com/)       | Version control                             |
 | [Go](https://go.dev/)             | See `go.mod` for minimum version            |
 | [Mage](https://magefile.org/)     | Backend build tool                          |
 | [Node.js](https://nodejs.org/)    | `>=24`; see `.nvmrc` for the pinned version |
 | [npm](https://www.npmjs.com/)     | JavaScript package manager                  |
 | [Docker](https://www.docker.com/) | Required for local Grafana and e2e tests    |
- 
+
 ### Package manager version
 
 This repository defines the required package manager and its exact version in the
@@ -116,6 +116,19 @@ Start a local Grafana instance with the plugin pre-loaded:
 ```bash
 docker compose up -d
 ```
+
+The default Compose stack is also the e2e stack. For manual testing with
+specialized Prometheus data, use one of:
+
+```bash
+npm run server:random-data
+npm run server:high-cardinality
+npm run server:utf8
+npm run server:full
+```
+
+See [DEVELOPMENT.md](./DEVELOPMENT.md#running-locally) for the services,
+representative metrics, and shutdown commands for each environment.
 
 For starting with a specific Grafana version
 
