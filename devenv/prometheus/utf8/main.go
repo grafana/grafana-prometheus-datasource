@@ -67,6 +67,5 @@ func main() {
 	}()
 
 	fmt.Println("UTF-8 exporter listening on :9112")
-	// #nosec G114 -- This local devenv metrics endpoint has no sensitive traffic.
-	log.Fatal(http.ListenAndServe(":9112", nil)) // nosemgrep: local devenv only
+	log.Fatal(http.ListenAndServe(":9112", nil)) // #nosec G114 -- no sensitive traffic. nosemgrep: local devenv only
 }
