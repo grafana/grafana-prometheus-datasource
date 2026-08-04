@@ -69,5 +69,5 @@ func main() {
 	}()
 
 	fmt.Println("High-cardinality exporter listening on :9111")
-	log.Fatal(http.ListenAndServe(":9111", nil)) // #nosec G114 -- no sensitive traffic. nosemgrep: local devenv only
+	log.Fatal(http.ListenAndServe(":9111", nil)) // #nosec G114 -- no sensitive traffic. nosemgrep: use-tls
 }
