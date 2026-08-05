@@ -2,4 +2,4 @@
 'grafana-prometheus-datasource': patch
 ---
 
-Use npm as package manager
+Improve numeric value parsing performance

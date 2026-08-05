@@ -14,13 +14,52 @@ You can browse [existing issues](https://github.com/grafana/grafana-prometheus-d
 ## Required Tools
 
 | Tool                              | Notes                                       |
-| --------------------------------- | ------------------------------------------- |
+| --------------------------------- |---------------------------------------------|
 | [Git](https://git-scm.com/)       | Version control                             |
 | [Go](https://go.dev/)             | See `go.mod` for minimum version            |
 | [Mage](https://magefile.org/)     | Backend build tool                          |
-| [Node.js](https://nodejs.org/)    | `>=22`; see `.nvmrc` for the pinned version |
+| [Node.js](https://nodejs.org/)    | `>=24`; see `.nvmrc` for the pinned version |
 | [npm](https://www.npmjs.com/)     | JavaScript package manager                  |
 | [Docker](https://www.docker.com/) | Required for local Grafana and e2e tests    |
+ 
+### Package manager version
+
+This repository defines the required package manager and its exact version in the
+`packageManager` field of `package.json`. You don't have to use it, but enabling
+[Corepack](https://github.com/nodejs/corepack) is a convenient way to make your
+terminal automatically use that version instead of whatever `npm` you have
+installed globally:
+
+Corepack is included with many Node.js distributions. Check whether it is
+available:
+
+```bash
+corepack --version
+```
+
+If the command is unavailable, install the standalone Corepack package:
+
+```bash
+npm install --global --ignore-scripts corepack
+```
+
+Then enable its npm shim:
+
+```bash
+corepack enable npm
+```
+
+Restart your terminal after enabling Corepack. No directory-change hook is
+required: once enabled, Corepack reads the nearest `package.json` whenever you
+run `npm`, in any directory. You can verify the selected version from the
+repository directory:
+
+```bash
+npm --version
+```
+
+Corepack manages the package manager version only; it does not install or select
+the Node.js version specified by the `engines` field.
 
 ## Frontend Development
 
@@ -100,7 +139,12 @@ npm run e2e
 Each PR must have a proper changeset that explains the PR's purpose in one line. That information will be used to generate a changelog when we release a new version of the respective package.
 
 To have a changeset, simply run `npm run changeset` and follow the CLI instructions.
-When you are done commit the auto-generated changeset file to your PR.
+When targeting `@grafana/prometheus` or `promlib`, the command intentionally
+creates two changeset files: one for the selected library and a mirrored
+datasource changeset with the same summary — matching the library's bump type
+for `@grafana/prometheus`, always patch for `promlib`. Both libraries are
+shipped as part of the datasource, so commit both generated files. A direct
+datasource changeset still creates only one file.
 
 ## Project Structure
 
@@ -117,7 +161,7 @@ When you are done commit the auto-generated changeset file to your PR.
 
 - Keep PRs focused — one logical change per PR.
 - Add or update tests for any changed behaviour.
-- Run `npm run changeset` and commit the generated file — this replaces manual `CHANGELOG.md` edits.
+- Run `npm run changeset` and commit all generated files — this replaces manual `CHANGELOG.md` edits.
 - Ensure `npm run lint`, `npm run typecheck`, and `npm run test:ci` all pass locally before opening a PR.
 
 ## Release Process
@@ -156,6 +200,7 @@ The library in `packages/grafana-prometheus/` is released independently via a ma
 - Follow the CLI instructions.
   - Changesets will be aggregated and a new changelog entry will be generated.
   - Aggregated changesets will be deleted.
+  - Mirrored datasource changesets will remain pending for the next datasource release.
   - The version will be bumped in `packages/grafana-prometheus/package.json`.
   - Commit everything.
 - After merging the PR visit [Publish @grafana/prometheus to NPM](https://github.com/grafana/grafana-prometheus-datasource/actions/workflows/release-npm.yml) in actions.
@@ -178,6 +223,7 @@ The backend library in `pkg/promlib` is released (tagged) independently via a gi
 - Follow the CLI instructions.
   - Changesets will be aggregated and a new changelog entry will be generated.
   - Aggregated changesets will be deleted.
+  - Mirrored datasource changesets will remain pending for the next datasource release.
   - The version will be bumped in `packages/promlib`.
   - Commit everything.
 - After merging the PR checkout the commit you just merged. `git checkout <COMMIT_SHA>`

@@ -1,6 +1,6 @@
 {
   "name": "prometheus",
-  "version": "13.1.6",
+  "version": "13.1.7",
   "workspaces": [
     "packages/*"
   ],
@@ -17,7 +17,7 @@
     "server": "docker compose up --build",
     "sign": "sign-plugin",
     "changeset": "node scripts/add-changeset.js",
-    "changeset:version": "node scripts/version-changeset.js",
+    "changeset:version": "node scripts/version-changeset.js && npm install",
     "i18n-extract": "i18next-cli extract --sync-primary"
   },
   "author": "Grafana",
@@ -99,7 +99,7 @@
   },
   "engines": {
     "node": ">=24",
-    "npm": ">=11.18.0"
+    "npm": ">=11.16.0"
   },
   "dependencies": {
     "@emotion/css": "11.10.6",

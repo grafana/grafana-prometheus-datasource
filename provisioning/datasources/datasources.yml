@@ -1,8 +1,27 @@
 apiVersion: 1
 
 datasources:
-  - name: 'prometheus'
-    uid: 'prometheus'
+  # Points at the gzip-forcing proxy (see docker-compose.yaml) rather than
+  # Prometheus directly, so resource calls (labels, label values, rules) exercise
+  # the gzip-decode + header-stripping path that regressed in production.
+  - name: 'prometheus-gzip'
+    uid: 'prometheus-gzip'
+    type: 'prometheus'
+    access: proxy
+    url: 'http://prometheus-gzip:9091'
+    isDefault: false
+    orgId: 1
+    version: 1
+    editable: true
+    jsonData:
+      httpMethod: 'GET'
+
+  # Fallback pointing directly at Prometheus, bypassing the gzip-forcing proxy.
+  # Query-path tests and manual debugging don't need the gzip framing that
+  # 'prometheus-gzip' exists to exercise, so they can use this one if the proxy
+  # misbehaves or isn't relevant to what's being tested.
+  - name: 'prometheus-direct'
+    uid: 'prometheus-direct'
     type: 'prometheus'
     access: proxy
     url: 'http://prometheus:9090'
