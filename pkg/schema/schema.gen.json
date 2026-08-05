@@ -58,6 +58,11 @@
               "type": "boolean",
               "default": false
             },
+            "enableSecureSocksProxy": {
+              "description": "Route requests to this data source through Grafana's Secure Socks Proxy, which backs Private Data source Connect (PDC). The proxy address and certificates are supplied to the plugin at runtime; this flag is the per-data-source opt-in and is persisted in jsonData. Only takes effect when the Grafana instance has the secure socks data source proxy configured.",
+              "type": "boolean",
+              "default": false
+            },
             "exemplarTraceIdDestinations": {
               "description": "Exemplar trace ID destinations. For each configured destination, the plugin renders a link on exemplar labels — either to an internal Grafana tracing data source (datasourceUid) or an external URL. The label whose value carries the trace ID is 'name' (defaults to 'traceID' when new entries are added).",
               "type": "array",

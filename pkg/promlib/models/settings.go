@@ -43,6 +43,7 @@ type PromOptions struct {
 	ServerName        string   `json:"serverName"`
 	TLSAuthWithCACert bool     `json:"tlsAuthWithCACert"`
 	TLSSkipVerify     bool     `json:"tlsSkipVerify"`
+	EnableSecureSocksProxy bool `json:"enableSecureSocksProxy"`
 }
 
 // ExemplarTraceIDDestination mirrors the frontend ExemplarTraceIdDestination type.
