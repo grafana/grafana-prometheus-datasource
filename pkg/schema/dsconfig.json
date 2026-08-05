@@ -272,10 +272,7 @@
       "description": "Route requests to this data source through Grafana's Secure Socks Proxy, which backs Private Data source Connect (PDC). The proxy address and certificates are supplied to the plugin at runtime; this flag is the per-data-source opt-in and is persisted in jsonData. Only takes effect when the Grafana instance has the secure socks data source proxy configured.",
       "valueType": "boolean",
       "target": "jsonData",
-      "defaultValue": false,
-      "ui": {
-        "component": "switch"
-      }
+      "defaultValue": false
     },
     {
       "id": "jsonData_httpHeaders",
