@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
@@ -49,6 +50,14 @@ type PromOptions struct {
 	SeriesEndpoint                bool                         `json:"seriesEndpoint"`
 	SeriesLimit                   *int64                       `json:"seriesLimit"`
 	ExemplarTraceIDDestinations   []ExemplarTraceIDDestination `json:"exemplarTraceIdDestinations"`
+
+	// OAuth2 client-credentials grant. The client secret is not part of this struct;
+	// it is read directly from DecryptedSecureJSONData["oauth2ClientSecret"], same as
+	// how the basic-auth password bypasses this struct.
+	OAuth2ClientCredentialsEnabled  bool     `json:"oauth2ClientCredentialsEnabled"`
+	OAuth2ClientCredentialsID       string   `json:"oauth2ClientId"`
+	OAuth2ClientCredentialsTokenURL string   `json:"oauth2TokenUrl"`
+	OAuth2ClientCredentialsScopes   []string `json:"oauth2Scopes"`
 }
 
 // ExemplarTraceIDDestination mirrors the frontend ExemplarTraceIdDestination type.
@@ -92,5 +101,18 @@ func (o *PromOptions) Validate() error {
 	if m := strings.ToUpper(o.HTTPMethod); m != "" && m != http.MethodGet && m != http.MethodPost {
 		return fmt.Errorf("invalid httpMethod %q: must be GET or POST", o.HTTPMethod)
 	}
+
+	if o.OAuth2ClientCredentialsEnabled {
+		if o.OAuth2ClientCredentialsID == "" {
+			return fmt.Errorf("oauth2ClientId is required when OAuth2 client credentials is enabled")
+		}
+		if o.OAuth2ClientCredentialsTokenURL == "" {
+			return fmt.Errorf("oauth2TokenUrl is required when OAuth2 client credentials is enabled")
+		}
+		if _, err := url.ParseRequestURI(o.OAuth2ClientCredentialsTokenURL); err != nil {
+			return fmt.Errorf("invalid oauth2TokenUrl %q: %w", o.OAuth2ClientCredentialsTokenURL, err)
+		}
+	}
+
 	return nil
 }

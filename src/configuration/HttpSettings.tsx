@@ -1,7 +1,9 @@
 import { type DataSourceSettings } from '@grafana/data';
 import { Auth, AuthMethod, ConnectionSettings, convertLegacyAuthProps } from '@grafana/plugin-ui';
-import { docsTip, overhaulStyles, type PromOptions } from '@grafana/prometheus';
+import { docsTip, OAuth2ClientCredentialsAuth, overhaulStyles, type PromOptions } from '@grafana/prometheus';
 import { SecureSocksProxySettings, useTheme2 } from '@grafana/ui';
+
+const OAUTH2_CLIENT_CREDENTIALS_METHOD_ID = 'custom-oauth2-client-credentials' as const;
 
 type Props = {
   options: DataSourceSettings<PromOptions>;
@@ -16,6 +18,10 @@ export const HttpSettings = (props: Props) => {
     config: options,
     onChange: onOptionsChange,
   });
+
+  const selectedMethod = options.jsonData.oauth2ClientCredentialsEnabled
+    ? OAUTH2_CLIENT_CREDENTIALS_METHOD_ID
+    : newAuthProps.selectedMethod;
 
   const theme = useTheme2();
   const styles = overhaulStyles(theme);
@@ -64,12 +70,21 @@ export const HttpSettings = (props: Props) => {
             jsonData: {
               ...options.jsonData,
               oauthPassThru: method === AuthMethod.OAuthForward,
+              oauth2ClientCredentialsEnabled: method === OAUTH2_CLIENT_CREDENTIALS_METHOD_ID,
             },
           });
         }}
         // If your method is selected pass its id to `selectedMethod`,
         // otherwise pass the id from converted legacy data
-        selectedMethod={newAuthProps.selectedMethod}
+        selectedMethod={selectedMethod}
+        customMethods={[
+          {
+            id: OAUTH2_CLIENT_CREDENTIALS_METHOD_ID,
+            label: 'OAuth2 Client Credentials',
+            description: 'Authenticate using the OAuth2 client credentials grant.',
+            component: <OAuth2ClientCredentialsAuth options={options} onOptionsChange={onOptionsChange} />,
+          },
+        ]}
       />
       <div className={styles.sectionBottomPadding} />
       {secureSocksDSProxyEnabled && (
