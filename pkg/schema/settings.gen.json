@@ -10,7 +10,7 @@
         "default": false
       },
       "basicAuthUser": {
-        "description": "The username of the data source account",
+        "description": "Username for basic authentication.",
         "type": "string",
         "x-dsconfig-depends-on": "virtual_authMethod == 'BasicAuth'",
         "x-dsconfig-required-when": "root_basicAuth == true"

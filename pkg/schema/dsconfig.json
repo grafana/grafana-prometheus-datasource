@@ -56,7 +56,7 @@
       },
       "storage": {
         "type": "computed",
-        "read": "root.basicAuth == true ? 'BasicAuth' : (jsonData.oauthPassThru == true ? 'OAuthForward' : 'NoAuth')"
+        "read": "root_basicAuth == true ? 'BasicAuth' : (jsonData_oauthPassThru == true ? 'OAuthForward' : 'NoAuth')"
       },
       "effects": [
         {
@@ -97,7 +97,7 @@
       "id": "root_basicAuthUser",
       "key": "basicAuthUser",
       "label": "User",
-      "description": "The username of the data source account",
+      "description": "Username for basic authentication.",
       "valueType": "string",
       "target": "root",
       "role": "auth.basic.username",
@@ -822,7 +822,7 @@
         "root_basicAuthUser",
         "secureJsonData_basicAuthPassword"
       ],
-      "description": "Basic auth credentials. Both fields are used together when root.basicAuth is true."
+      "description": "Basic auth credentials. Both fields are used together when root_basicAuth is true."
     },
     {
       "type": "group",
@@ -832,7 +832,7 @@
         "secureJsonData_tlsClientCert",
         "secureJsonData_tlsClientKey"
       ],
-      "description": "TLS mutual auth: enabling jsonData.tlsAuth requires serverName + client cert + client key. See @grafana/plugin-ui TLSClientAuth.tsx."
+      "description": "TLS mutual auth: enabling jsonData_tlsAuth requires serverName + client cert + client key. See @grafana/plugin-ui TLSClientAuth.tsx."
     },
     {
       "type": "pair",
@@ -840,7 +840,7 @@
         "jsonData_tlsAuthWithCACert",
         "secureJsonData_tlsCACert"
       ],
-      "description": "Self-signed / custom CA verification: enabling jsonData.tlsAuthWithCACert requires the CA certificate PEM in secureJsonData.tlsCACert."
+      "description": "Self-signed / custom CA verification: enabling jsonData_tlsAuthWithCACert requires the CA certificate PEM in secureJsonData_tlsCACert."
     },
     {
       "type": "pair",
@@ -853,28 +853,28 @@
   ],
   "instructions": [
     {
-      "msg": "Prometheus authentication is built on Grafana's HTTP settings model, not a discriminator field. The editor's three visible auth methods write these flags: 'Basic authentication' sets root.basicAuth=true and provides root.basicAuthUser + secureJsonData.basicAuthPassword; 'Forward OAuth Identity' sets jsonData.oauthPassThru=true; 'No Authentication' leaves both false. Only one of basicAuth / oauthPassThru should be true at a time — the editor's onAuthMethodSelect (HttpSettings.tsx:59-69) always writes both. The upstream utility convertLegacyAuthProps (@grafana/plugin-ui) also recognises root.withCredentials for 'cross-site access control', but this plugin does not offer it in its visibleMethods.",
+      "msg": "Prometheus authentication is built on Grafana's HTTP settings model, not a discriminator field. The editor's three visible auth methods write these flags: 'Basic authentication' sets root_basicAuth=true and provides root_basicAuthUser + secureJsonData_basicAuthPassword; 'Forward OAuth Identity' sets jsonData_oauthPassThru=true; 'No Authentication' leaves both false. Only one of basicAuth / oauthPassThru should be true at a time — the editor's onAuthMethodSelect (HttpSettings.tsx:59-69) always writes both. The upstream utility convertLegacyAuthProps (@grafana/plugin-ui) also recognises root_withCredentials for 'cross-site access control', but this plugin does not offer it in its visibleMethods.",
       "tags": [
         "llm",
         "auth"
       ]
     },
     {
-      "msg": "Minimal Basic-auth payload: {\"url\":\"http://localhost:9090\",\"basicAuth\":true,\"basicAuthUser\":\"<user>\",\"jsonData\":{},\"secureJsonData\":{\"basicAuthPassword\":\"<password>\"}}. Minimal No-auth payload: {\"url\":\"http://localhost:9090\",\"jsonData\":{}}. Minimal OAuth-forward payload: {\"url\":\"http://localhost:9090\",\"jsonData\":{\"oauthPassThru\":true}}. root.url is required — the backend admission handler (pkg/promlib/admission_handler.go:51) rejects a missing URL. Trailing slashes are safe: the client uses path.Join to build /api/v1/... under the base URL.",
+      "msg": "Minimal Basic-auth payload: {\"url\":\"http://localhost:9090\",\"basicAuth\":true,\"basicAuthUser\":\"<user>\",\"jsonData\":{},\"secureJsonData\":{\"basicAuthPassword\":\"<password>\"}}. Minimal No-auth payload: {\"url\":\"http://localhost:9090\",\"jsonData\":{}}. Minimal OAuth-forward payload: {\"url\":\"http://localhost:9090\",\"jsonData\":{\"oauthPassThru\":true}}. root_url is required — the backend admission handler (pkg/promlib/admission_handler.go:51) rejects a missing URL. Trailing slashes are safe: the client uses path.Join to build /api/v1/... under the base URL.",
       "tags": [
         "llm",
         "auth"
       ]
     },
     {
-      "msg": "TLS is independent of the auth method. jsonData.tlsAuth=true enables mTLS and requires jsonData.serverName plus secureJsonData.tlsClientCert and secureJsonData.tlsClientKey. jsonData.tlsAuthWithCACert=true enables server-cert verification against a custom CA and requires secureJsonData.tlsCACert. Both can be enabled together. jsonData.tlsSkipVerify=true bypasses verification entirely and should only be used for testing. All TLS fields are consumed by the SDK's settings.HTTPClientOptions(ctx) call in pkg/promlib/client/transport.go:18.",
+      "msg": "TLS is independent of the auth method. jsonData_tlsAuth=true enables mTLS and requires jsonData_serverName plus secureJsonData_tlsClientCert and secureJsonData_tlsClientKey. jsonData_tlsAuthWithCACert=true enables server-cert verification against a custom CA and requires secureJsonData_tlsCACert. Both can be enabled together. jsonData_tlsSkipVerify=true bypasses verification entirely and should only be used for testing. All TLS fields are consumed by the SDK's settings.HTTPClientOptions(ctx) call in pkg/promlib/client/transport.go:18.",
       "tags": [
         "llm",
         "tls"
       ]
     },
     {
-      "msg": "secureJsonData values (basicAuthPassword, tlsCACert, tlsClientCert, tlsClientKey) are write-only: they can be set or reset but never read back. To check whether a secret is already configured on an existing datasource, read the secureJsonFields object (e.g. secureJsonFields.basicAuthPassword == true) instead of secureJsonData.",
+      "msg": "secureJsonData values (basicAuthPassword, tlsCACert, tlsClientCert, tlsClientKey) are write-only: they can be set or reset but never read back. To check whether a secret is already configured on an existing datasource, read the secureJsonFields object (e.g. secureJsonFields.basicAuthPassword == true) instead of secureJsonData_",
       "tags": [
         "llm",
         "auth",
@@ -882,14 +882,14 @@
       ]
     },
     {
-      "msg": "jsonData.httpMethod defaults to POST (see getOptionsWithDefaults, PromSettings.tsx:74-82 and pkg/promlib/models/settings.go:82-87 ApplyDefaults) and must be POST or GET; the backend's Validate rejects any other value. jsonData.timeInterval (Scrape interval, default '15s' in the tooltip only) and jsonData.queryTimeout (default '60s' in the placeholder only) are duration strings validated by the DURATION_REGEX (constants.ts:11) — empty means 'use Grafana defaults'. If neither is set, no default is written to storage; the backend treats empty QueryTimeout as 'no explicit timeout parameter'.",
+      "msg": "jsonData_httpMethod defaults to POST (see getOptionsWithDefaults, PromSettings.tsx:74-82 and pkg/promlib/models/settings.go:82-87 ApplyDefaults) and must be POST or GET; the backend's Validate rejects any other value. jsonData_timeInterval (Scrape interval, default '15s' in the tooltip only) and jsonData_queryTimeout (default '60s' in the placeholder only) are duration strings validated by the DURATION_REGEX (constants.ts:11) — empty means 'use Grafana defaults'. If neither is set, no default is written to storage; the backend treats empty QueryTimeout as 'no explicit timeout parameter'.",
       "tags": [
         "llm",
         "settings"
       ]
     },
     {
-      "msg": "Editor-hidden but backend-parsed knobs: jsonData.maxSamplesProcessedWarningThreshold and jsonData.maxSamplesProcessedErrorThreshold are read by ParsePromOptions (pkg/promlib/models/settings.go:41-42) but the PromSettings component only shows their inputs when showQuerySamplesProcessedThresholdFields=true, and the Prometheus plugin's own ConfigEditor never passes that prop (ConfigEditor.tsx:47). Provisioning can still set them via jsonData. jsonData.queryStatsEnabled is hidden the same way (PromSettings only renders its switch when showQueryStats=true, which the plugin never passes) but is read by the custom query params middleware, which appends stats=all to query requests. Also note jsonData.oauthPassThru, jsonData.manageAlerts, and jsonData.allowAsRecordingRulesTarget. Custom HTTP headers ARE now modeled by the jsonData_httpHeaders array field using an indexedPair storage mapping: each header's name is written to jsonData.httpHeaderName<N> and its value is written write-only to secureJsonData.httpHeaderValue<N> (starting at N=1), exactly as @grafana/plugin-ui's CustomHeaders component and the SDK HTTPClientOptions expect. The per-header httpHeaderValue<N> secrets are dynamic and are therefore not listed among the static SecureJsonDataKeys.",
+      "msg": "Editor-hidden but backend-parsed knobs: jsonData_maxSamplesProcessedWarningThreshold and jsonData_maxSamplesProcessedErrorThreshold are read by ParsePromOptions (pkg/promlib/models/settings.go:41-42) but the PromSettings component only shows their inputs when showQuerySamplesProcessedThresholdFields=true, and the Prometheus plugin's own ConfigEditor never passes that prop (ConfigEditor.tsx:47). Provisioning can still set them via jsonData_ jsonData_queryStatsEnabled is hidden the same way (PromSettings only renders its switch when showQueryStats=true, which the plugin never passes) but is read by the custom query params middleware, which appends stats=all to query requests. Also note jsonData_oauthPassThru, jsonData_manageAlerts, and jsonData_allowAsRecordingRulesTarget. Custom HTTP headers ARE now modeled by the jsonData_httpHeaders array field using an indexedPair storage mapping: each header's name is written to jsonData_httpHeaderName<N> and its value is written write-only to secureJsonData_httpHeaderValue<N> (starting at N=1), exactly as @grafana/plugin-ui's CustomHeaders component and the SDK HTTPClientOptions expect. The per-header httpHeaderValue<N> secrets are dynamic and are therefore not listed among the static SecureJsonDataKeys.",
       "tags": [
         "llm",
         "settings",
