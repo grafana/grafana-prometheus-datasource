@@ -4,7 +4,7 @@ go 1.26.5
 
 require (
 	github.com/grafana/dsconfig/schema v0.0.12
-	github.com/grafana/grafana-plugin-sdk-go v0.295.0
+	github.com/grafana/grafana-plugin-sdk-go v0.296.1
 	github.com/stretchr/testify v1.11.1
 	k8s.io/kube-openapi v0.0.0-20260624041617-8f3fa4921821
 )
