@@ -35,7 +35,7 @@ type PromOptions struct {
 	ExemplarTraceIDDestinations         []ExemplarTraceIDDestination `json:"exemplarTraceIdDestinations"`
 	ManageAlerts                        bool                         `json:"manageAlerts"`
 	AllowAsRecordingRulesTarget         bool                         `json:"allowAsRecordingRulesTarget"`
-	// Following fields are not direclty used by prom datasource
+	// Following fields are not directly used by prom datasource
 	// These fields are managed by the Grafana plugin SDK.
 	TimeOut           int64    `json:"timeout"`
 	KeepCookies       []string `json:"keepCookies"`
