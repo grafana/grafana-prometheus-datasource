@@ -2,7 +2,6 @@ package datasource
 
 import (
 	"context"
-	"strings"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	sdkhttpclient "github.com/grafana/grafana-plugin-sdk-go/backend/httpclient"
@@ -24,8 +23,6 @@ type Datasource struct {
 	Service *promlib.Service
 }
 
-const searchResponseLimitBytes int64 = 100 * 1024 * 1024
-
 func (d *Datasource) QueryData(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
 	ctx = d.contextualMiddlewares(ctx)
 	return d.Service.QueryData(ctx, req)
@@ -33,10 +30,6 @@ func (d *Datasource) QueryData(ctx context.Context, req *backend.QueryDataReques
 
 func (d *Datasource) CallResource(ctx context.Context, req *backend.CallResourceRequest, sender backend.CallResourceResponseSender) error {
 	ctx = d.contextualMiddlewares(ctx)
-	if strings.HasPrefix(strings.TrimPrefix(req.Path, "/"), "api/v1/search/") {
-		// TODO: Update the plugin SDK dependency after its per-request response-limit override merges.
-		ctx = sdkhttpclient.WithResponseLimit(ctx, searchResponseLimitBytes)
-	}
 	return d.Service.CallResource(ctx, req, sender)
 }
 

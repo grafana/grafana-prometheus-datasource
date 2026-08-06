@@ -31,6 +31,8 @@ type instance struct {
 
 type ExtendOptions func(ctx context.Context, settings backend.DataSourceInstanceSettings, clientOpts *sdkhttpclient.Options, log log.Logger) error
 
+const searchResponseLimitBytes int64 = 100 * 1024 * 1024
+
 func NewService(httpClientProvider *sdkhttpclient.Provider, plog log.Logger, extendOptions ExtendOptions) *Service {
 	if httpClientProvider == nil {
 		httpClientProvider = sdkhttpclient.NewProvider()
@@ -148,6 +150,7 @@ func (s *Service) CallResource(ctx context.Context, req *backend.CallResourceReq
 	case strings.HasPrefix(strings.TrimPrefix(req.Path, "/"), "api/v1/search/"):
 		// Search responses are NDJSON streams and must bypass the catch-all
 		// Execute path, which buffers and decodes the complete response.
+		ctx = sdkhttpclient.WithResponseLimit(ctx, searchResponseLimitBytes)
 		return i.resource.ExecuteSearch(ctx, req, sender)
 	case strings.EqualFold(req.Path, "suggestions"):
 		resp, err := i.resource.GetSuggestions(ctx, req)
