@@ -37,13 +37,13 @@ type PromOptions struct {
 	AllowAsRecordingRulesTarget         bool                         `json:"allowAsRecordingRulesTarget"`
 	// Following fields are not directly used by prom datasource
 	// These fields are managed by the Grafana plugin SDK.
-	TimeOut           int64    `json:"timeout"`
-	KeepCookies       []string `json:"keepCookies"`
-	TLSAuth           bool     `json:"tlsAuth"`
-	ServerName        string   `json:"serverName"`
-	TLSAuthWithCACert bool     `json:"tlsAuthWithCACert"`
-	TLSSkipVerify     bool     `json:"tlsSkipVerify"`
-	EnableSecureSocksProxy bool `json:"enableSecureSocksProxy"`
+	TimeOut                int64    `json:"timeout"`
+	KeepCookies            []string `json:"keepCookies"`
+	TLSAuth                bool     `json:"tlsAuth"`
+	ServerName             string   `json:"serverName"`
+	TLSAuthWithCACert      bool     `json:"tlsAuthWithCACert"`
+	TLSSkipVerify          bool     `json:"tlsSkipVerify"`
+	EnableSecureSocksProxy bool     `json:"enableSecureSocksProxy"`
 }
 
 // ExemplarTraceIDDestination mirrors the frontend ExemplarTraceIdDestination type.
