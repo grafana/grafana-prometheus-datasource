@@ -52,10 +52,11 @@ export const PromQueryEditorSelector = memo<Props>((props) => {
   const queryCoauthoringEnabled = (config.featureToggles as FeatureTogglesWithQueryCoauthoring)[
     'queryeditor.coauthoringUi'
   ];
+  const queryCoauthoringAvailable = queryCoauthoringEnabled && Boolean(props.onRegisterQueryEditorCoauthoring);
 
   const showAssistant =
     config.featureToggles.queryWithAssistant &&
-    !(app === CoreApp.PanelEditor && queryCoauthoringEnabled) &&
+    !(app === CoreApp.PanelEditor && queryCoauthoringAvailable) &&
     (app === CoreApp.Explore || app === CoreApp.Dashboard || app === CoreApp.PanelEditor);
 
   const onEditorModeChange = useCallback(

@@ -44,6 +44,10 @@
         "select-a-metric": "1. Select a metric",
         "series-limit": "Series limit"
       },
+      "monaco-query-field": {
+        "coauthor": "✦ Coauthor",
+        "copy": "Copy"
+      },
       "prom-cheat-sheet": {
         "prom-ql-cheat-sheet": "PromQL Cheat Sheet"
       },

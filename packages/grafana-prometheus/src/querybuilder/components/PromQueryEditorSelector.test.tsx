@@ -107,10 +107,22 @@ describe('PromQueryEditorSelector', () => {
     expect(await screen.findByTestId('query-with-assistant-button')).toBeInTheDocument();
   });
 
-  it('does not show the assistant button in PanelEditor when query coauthoring is enabled', () => {
+  it('replaces the assistant button when the flagged panel editor offers query coauthoring', () => {
+    setQueryCoauthoringEnabled(true);
+    renderWithProps(
+      {},
+      {
+        app: CoreApp.PanelEditor,
+        onRegisterQueryEditorCoauthoring: jest.fn(),
+      }
+    );
+    expect(screen.queryByTestId('query-with-assistant-button')).not.toBeInTheDocument();
+  });
+
+  it('keeps the assistant button in a legacy panel editor without query coauthoring', async () => {
     setQueryCoauthoringEnabled(true);
     renderWithProps({}, { app: CoreApp.PanelEditor });
-    expect(screen.queryByTestId('query-with-assistant-button')).not.toBeInTheDocument();
+    expect(await screen.findByTestId('query-with-assistant-button')).toBeInTheDocument();
   });
 
   it('still shows the assistant button in Explore when query coauthoring is enabled', async () => {

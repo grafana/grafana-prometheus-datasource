@@ -8,6 +8,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { type GrafanaTheme2 } from '@grafana/data';
 import { selectors } from '@grafana/e2e-selectors';
+import { t } from '@grafana/i18n';
 import { type Monaco, type monacoTypes, ReactMonacoEditor, useTheme2 } from '@grafana/ui';
 
 import { createPrometheusCoauthoringCapability } from '../../query_coauthoring/capability';
@@ -243,11 +244,11 @@ const MonacoQueryField = (props: Props) => {
             toolbarNode.className = styles.coauthoringToolbar;
             copyButton.className = styles.coauthoringButton;
             copyButton.type = 'button';
-            copyButton.textContent = 'Copy';
+            copyButton.textContent = t('grafana-prometheus.components.monaco-query-field.copy', 'Copy');
             divider.className = styles.coauthoringDivider;
             coauthorButton.className = styles.coauthoringButton;
             coauthorButton.type = 'button';
-            coauthorButton.textContent = '✦ Coauthor';
+            coauthorButton.textContent = t('grafana-prometheus.components.monaco-query-field.coauthor', '✦ Coauthor');
             shortcut.className = styles.coauthoringShortcut;
             shortcut.textContent = 'cmd+shift+q';
             hostNode.style.display = 'none';
