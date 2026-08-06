@@ -33,7 +33,7 @@ func (r *Resource) ExecuteSearch(
 	// transparently decompresses gzip. Requesting gzip explicitly keeps the wire
 	// compressed while letting us decode it with a streaming gzip.Reader below.
 	streamReq := *req
-	streamReq.Headers = map[string][]string(req.GetHTTPHeaders().Clone())
+	streamReq.Headers = req.GetHTTPHeaders().Clone()
 	streamReq.Headers["Accept-Encoding"] = []string{"gzip"}
 
 	resp, err := r.promClient.QueryResource(ctx, &streamReq)
