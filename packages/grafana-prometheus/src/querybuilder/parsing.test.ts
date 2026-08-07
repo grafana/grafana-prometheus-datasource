@@ -255,6 +255,29 @@ describe('buildVisualQueryFromString', () => {
     );
   });
 
+  it('parses rate query with [ in label filter value', () => {
+    expect(
+      buildVisualQueryFromString('rate(metric{label=~"value[0-9]"}[5m])')
+    ).toEqual(
+      noErrors({
+        metric: 'metric',
+        labels: [
+          {
+            op: '=~',
+            value: 'value[0-9]',
+            label: 'label',
+          },
+        ],
+        operations: [
+          {
+            id: 'rate',
+            params: ['5m'],
+          },
+        ],
+      })
+    );
+  });
+
   it('parses query with nested query and interval variable', () => {
     expect(
       buildVisualQueryFromString(
