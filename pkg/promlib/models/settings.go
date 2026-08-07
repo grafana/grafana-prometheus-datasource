@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
@@ -68,13 +69,101 @@ func ParsePromOptions(settings backend.DataSourceInstanceSettings) (*PromOptions
 		data = []byte("{}")
 	}
 	if err := json.Unmarshal(data, &opts); err != nil {
-		return nil, fmt.Errorf("error unmarshalling JSONData: %w", err)
+		// Strict unmarshal failed — try lenient unmarshal with type coercion.
+		// Datasources provisioned through the API or Terraform may store values
+		// with off-spec types (e.g., string "true" for a bool field, number 15
+		// for a string field).  The UI always writes normalized types, and the
+		// previous schemaless reader accepted both.
+		raw := make(map[string]any)
+		if err2 := json.Unmarshal(data, &raw); err2 != nil {
+			return nil, fmt.Errorf("error unmarshalling JSONData: %w", err)
+		}
+		coercePromOptions(raw)
+		coerced, err2 := json.Marshal(raw)
+		if err2 != nil {
+			return nil, fmt.Errorf("error unmarshalling JSONData: %w", err)
+		}
+		if err2 := json.Unmarshal(coerced, &opts); err2 != nil {
+			return nil, fmt.Errorf("error unmarshalling JSONData: %w", err)
+		}
 	}
 	opts.ApplyDefaults()
 	if err := opts.Validate(); err != nil {
 		return nil, err
 	}
 	return &opts, nil
+}
+
+// coercePromOptions normalises field types in a raw JSON map so that
+// a subsequent strict unmarshal into PromOptions succeeds.  Fields that
+// arrive from the API or Terraform with mismatched types are converted
+// to the expected Go type in place.
+func coercePromOptions(raw map[string]any) {
+	// Boolean fields: accept string "true"/"false" and number 0/1.
+	for _, key := range []string{
+		"manageAlerts", "allowAsRecordingRulesTarget",
+		"queryStatsEnabled", "disableMetricsLookup",
+		"incrementalQuerying", "disableRecordingRules",
+		"oauthPassThru", "seriesEndpoint", "disableGrafanaCache",
+	} {
+		if v, ok := raw[key]; ok {
+			switch val := v.(type) {
+			case string:
+				raw[key] = val == "true" || val == "1" || val == "yes"
+			case float64:
+				raw[key] = val != 0
+			}
+		}
+	}
+
+	// String fields: accept numbers.
+	for _, key := range []string{
+		"timeInterval", "queryTimeout", "customQueryParameters",
+		"httpMethod", "prometheusType", "prometheusVersion",
+		"cacheLevel", "defaultEditor", "incrementalQueryOverlapWindow",
+		"alertmanagerUid", "authType", "defaultRegion", "profile",
+	} {
+		if v, ok := raw[key]; ok {
+			if num, ok := v.(float64); ok {
+				raw[key] = strconv.FormatFloat(num, 'f', -1, 64)
+			}
+		}
+	}
+
+	// *int64 fields: accept string numbers and float64.
+	if v, ok := raw["seriesLimit"]; ok {
+		switch val := v.(type) {
+		case string:
+			if n, err := strconv.ParseInt(val, 10, 64); err == nil {
+				raw["seriesLimit"] = n
+			}
+		case float64:
+			raw["seriesLimit"] = int64(val)
+		}
+	}
+
+	// float64 fields: accept string numbers.
+	for _, key := range []string{
+		"maxSamplesProcessedWarningThreshold",
+		"maxSamplesProcessedErrorThreshold",
+	} {
+		if v, ok := raw[key]; ok {
+			if s, ok := v.(string); ok {
+				if n, err := strconv.ParseFloat(s, 64); err == nil {
+					raw[key] = n
+				}
+			}
+		}
+	}
+
+	// ExemplarTraceIDDestination: accept a single object (map) in addition to
+	// an array.  Some API/Terraform configurations store a single destination
+	// as a JSON object rather than a one-element array.
+	if v, ok := raw["exemplarTraceIdDestinations"]; ok {
+		if _, ok := v.(map[string]any); ok {
+			raw["exemplarTraceIdDestinations"] = []any{v}
+		}
+	}
 }
 
 // ApplyDefaults normalises fields and sets missing values to their defaults.
