@@ -31,6 +31,10 @@ func CreateTransportOptions(ctx context.Context, settings backend.DataSourceInst
 	if jsonData.HTTPMethod == http.MethodGet {
 		middlewares = append(middlewares, middleware.ForceHttpGet(logger))
 	}
+	if jsonData.OAuth2ClientCredentialsEnabled {
+		clientSecret := settings.DecryptedSecureJSONData["oauth2ClientSecret"]
+		middlewares = append(middlewares, middleware.OAuth2ClientCredentials(logger, jsonData, clientSecret))
+	}
 	opts.Middlewares = middlewares
 
 	// Forward Grafana-provided HTTP headers (e.g. FromAlert, X-Rule-*, X-Dashboard-*,
