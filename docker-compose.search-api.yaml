@@ -1,0 +1,12 @@
+services:
+  prometheus:
+    image: prom/prometheus:v3.13.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --enable-feature=search-api
+      - --web.listen-address=0.0.0.0:9090
+      - --storage.tsdb.path=/prometheus
+
+  grafana:
+    volumes:
+      - ./devenv/prometheus/search-api-provisioning:/etc/grafana/provisioning:ro
