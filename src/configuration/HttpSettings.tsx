@@ -77,6 +77,11 @@ export const HttpSettings = (props: Props) => {
         // If your method is selected pass its id to `selectedMethod`,
         // otherwise pass the id from converted legacy data
         selectedMethod={selectedMethod}
+        // The library default order is [BasicAuth, OAuthForward, NoAuth, ...customMethods],
+        // which puts "No Authentication" ahead of custom methods. Override explicitly so it
+        // stays last. If another built-in or custom auth method is added, add it here too,
+        // before AuthMethod.NoAuth.
+        visibleMethods={[AuthMethod.BasicAuth, AuthMethod.OAuthForward, OAUTH2_CLIENT_CREDENTIALS_METHOD_ID, AuthMethod.NoAuth]}
         customMethods={[
           {
             id: OAUTH2_CLIENT_CREDENTIALS_METHOD_ID,
