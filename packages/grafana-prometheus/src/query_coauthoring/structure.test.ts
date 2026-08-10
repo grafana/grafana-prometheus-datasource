@@ -34,6 +34,25 @@ describe('normalizeFocusRanges', () => {
     ]);
   });
 
+  it('normalizes partial and complete selections of a Grafana variable', () => {
+    const query = 'rate(http_requests_total[$__rate_interval])';
+
+    expect(normalizeFocusRanges(query, [selection(query, '__rate_interval')])).toEqual([
+      range(query, '$__rate_interval'),
+    ]);
+    expect(normalizeFocusRanges(query, [selection(query, '$__rate_interval')])).toEqual([
+      range(query, '$__rate_interval'),
+    ]);
+  });
+
+  it('expands a selection across query parts to their enclosing syntax boundary', () => {
+    const query = 'rate(fakedata_highcard_http_requests_total[$__rate_interval])';
+
+    expect(normalizeFocusRanges(query, [selection(query, 'total[$__rat')])).toEqual([
+      range(query, 'fakedata_highcard_http_requests_total[$__rate_interval]'),
+    ]);
+  });
+
   it('normalizes reversed disjoint selections independently', () => {
     const query = 'rate(http_requests_total{job="api"}[5m])';
     const metric = selection(query, 'http_requests_total', 4, 12);

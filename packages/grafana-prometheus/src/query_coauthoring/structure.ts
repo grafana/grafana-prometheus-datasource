@@ -1,7 +1,7 @@
 import { type SyntaxNode } from '@lezer/common';
 import { parser } from '@prometheus-io/lezer-promql';
 
-import { ErrorId } from '../querybuilder/parsingUtils';
+import { ErrorId, replaceBuiltInVariable } from '../querybuilder/parsingUtils';
 
 export interface TextRange {
   from: number;
@@ -84,8 +84,17 @@ export function normalizeFocusRanges(query: string, selections: EditorSelection[
     return [{ from: 0, to: query.length }];
   }
 
-  const lexicalTokens = collectLexicalTokens(query);
-  const expanded = nonEmptySelections.map((selection) => expandToLexicalBoundaries(selection, lexicalTokens));
+  const parsedQuery = replaceBuiltInVariable(query);
+  const lexicalTokens = collectLexicalTokens(parsedQuery);
+  const expanded = nonEmptySelections.map((selection) => {
+    const lexicalRange = expandToLexicalBoundaries(selection, lexicalTokens);
+    const intersectingTokens = lexicalTokens.filter((token) => token.to > selection.from && token.from < selection.to);
+    if (intersectingTokens.length < 2) {
+      return lexicalRange;
+    }
+
+    return findSyntaxAnchor(parsedQuery, lexicalRange)?.range ?? lexicalRange;
+  });
   return mergeRanges(expanded);
 }
 
