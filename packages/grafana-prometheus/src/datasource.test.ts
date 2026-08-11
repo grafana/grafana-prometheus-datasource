@@ -1160,6 +1160,56 @@ describe('PrometheusDatasource', () => {
       const result = extractResourceMatcher(queries, filters);
       expect(result).toBe('{__name__=~"go_cpu_classes_idle_cpu_seconds_total"}');
     });
+
+    it('should convert a multi-value "one of" (=|) filter to a regex matcher joining all values', () => {
+      const queries: PromQuery[] = [];
+      const filters: AdHocVariableFilter[] = [
+        {
+          key: 'quantile',
+          operator: '=|',
+          value: '0.5',
+          values: ['0.5', '0.9'],
+        },
+      ];
+
+      const result = extractResourceMatcher(queries, filters);
+      expect(result).toBe('{quantile=~"0.5|0.9"}');
+    });
+
+    it('should convert a multi-value "not one of" (!=|) filter to a negative regex matcher', () => {
+      const queries: PromQuery[] = [];
+      const filters: AdHocVariableFilter[] = [
+        {
+          key: 'job',
+          operator: '!=|',
+          value: 'grafana',
+          values: ['grafana', 'prometheus'],
+        },
+      ];
+
+      const result = extractResourceMatcher(queries, filters);
+      expect(result).toBe('{job!~"grafana|prometheus"}');
+    });
+
+    it('should leave plain = filters unchanged when mixed with "one of" filters', () => {
+      const queries: PromQuery[] = [];
+      const filters: AdHocVariableFilter[] = [
+        {
+          key: 'instance',
+          operator: '=',
+          value: 'localhost',
+        },
+        {
+          key: 'quantile',
+          operator: '=|',
+          value: '0.5',
+          values: ['0.5', '0.9'],
+        },
+      ];
+
+      const result = extractResourceMatcher(queries, filters);
+      expect(result).toBe('{instance="localhost",quantile=~"0.5|0.9"}');
+    });
   });
 });
 

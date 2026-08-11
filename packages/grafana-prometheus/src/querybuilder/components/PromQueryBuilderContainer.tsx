@@ -34,13 +34,14 @@ export function PromQueryBuilderContainer(props: PromQueryBuilderContainerProps)
   const [rendered, setRendered] = useState<RenderedQuery>({ expr: query.expr });
 
   useEffect(() => {
-    // Only rebuild visual query if expr changes from outside
+    // Only rebuild when expr changes from outside; omitting `rendered` from deps is intentional —
+    // including it caused a spurious re-parse that discarded in-progress edits (e.g. adding a second label).
     if (!rendered.visQuery || rendered.expr !== query.expr) {
       const parseResult = buildVisualQueryFromString(query.expr ?? '');
 
       setRendered({ expr: query.expr, visQuery: parseResult.query });
     }
-  }, [query, rendered]);
+  }, [query.expr]);
 
   const onVisQueryChange = (visQuery: PromVisualQuery) => {
     const expr = promQueryModeller.renderQuery(visQuery);
