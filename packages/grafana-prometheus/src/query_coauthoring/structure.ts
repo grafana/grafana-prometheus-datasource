@@ -3,23 +3,28 @@ import { parser } from '@prometheus-io/lezer-promql';
 
 import { ErrorId, replaceBuiltInVariable } from '../querybuilder/parsingUtils';
 
+/** @internal */
 export interface TextRange {
   from: number;
   to: number;
 }
 
+/** @internal */
 export interface EditorSelection {
   anchor: number;
   head: number;
 }
 
+/** @internal */
 export type ChangeFocus = 'inside' | 'outside' | 'mixed';
 
+/** @internal */
 export interface QuerySyntaxAnchor {
   kind: 'aggregation' | 'binary-expression' | 'function' | 'label-matcher' | 'range' | 'selector';
   range: TextRange;
 }
 
+/** @internal */
 export interface StagedQueryChange {
   id: string;
   originalRange: TextRange;
@@ -29,10 +34,13 @@ export interface StagedQueryChange {
   proposedAnchor?: QuerySyntaxAnchor;
 }
 
+/** @internal */
 export type PromQLValidation = { valid: true } | { valid: false };
 
+/** @internal */
 export type StagedQueryDiff = { valid: true; changes: StagedQueryChange[] } | { valid: false; changes: [] };
 
+/** @internal */
 export interface StagedQueryDiffOptions {
   originalInterpolatedQuery?: string;
   proposedInterpolatedQuery?: string;
@@ -68,6 +76,7 @@ const anchorKinds: Record<string, QuerySyntaxAnchor['kind']> = {
   VectorSelector: 'selector',
 };
 
+/** @internal */
 export function normalizeFocusRanges(query: string, selections: EditorSelection[]): TextRange[] {
   if (query.length === 0) {
     return [];
@@ -98,6 +107,7 @@ export function normalizeFocusRanges(query: string, selections: EditorSelection[
   return mergeRanges(expanded);
 }
 
+/** @internal */
 export function extractMetricNames(query: string): string[] {
   const names = new Set<string>();
 
@@ -125,6 +135,7 @@ export function extractMetricNames(query: string): string[] {
   return Array.from(names);
 }
 
+/** @internal */
 export function validatePromQL(query: string, interpolatedQuery = query): PromQLValidation {
   if (query.trim().length === 0) {
     return { valid: false };
@@ -144,6 +155,7 @@ export function validatePromQL(query: string, interpolatedQuery = query): PromQL
   return { valid: !hasError };
 }
 
+/** @internal */
 export function buildStagedQueryDiff(
   originalQuery: string,
   proposedQuery: string,

@@ -6,5 +6,10 @@ import { type QueryEditorCoauthoringRegistrar } from '../query_coauthoring/capab
 import { type PromOptions, type PromQuery } from '../types';
 
 export type PromQueryEditorProps = QueryEditorProps<PrometheusDatasource, PromQuery, PromOptions> & {
+  /**
+   * Registers Grafana's experimental query coauthoring capability.
+   *
+   * @internal
+   */
   onRegisterQueryEditorCoauthoring?: QueryEditorCoauthoringRegistrar<PromQuery>;
 };

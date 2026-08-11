@@ -10,6 +10,7 @@ import {
   type TextRange,
 } from './structure';
 
+/** @internal */
 export interface QueryEditorCoauthoringMetricMetadata {
   name: string;
   type?: string;
@@ -18,12 +19,14 @@ export interface QueryEditorCoauthoringMetricMetadata {
   labels?: string[];
 }
 
+/** @internal */
 export interface QueryEditorCoauthoringContext {
   query: string;
   focusRanges: TextRange[];
   metricMetadata: QueryEditorCoauthoringMetricMetadata[];
 }
 
+/** @internal */
 export interface QueryEditorCoauthoringPreviewChange {
   id: string;
   original: string;
@@ -31,15 +34,25 @@ export interface QueryEditorCoauthoringPreviewChange {
   kind?: string;
 }
 
+/** @internal */
 export interface QueryEditorCoauthoringPreview {
   changes: QueryEditorCoauthoringPreviewChange[];
 }
 
+/** @internal */
 export interface QueryEditorCoauthoringInvocation {
   anchorElement: HTMLElement;
   dismiss: () => void;
 }
 
+/**
+ * Experimental contract between Grafana and the Prometheus query editor's coauthoring adapter.
+ *
+ * @remarks
+ * This interface is internal to Grafana and can change without notice. It is not a plugin API.
+ *
+ * @internal
+ */
 export interface QueryEditorCoauthoringCapability<TQuery extends DataQuery = DataQuery> {
   getValue: () => string;
   getContext: () => Promise<QueryEditorCoauthoringContext>;
@@ -51,12 +64,14 @@ export interface QueryEditorCoauthoringCapability<TQuery extends DataQuery = Dat
   focus: () => void;
 }
 
+/** @internal */
 export interface PrometheusCoauthoringCapability<
   TQuery extends DataQuery = DataQuery,
 > extends QueryEditorCoauthoringCapability<TQuery> {
   invoke: (invocation: QueryEditorCoauthoringInvocation) => void;
 }
 
+/** @internal */
 export type QueryEditorCoauthoringRegistrar<TQuery extends DataQuery = DataQuery> = (
   capability: QueryEditorCoauthoringCapability<TQuery> | undefined
 ) => void;
@@ -130,6 +145,11 @@ const MAX_LABEL_METRICS = 5;
 const MAX_CONTEXT_LABELS = 30;
 const MAX_METADATA_HELP_LENGTH = 500;
 
+/**
+ * Creates the Prometheus adapter for Grafana's experimental query coauthoring interface.
+ *
+ * @internal
+ */
 export function createPrometheusCoauthoringCapability<TQuery extends DataQuery>({
   editor,
   createQuery,

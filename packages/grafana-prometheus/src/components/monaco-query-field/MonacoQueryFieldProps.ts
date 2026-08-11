@@ -19,6 +19,8 @@ export type Props = {
   onBlur: (value: string) => void;
   datasource: PrometheusDatasource;
   timeRange: TimeRange;
+  /** @internal */
   onRegisterQueryEditorCoauthoring?: QueryEditorCoauthoringRegistrar<PromQuery>;
+  /** @internal */
   createQueryForCoauthoring?: (value: string) => PromQuery;
 };

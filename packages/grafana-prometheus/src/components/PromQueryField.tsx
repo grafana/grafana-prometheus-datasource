@@ -27,6 +27,7 @@ import { MonacoQueryFieldWrapper } from './monaco-query-field/MonacoQueryFieldWr
 interface PromQueryFieldProps extends QueryEditorProps<PrometheusDatasource, PromQuery, PromOptions> {
   ExtraFieldElement?: ReactNode;
   hideMetricsBrowser?: boolean;
+  /** @internal */
   onRegisterQueryEditorCoauthoring?: QueryEditorCoauthoringRegistrar<PromQuery>;
   'data-testid'?: string;
 }

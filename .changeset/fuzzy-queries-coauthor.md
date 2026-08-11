@@ -3,4 +3,4 @@
 'grafana-prometheus-datasource': patch
 ---
 
-Add an opt-in PromQL coauthoring capability for the Monaco code editor.
+Add an internal, experimental PromQL coauthoring capability for the Monaco code editor.

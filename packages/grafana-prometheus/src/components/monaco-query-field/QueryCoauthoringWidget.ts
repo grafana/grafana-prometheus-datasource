@@ -45,6 +45,11 @@ interface RegisterQueryCoauthoringWidgetOptions<TQuery extends DataQuery> {
   widgetId: string;
 }
 
+/**
+ * Registers the internal Prometheus adapter for Grafana's experimental query coauthoring interface.
+ *
+ * @internal
+ */
 export function registerPrometheusQueryCoauthoring<TQuery extends DataQuery>({
   createQuery,
   editor,

@@ -46,6 +46,7 @@ export const PromQueryEditorSelector = memo<Props>((props) => {
   const query = getQueryWithDefaults(props.query, app, defaultEditor);
   // This should be filled in from the defaults by now.
   const editorMode = query.editorMode!;
+  // Grafana owns experiment gating by withholding this internal registrar when the feature is disabled.
   const queryCoauthoringAvailable = Boolean(props.onRegisterQueryEditorCoauthoring);
 
   const showAssistant =
