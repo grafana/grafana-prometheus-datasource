@@ -31,10 +31,10 @@ func CustomQueryParameters(logger log.Logger, jsonData *models.PromOptions) sdkh
 			return next
 		}
 
-		customQueryParams := jsonData.CustomQueryParameters
-		warnVal := jsonData.MaxSamplesProcessedWarningThreshold
-		errVal := jsonData.MaxSamplesProcessedErrorThreshold
-		queryStatsEnabled := jsonData.QueryStatsEnabled
+		customQueryParams := string(jsonData.CustomQueryParameters)
+		warnVal := float64(jsonData.MaxSamplesProcessedWarningThreshold)
+		errVal := float64(jsonData.MaxSamplesProcessedErrorThreshold)
+		queryStatsEnabled := bool(jsonData.QueryStatsEnabled)
 
 		if customQueryParams == "" && warnVal == 0 && errVal == 0 && !queryStatsEnabled {
 			return next
