@@ -124,7 +124,6 @@ describe('createPrometheusCoauthoringCapability', () => {
       changes: [
         expect.objectContaining({
           id: 'change-1',
-          focus: 'outside',
           original: 'rate',
           proposed: 'increase',
           kind: 'function',
@@ -153,6 +152,15 @@ describe('createPrometheusCoauthoringCapability', () => {
     expect(setSelections).not.toHaveBeenCalled();
     expect(deltaDecorations).toHaveBeenLastCalledWith(['decoration-0'], []);
     expect(updateOptions).toHaveBeenLastCalledWith({ readOnly: false });
+  });
+
+  it('does not lock the editor for a no-op proposal', () => {
+    const { capability, deltaDecorations, updateOptions } = setup();
+    capability.invoke({ anchorElement: document.createElement('div'), dismiss: jest.fn() });
+
+    expect(capability.stagePreview('rate(http_requests_total[5m])')).toBeUndefined();
+    expect(deltaDecorations).not.toHaveBeenCalled();
+    expect(updateOptions).not.toHaveBeenCalled();
   });
 
   it('validates interpolated PromQL and exposes no query-run command', () => {

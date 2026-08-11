@@ -8,11 +8,10 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { type GrafanaTheme2 } from '@grafana/data';
 import { selectors } from '@grafana/e2e-selectors';
-import { t } from '@grafana/i18n';
 import { type Monaco, type monacoTypes, ReactMonacoEditor, useTheme2 } from '@grafana/ui';
 
-import { createPrometheusCoauthoringCapability } from '../../query_coauthoring/capability';
 import { type Props } from './MonacoQueryFieldProps';
+import { registerPrometheusQueryCoauthoring } from './QueryCoauthoringWidget';
 import { getOverrideServices } from './getOverrideServices';
 import { DataProvider } from './monaco-completion-provider/data_provider';
 import { getCompletionProvider, getSuggestOptions } from './monaco-completion-provider/monaco-completion-provider';
@@ -184,6 +183,8 @@ const MonacoQueryField = (props: Props) => {
   const historyRef = useLatest(history);
   const onRunQueryRef = useLatest(onRunQuery);
   const onBlurRef = useLatest(onBlur);
+  const datasourceRef = useLatest(datasource);
+  const timeRangeRef = useLatest(timeRange);
   const createQueryForCoauthoringRef = useLatest(createQueryForCoauthoring);
 
   const autocompleteDisposeFun = useRef<(() => void) | null>(null);
@@ -219,119 +220,25 @@ const MonacoQueryField = (props: Props) => {
         }}
         onMount={(editor, monaco) => {
           if (onRegisterQueryEditorCoauthoring && createQueryForCoauthoringRef.current) {
-            const capability = createPrometheusCoauthoringCapability({
+            coauthoringDisposeFun.current = registerPrometheusQueryCoauthoring({
               editor,
               createQuery: (value) => createQueryForCoauthoringRef.current!(value),
-              interpolate: (value) => datasource.interpolateString(value, placeHolderScopedVars),
-              retrieveMetricsMetadata: () => languageProvider.retrieveMetricsMetadata(),
-              queryMetricsMetadata: () => languageProvider.queryMetricsMetadata(),
-              queryMetricLabels: (metricName) => languageProvider.queryLabelKeys(timeRange, metricName, 30),
-              previewChangeClassName: styles.coauthoringPreviewChange,
-              previewOriginalClassName: styles.coauthoringPreviewOriginal,
+              getDatasource: () => datasourceRef.current,
+              getLanguageProvider: () => lpRef.current,
+              getTimeRange: () => timeRangeRef.current,
+              monaco,
+              onRegister: onRegisterQueryEditorCoauthoring,
+              styles: {
+                button: styles.coauthoringButton,
+                divider: styles.coauthoringDivider,
+                previewChange: styles.coauthoringPreviewChange,
+                previewOriginal: styles.coauthoringPreviewOriginal,
+                shortcut: styles.coauthoringShortcut,
+                toolbar: styles.coauthoringToolbar,
+                widget: styles.coauthoringWidget,
+              },
+              widgetId: `prometheus-query-coauthoring-${id}`,
             });
-            const widgetNode = document.createElement('div');
-            const toolbarNode = document.createElement('div');
-            const hostNode = document.createElement('div');
-            const copyButton = document.createElement('button');
-            const divider = document.createElement('span');
-            const coauthorButton = document.createElement('button');
-            const shortcut = document.createElement('span');
-            let coauthoringActive = false;
-            let widgetPosition = editor.getPosition() ?? { lineNumber: 1, column: 1 };
-
-            widgetNode.className = styles.coauthoringWidget;
-            widgetNode.style.display = 'none';
-            toolbarNode.className = styles.coauthoringToolbar;
-            copyButton.className = styles.coauthoringButton;
-            copyButton.type = 'button';
-            copyButton.textContent = t('grafana-prometheus.components.monaco-query-field.copy', 'Copy');
-            divider.className = styles.coauthoringDivider;
-            coauthorButton.className = styles.coauthoringButton;
-            coauthorButton.type = 'button';
-            coauthorButton.textContent = t('grafana-prometheus.components.monaco-query-field.coauthor', '✦ Coauthor');
-            shortcut.className = styles.coauthoringShortcut;
-            shortcut.textContent = 'cmd+shift+q';
-            hostNode.style.display = 'none';
-            toolbarNode.append(copyButton, divider, coauthorButton, shortcut);
-            widgetNode.append(toolbarNode, hostNode);
-
-            const widget: monacoTypes.editor.IContentWidget = {
-              allowEditorOverflow: true,
-              getId: () => `prometheus-query-coauthoring-${id}`,
-              getDomNode: () => widgetNode,
-              getPosition: () => ({
-                position: widgetPosition,
-                preference: [
-                  monaco.editor.ContentWidgetPositionPreference.BELOW,
-                  monaco.editor.ContentWidgetPositionPreference.ABOVE,
-                ],
-              }),
-            };
-
-            const hasSelection = () => editor.getSelections()?.some((selection) => !selection.isEmpty()) ?? false;
-            const updateWidgetPosition = () => {
-              widgetPosition = editor.getSelection()?.getEndPosition() ?? editor.getPosition() ?? widgetPosition;
-            };
-            const showSelectionToolbar = () => {
-              updateWidgetPosition();
-              const visible = hasSelection() && !coauthoringActive;
-              widgetNode.style.display = visible ? 'block' : 'none';
-              toolbarNode.style.display = visible ? 'flex' : 'none';
-              hostNode.style.display = 'none';
-              editor.layoutContentWidget(widget);
-            };
-            const startCoauthoring = () => {
-              if (coauthoringActive || editor.getValue().trim().length === 0) {
-                return;
-              }
-              coauthoringActive = true;
-              updateWidgetPosition();
-              widgetNode.style.display = 'block';
-              toolbarNode.style.display = 'none';
-              hostNode.style.display = 'block';
-              editor.layoutContentWidget(widget);
-              capability.invoke({
-                anchorElement: hostNode,
-                dismiss: () => {
-                  coauthoringActive = false;
-                  showSelectionToolbar();
-                },
-              });
-            };
-            const preserveSelection = (event: MouseEvent) => event.preventDefault();
-
-            copyButton.addEventListener('mousedown', preserveSelection);
-            coauthorButton.addEventListener('mousedown', preserveSelection);
-            copyButton.addEventListener('click', () => {
-              const model = editor.getModel();
-              const selectedText =
-                model && editor.getSelections()
-                  ? editor
-                      .getSelections()!
-                      .filter((selection) => !selection.isEmpty())
-                      .map((selection) => model.getValueInRange(selection))
-                      .join('\n')
-                  : '';
-              if (selectedText) {
-                void navigator.clipboard.writeText(selectedText).catch(() => undefined);
-              }
-            });
-            coauthorButton.addEventListener('click', startCoauthoring);
-            editor.addContentWidget(widget);
-            const selectionDisposable = editor.onDidChangeCursorSelection(() => {
-              if (!coauthoringActive) {
-                showSelectionToolbar();
-              }
-            });
-            editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyQ, startCoauthoring);
-
-            onRegisterQueryEditorCoauthoring(capability);
-            coauthoringDisposeFun.current = () => {
-              capability.clearPreview();
-              selectionDisposable.dispose();
-              editor.removeContentWidget(widget);
-              onRegisterQueryEditorCoauthoring(undefined);
-            };
           }
 
           const isEditorFocused = editor.createContextKey<boolean>('isEditorFocused' + id, false);

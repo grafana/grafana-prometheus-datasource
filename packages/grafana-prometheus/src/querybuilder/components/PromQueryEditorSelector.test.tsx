@@ -107,8 +107,7 @@ describe('PromQueryEditorSelector', () => {
     expect(await screen.findByTestId('query-with-assistant-button')).toBeInTheDocument();
   });
 
-  it('replaces the assistant button when the flagged panel editor offers query coauthoring', () => {
-    setQueryCoauthoringEnabled(true);
+  it('replaces the assistant button when the panel editor offers query coauthoring', () => {
     renderWithProps(
       {},
       {

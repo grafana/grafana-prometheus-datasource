@@ -26,10 +26,9 @@ export interface QueryEditorCoauthoringContext {
 
 export interface QueryEditorCoauthoringPreviewChange {
   id: string;
-  focus: 'inside' | 'outside' | 'mixed';
   original: string;
   proposed: string;
-  kind?: 'aggregation' | 'binary-expression' | 'function' | 'label-matcher' | 'range' | 'selector';
+  kind?: string;
 }
 
 export interface QueryEditorCoauthoringPreview {
@@ -240,7 +239,7 @@ export function createPrometheusCoauthoringCapability<TQuery extends DataQuery>(
         originalInterpolatedQuery: interpolate(snapshot.query),
         proposedInterpolatedQuery: interpolate(value),
       });
-      if (!diff.valid) {
+      if (!diff.valid || diff.changes.length === 0) {
         return undefined;
       }
 
@@ -278,7 +277,6 @@ export function createPrometheusCoauthoringCapability<TQuery extends DataQuery>(
       return {
         changes: diff.changes.map((change) => ({
           id: change.id,
-          focus: change.focus,
           original: snapshot.query.slice(change.originalRange.from, change.originalRange.to),
           proposed: value.slice(change.proposedRange.from, change.proposedRange.to),
           kind: change.proposedAnchor?.kind ?? change.originalAnchor?.kind,

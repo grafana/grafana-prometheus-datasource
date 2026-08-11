@@ -25,9 +25,6 @@ import { PromQueryBuilderOptions } from './PromQueryBuilderOptions';
 import { PromQueryCodeEditor } from './PromQueryCodeEditor';
 
 type Props = PromQueryEditorProps;
-type FeatureTogglesWithQueryCoauthoring = typeof config.featureToggles & {
-  'queryeditor.coauthoringUi'?: boolean;
-};
 
 export const PromQueryEditorSelector = memo<Props>((props) => {
   const {
@@ -49,10 +46,7 @@ export const PromQueryEditorSelector = memo<Props>((props) => {
   const query = getQueryWithDefaults(props.query, app, defaultEditor);
   // This should be filled in from the defaults by now.
   const editorMode = query.editorMode!;
-  const queryCoauthoringEnabled = (config.featureToggles as FeatureTogglesWithQueryCoauthoring)[
-    'queryeditor.coauthoringUi'
-  ];
-  const queryCoauthoringAvailable = queryCoauthoringEnabled && Boolean(props.onRegisterQueryEditorCoauthoring);
+  const queryCoauthoringAvailable = Boolean(props.onRegisterQueryEditorCoauthoring);
 
   const showAssistant =
     config.featureToggles.queryWithAssistant &&
