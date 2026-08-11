@@ -1,5 +1,5 @@
 ---
-'grafana-prometheus-datasource': patch
+'promlib': patch
 ---
 
 Fix: Stop rejecting loosely-typed jsonData. Since promlib v0.0.13 a datasource provisioned through the API, Terraform or an operator with an off-spec value — `"true"` for a boolean, `"1000"` or `1000.0` for a number — failed to load, and every query, health check and metric lookup against it errored. Such values are now coerced where the type can be read and ignored where it cannot, each logging a warning. `timeInterval`, `queryTimeout` and `httpMethod` are unchanged and still reject a wrong type.
