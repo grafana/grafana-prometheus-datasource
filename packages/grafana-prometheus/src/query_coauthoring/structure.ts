@@ -1,5 +1,5 @@
 import { type SyntaxNode } from '@lezer/common';
-import { parser } from '@prometheus-io/lezer-promql';
+import { parser, QuotedLabelName, StringLiteral } from '@prometheus-io/lezer-promql';
 
 import { ErrorId, replaceBuiltInVariable } from '../querybuilder/parsingUtils';
 
@@ -123,6 +123,15 @@ export function extractMetricNames(query: string): string[] {
         return false;
       }
 
+      const quotedMetricNode = node.node.getChild('LabelMatchers')?.getChild(QuotedLabelName)?.getChild(StringLiteral);
+      if (quotedMetricNode) {
+        const metricName = decodePromQLStringLiteral(query.slice(quotedMetricNode.from, quotedMetricNode.to));
+        if (metricName !== undefined) {
+          names.add(metricName);
+        }
+        return false;
+      }
+
       const selector = query.slice(node.from, node.to);
       const nameMatcher = /__name__\s*=\s*"((?:\\.|[^"\\])*)"/.exec(selector);
       if (nameMatcher) {
@@ -242,6 +251,10 @@ function mergeRanges(ranges: TextRange[]): TextRange[] {
 }
 
 function computeRawChanges(originalQuery: string, proposedQuery: string): RawChange[] {
+  if (originalQuery === proposedQuery) {
+    return [];
+  }
+
   const originalTokens = tokenizeDiff(originalQuery);
   const proposedTokens = tokenizeDiff(proposedQuery);
 
@@ -291,6 +304,68 @@ function computeRawChanges(originalQuery: string, proposedQuery: string): RawCha
   finishActiveChange();
 
   return changes;
+}
+
+function decodePromQLStringLiteral(literal: string): string | undefined {
+  if (literal.length < 2 || literal[0] !== literal[literal.length - 1]) {
+    return undefined;
+  }
+
+  const quote = literal[0];
+  const value = literal.slice(1, -1);
+  if (quote === '`') {
+    return value;
+  }
+  if (quote !== '"' && quote !== "'") {
+    return undefined;
+  }
+
+  let decoded = '';
+  for (let index = 0; index < value.length; index++) {
+    if (value[index] !== '\\') {
+      decoded += value[index];
+      continue;
+    }
+
+    const escape = value[++index];
+    const simpleEscapes: Record<string, string> = {
+      a: '\x07',
+      b: '\b',
+      f: '\f',
+      n: '\n',
+      r: '\r',
+      t: '\t',
+      v: '\v',
+      '\\': '\\',
+      '"': '"',
+      "'": "'",
+    };
+    if (escape in simpleEscapes) {
+      decoded += simpleEscapes[escape];
+      continue;
+    }
+
+    const digits = escape === 'x' ? 2 : escape === 'u' ? 4 : escape === 'U' ? 8 : /^[0-7]$/.test(escape) ? 3 : 0;
+    const radix = /^[0-7]$/.test(escape) ? 8 : 16;
+    const encoded =
+      radix === 8 ? escape + value.slice(index + 1, index + digits) : value.slice(index + 1, index + 1 + digits);
+    if (
+      digits === 0 ||
+      encoded.length !== digits ||
+      !new RegExp(`^[0-${radix === 8 ? '7' : '9a-fA-F'}]+$`).test(encoded)
+    ) {
+      return undefined;
+    }
+
+    const codePoint = Number.parseInt(encoded, radix);
+    if (codePoint > 0x10ffff || (codePoint >= 0xd800 && codePoint <= 0xdfff)) {
+      return undefined;
+    }
+    decoded += String.fromCodePoint(codePoint);
+    index += radix === 8 ? digits - 1 : digits;
+  }
+
+  return decoded;
 }
 
 function tokenizeDiff(value: string): DiffToken[] {

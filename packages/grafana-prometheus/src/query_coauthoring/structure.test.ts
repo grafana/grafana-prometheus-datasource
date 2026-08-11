@@ -118,6 +118,13 @@ describe('extractMetricNames', () => {
   it('extracts an exact __name__ matcher without treating label values as metrics', () => {
     expect(extractMetricNames('{__name__="http_requests_total",job="api"}')).toEqual(['http_requests_total']);
   });
+
+  it('extracts and decodes quoted UTF-8 metric names', () => {
+    expect(extractMetricNames('{"http.requests",job="api"} + {"http\\\"responses",job="api"}')).toEqual([
+      'http.requests',
+      'http"responses',
+    ]);
+  });
 });
 
 describe('validatePromQL', () => {
@@ -131,6 +138,15 @@ describe('validatePromQL', () => {
 });
 
 describe('buildStagedQueryDiff', () => {
+  it('returns no changes for identical queries before applying the large-diff fallback', () => {
+    const query = Array.from({ length: 300 }, (_, index) => `metric_${index}`).join(' + ');
+
+    expect(buildStagedQueryDiff(query, query, [{ from: 0, to: query.length }])).toEqual({
+      valid: true,
+      changes: [],
+    });
+  });
+
   it('creates stable syntax anchors for multiple changes', () => {
     const original = 'sum(rate(http_requests_total{job="api"}[5m]))';
     const proposed = 'sum(increase(http_requests_total{job="api"}[10m]))';

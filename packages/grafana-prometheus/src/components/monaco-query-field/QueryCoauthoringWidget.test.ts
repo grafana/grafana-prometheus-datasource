@@ -100,6 +100,7 @@ describe('registerPrometheusQueryCoauthoring', () => {
 
   it('offers coauthoring for a selection and restores the selection actions after dismissal', () => {
     const { capability, editor, notifySelectionChange } = setup();
+    const clearPreview = jest.spyOn(capability, 'clearPreview');
     const onInvoke = jest.fn();
     capability.subscribeToInvocation(onInvoke);
     const selection = {
@@ -122,7 +123,45 @@ describe('registerPrometheusQueryCoauthoring', () => {
 
     invocation.dismiss();
 
+    expect(clearPreview).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('button', { name: '✦ Coauthor' })).toBeVisible();
+  });
+
+  it('copies selected text without the async clipboard API', () => {
+    const { editor, notifySelectionChange } = setup();
+    const selection = {
+      getEndPosition: () => ({ lineNumber: 1, column: 12 }),
+      isEmpty: () => false,
+    } as monacoTypes.Selection;
+    jest.mocked(editor.getSelections).mockReturnValue([selection]);
+    jest.mocked(editor.getModel).mockReturnValue({
+      getValueInRange: () => 'http_requests_total',
+    } as unknown as monacoTypes.editor.ITextModel);
+    const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+    const execCommandDescriptor = Object.getOwnPropertyDescriptor(document, 'execCommand');
+    const execCommand = jest.fn(() => true);
+
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined });
+    Object.defineProperty(document, 'execCommand', { configurable: true, value: execCommand });
+
+    try {
+      notifySelectionChange();
+      screen.getByRole('button', { name: 'Copy' }).click();
+
+      expect(execCommand).toHaveBeenCalledWith('copy');
+      expect(document.body.querySelector('textarea')).not.toBeInTheDocument();
+    } finally {
+      if (clipboardDescriptor) {
+        Object.defineProperty(navigator, 'clipboard', clipboardDescriptor);
+      } else {
+        delete (navigator as { clipboard?: Clipboard }).clipboard;
+      }
+      if (execCommandDescriptor) {
+        Object.defineProperty(document, 'execCommand', execCommandDescriptor);
+      } else {
+        delete (document as { execCommand?: typeof document.execCommand }).execCommand;
+      }
+    }
   });
 
   it('uses the current language provider and time range when context is requested', async () => {

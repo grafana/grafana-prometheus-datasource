@@ -118,6 +118,17 @@ describe('PromQueryEditorSelector', () => {
     expect(screen.queryByTestId('query-with-assistant-button')).not.toBeInTheDocument();
   });
 
+  it('keeps the assistant button in builder mode when the panel editor offers query coauthoring', async () => {
+    renderWithProps(
+      { editorMode: QueryEditorMode.Builder },
+      {
+        app: CoreApp.PanelEditor,
+        onRegisterQueryEditorCoauthoring: jest.fn(),
+      }
+    );
+    expect(await screen.findByTestId('query-with-assistant-button')).toBeInTheDocument();
+  });
+
   it('keeps the assistant button in a legacy panel editor without query coauthoring', async () => {
     setQueryCoauthoringEnabled(true);
     renderWithProps({}, { app: CoreApp.PanelEditor });

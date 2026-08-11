@@ -154,6 +154,7 @@ function registerPrometheusQueryCoauthoringWidget<TQuery extends DataQuery>({
     capability.invoke({
       anchorElement: hostNode,
       dismiss: () => {
+        capability.clearPreview();
         coauthoringActive = false;
         showSelectionToolbar();
       },
@@ -174,7 +175,7 @@ function registerPrometheusQueryCoauthoringWidget<TQuery extends DataQuery>({
             .join('\n')
         : '';
     if (selectedText) {
-      void navigator.clipboard.writeText(selectedText).catch(() => undefined);
+      copyText(selectedText);
     }
   });
   coauthorButton.addEventListener('click', startCoauthoring);
@@ -193,4 +194,39 @@ function registerPrometheusQueryCoauthoringWidget<TQuery extends DataQuery>({
     editor.removeContentWidget(widget);
     onRegister(undefined);
   };
+}
+
+function copyText(value: string) {
+  const writeText = navigator.clipboard?.writeText;
+  if (writeText) {
+    void writeText.call(navigator.clipboard, value).catch(() => copyTextFallback(value));
+    return;
+  }
+
+  copyTextFallback(value);
+}
+
+function copyTextFallback(value: string) {
+  if (typeof document.execCommand !== 'function') {
+    return;
+  }
+
+  const activeElement = document.activeElement;
+  const textarea = document.createElement('textarea');
+  textarea.value = value;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.append(textarea);
+  try {
+    textarea.select();
+    document.execCommand('copy');
+  } catch {
+    // Copying is best-effort in browsers without the async clipboard API.
+  } finally {
+    textarea.remove();
+    if (activeElement instanceof HTMLElement) {
+      activeElement.focus();
+    }
+  }
 }

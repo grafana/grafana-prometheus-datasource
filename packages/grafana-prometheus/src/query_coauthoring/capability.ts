@@ -206,7 +206,7 @@ export function createPrometheusCoauthoringCapability<TQuery extends DataQuery>(
     },
     getContext: async () => {
       const snapshot = invocationSnapshot ?? captureSnapshot();
-      const metricNames = extractMetricNames(snapshot.query).slice(0, MAX_CONTEXT_METRICS);
+      const metricNames = extractMetricNames(interpolate(snapshot.query)).slice(0, MAX_CONTEXT_METRICS);
       let metadata = retrieveMetricsMetadata();
       const metadataPromise = metricNames.some((name) => !metadata[name])
         ? queryMetricsMetadata()

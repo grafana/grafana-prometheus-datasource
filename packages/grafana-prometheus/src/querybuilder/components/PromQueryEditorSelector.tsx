@@ -51,7 +51,7 @@ export const PromQueryEditorSelector = memo<Props>((props) => {
 
   const showAssistant =
     config.featureToggles.queryWithAssistant &&
-    !(app === CoreApp.PanelEditor && queryCoauthoringAvailable) &&
+    !(app === CoreApp.PanelEditor && editorMode === QueryEditorMode.Code && queryCoauthoringAvailable) &&
     (app === CoreApp.Explore || app === CoreApp.Dashboard || app === CoreApp.PanelEditor);
 
   const onEditorModeChange = useCallback(

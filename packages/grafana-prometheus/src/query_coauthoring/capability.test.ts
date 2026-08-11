@@ -116,6 +116,16 @@ describe('createPrometheusCoauthoringCapability', () => {
     expect(queryMetricsMetadata).toHaveBeenCalledTimes(1);
   });
 
+  it('uses the interpolated query for metric metadata while preserving the original query', async () => {
+    const { capability, queryMetricLabels } = setup('rate($metric[5m])');
+
+    await expect(capability.getContext()).resolves.toMatchObject({
+      query: 'rate($metric[5m])',
+      metricMetadata: [{ name: 'http_requests_total', type: 'counter' }],
+    });
+    expect(queryMetricLabels).toHaveBeenCalledWith('http_requests_total');
+  });
+
   it('stages a reversible read-only preview and highlights proposed changes', () => {
     const { capability, editor, setValue, setSelections, deltaDecorations, updateOptions } = setup();
     capability.invoke({ anchorElement: document.createElement('div'), dismiss: jest.fn() });
