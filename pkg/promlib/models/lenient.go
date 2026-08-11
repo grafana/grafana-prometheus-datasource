@@ -71,18 +71,18 @@ func (s *LenientString) UnmarshalJSON(data []byte) error {
 		return nil
 	}
 
-	var scalar any
-	if err := json.Unmarshal(data, &scalar); err == nil {
-		switch scalar.(type) {
-		case float64:
-			*s = LenientString(strings.TrimSpace(string(data)))
-			coerced("string", "float64", data)
-			return nil
-		case bool:
-			*s = LenientString(strings.TrimSpace(string(data)))
-			coerced("string", "bool", data)
-			return nil
-		}
+	var number float64
+	if err := json.Unmarshal(data, &number); err == nil {
+		*s = LenientString(strings.TrimSpace(string(data)))
+		coerced("string", "float64", data)
+		return nil
+	}
+
+	var boolean bool
+	if err := json.Unmarshal(data, &boolean); err == nil {
+		*s = LenientString(strings.TrimSpace(string(data)))
+		coerced("string", "bool", data)
+		return nil
 	}
 
 	dropped("string", "unknown", data)
