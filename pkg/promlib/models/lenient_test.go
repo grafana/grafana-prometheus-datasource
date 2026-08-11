@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
+	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/models"
@@ -220,4 +221,132 @@ func jsonDataKeys(t *testing.T) []string {
 	require.NotEmpty(t, fields)
 
 	return slices.Sorted(maps.Keys(fields))
+}
+
+// The warning is the record a strictness migration is decided on: aggregate by type in Loki,
+// and retire a lenient type once it stops appearing. A correctly typed value is not leniency
+// and must stay silent, or the signal never goes quiet.
+func TestLenientTypes_LogOnlyWhenLenient(t *testing.T) {
+	cases := []struct {
+		name     string
+		jsonData string
+		want     []string
+	}{
+		{
+			name:     "correctly typed values log nothing",
+			jsonData: `{"seriesEndpoint":true,"seriesLimit":10,"prometheusVersion":"2.50.1"}`,
+		},
+		{
+			name:     "null is absence, not a type mismatch",
+			jsonData: `{"seriesEndpoint":null,"seriesLimit":null,"prometheusVersion":null}`,
+		},
+		{
+			name:     "undeclared properties log nothing",
+			jsonData: `{"sigV4Auth":123,"someLegacyField":{"a":1}}`,
+		},
+		{
+			name:     "a salvaged boolean is coerced",
+			jsonData: `{"seriesEndpoint":"True"}`,
+			want:     []string{`string->bool coerced "True"`},
+		},
+		{
+			name:     "an unreadable boolean is dropped",
+			jsonData: `{"seriesEndpoint":"banana"}`,
+			want:     []string{`string->bool dropped "banana"`},
+		},
+		{
+			name:     "every lenient value is reported, not just the first",
+			jsonData: `{"seriesEndpoint":"true","seriesLimit":"10","prometheusVersion":2.4}`,
+			want:     []string{`string->bool coerced "true"`, `string->int64 coerced "10"`, `float64->string coerced 2.4`},
+		},
+		{
+			// An integer literal needs no leniency, but a fractional one does even when the
+			// value is whole, because encoding/json rejects it for an integer field.
+			name:     "a whole number is silent while a fractional one is coerced",
+			jsonData: `{"seriesLimit":1000}`,
+		},
+		{
+			name:     "a fractional literal is coerced for an integer property",
+			jsonData: `{"seriesLimit":1000.0}`,
+			want:     []string{`float64->int64 coerced 1000.0`},
+		},
+		{
+			// Same target and outcome as the string case above; only "from" tells them apart.
+			name:     "a number read as a boolean is distinguishable from a string",
+			jsonData: `{"seriesEndpoint":1}`,
+			want:     []string{`float64->bool coerced 1`},
+		},
+		{
+			// float64 and bool are separate labels rather than one combined value, so each
+			// can be aggregated on its own.
+			name:     "a boolean read as a string names bool as the source",
+			jsonData: `{"prometheusVersion":true}`,
+			want:     []string{`bool->string coerced true`},
+		},
+		{
+			// A value that is the right JSON type but unreadable is a different problem from
+			// one that is structurally wrong, so the string source is reported either way.
+			name:     "an unparseable number string is reported as a string, not unknown",
+			jsonData: `{"seriesLimit":"ten","maxSamplesProcessedWarningThreshold":"lots"}`,
+			want:     []string{`string->int64 dropped "ten"`, `string->float64 dropped "lots"`},
+		},
+		{
+			name:     "an unusable shape is dropped",
+			jsonData: `{"seriesEndpoint":["true"],"oauthPassThru":{"a":1}}`,
+			want:     []string{`unknown->bool dropped ["true"]`, `unknown->bool dropped {"a":1}`},
+		},
+		{
+			name:     "a non-list exemplar value is dropped",
+			jsonData: `{"exemplarTraceIdDestinations":{"name":"x"}}`,
+			want:     []string{`unknown->exemplarDestinations dropped {"name":"x"}`},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			logged := captureLenientLogs(t, tc.jsonData)
+			if tc.want == nil {
+				require.Empty(t, logged)
+				return
+			}
+			require.ElementsMatch(t, tc.want, logged)
+		})
+	}
+}
+
+// captureLenientLogs parses jsonData with the package logger swapped for a recorder, and
+// returns "from->to outcome value" for each warning emitted. Swapping a package-level logger
+// means these cases cannot run in parallel.
+func captureLenientLogs(t *testing.T, jsonData string) []string {
+	t.Helper()
+
+	restore := log.DefaultLogger
+	// Embed the real logger so anything other than Warn passes through instead of panicking
+	// on a nil interface.
+	recorder := &lenientLogRecorder{Logger: restore}
+	log.DefaultLogger = recorder
+	defer func() { log.DefaultLogger = restore }()
+
+	_, err := models.ParsePromOptions(backend.DataSourceInstanceSettings{JSONData: []byte(jsonData)})
+	require.NoError(t, err)
+
+	return recorder.lenient
+}
+
+// lenientLogRecorder captures every warning, which is every warning the lenient types emit:
+// they are the only thing in this package that logs.
+type lenientLogRecorder struct {
+	log.Logger
+	lenient []string
+}
+
+func (r *lenientLogRecorder) Warn(_ string, args ...any) {
+	fields := map[string]any{}
+	for i := 0; i+1 < len(args); i += 2 {
+		if key, ok := args[i].(string); ok {
+			fields[key] = args[i+1]
+		}
+	}
+	r.lenient = append(r.lenient,
+		fmt.Sprintf("%v->%v %v %v", fields["from"], fields["to"], fields["outcome"], fields["value"]))
 }
