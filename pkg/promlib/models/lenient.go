@@ -114,41 +114,6 @@ func (f *LenientFloat64) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// LenientInt64 also accepts quoted and fractional numbers, truncating them. dsconfig has no
-// integer valueType, so a stored 1000.0 is schema-valid but encoding/json rejects it.
-type LenientInt64 int64
-
-func (i *LenientInt64) UnmarshalJSON(data []byte) error {
-	var whole int64
-	if err := json.Unmarshal(data, &whole); err == nil {
-		*i = LenientInt64(whole)
-		return nil
-	}
-
-	// A fractional literal is rejected by encoding/json even when the value is whole, so
-	// reaching here means 1000.0 or 1000.5 rather than 1000: leniency either way.
-	var number float64
-	if err := json.Unmarshal(data, &number); err == nil {
-		*i = LenientInt64(number)
-		coerced("int64", "float64", data)
-		return nil
-	}
-
-	var str string
-	if err := json.Unmarshal(data, &str); err == nil {
-		if parsed, err := strconv.ParseFloat(strings.TrimSpace(str), 64); err == nil {
-			*i = LenientInt64(parsed)
-			coerced("int64", "string", data)
-			return nil
-		}
-		dropped("int64", "string", data)
-		return nil
-	}
-
-	dropped("int64", "unknown", data)
-	return nil
-}
-
 // LenientExemplarTraceIDDestinations ignores a value it cannot read rather than failing the
 // unmarshal. It deliberately does not salvage a partial value: the backend never reads this
 // property, so a guessed one would only disagree with what the frontend reads from jsonData.

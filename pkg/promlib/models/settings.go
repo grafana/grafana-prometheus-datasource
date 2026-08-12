@@ -53,7 +53,7 @@ type PromOptions struct {
 	DisableRecordingRules         LenientBool                        `json:"disableRecordingRules"`
 	OauthPassThru                 LenientBool                        `json:"oauthPassThru"`
 	SeriesEndpoint                LenientBool                        `json:"seriesEndpoint"`
-	SeriesLimit                   *LenientInt64                      `json:"seriesLimit"`
+	SeriesLimit                   *LenientFloat64                    `json:"seriesLimit"`
 	ExemplarTraceIDDestinations   LenientExemplarTraceIDDestinations `json:"exemplarTraceIdDestinations"`
 }
 

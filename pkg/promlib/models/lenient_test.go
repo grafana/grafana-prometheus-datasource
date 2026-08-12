@@ -90,7 +90,7 @@ func TestParsePromOptions_LooselyTypedJSONData(t *testing.T) {
 			jsonData: `{"seriesLimit":"1000"}`,
 			assert: func(t *testing.T, opts *models.PromOptions) {
 				require.NotNil(t, opts.SeriesLimit)
-				require.Equal(t, int64(1000), int64(*opts.SeriesLimit))
+				require.Equal(t, 1000.0, float64(*opts.SeriesLimit))
 			},
 		},
 		{
@@ -99,7 +99,7 @@ func TestParsePromOptions_LooselyTypedJSONData(t *testing.T) {
 			jsonData: `{"seriesLimit":1000.0}`,
 			assert: func(t *testing.T, opts *models.PromOptions) {
 				require.NotNil(t, opts.SeriesLimit)
-				require.Equal(t, int64(1000), int64(*opts.SeriesLimit))
+				require.Equal(t, 1000.0, float64(*opts.SeriesLimit))
 			},
 		},
 		{
@@ -137,7 +137,7 @@ func TestParsePromOptions_LooselyTypedJSONData(t *testing.T) {
 				require.Equal(t, http.MethodGet, opts.HTTPMethod)
 				require.Equal(t, "30s", opts.TimeInterval)
 				require.NotNil(t, opts.SeriesLimit)
-				require.Equal(t, int64(5), int64(*opts.SeriesLimit))
+				require.Equal(t, 5.0, float64(*opts.SeriesLimit))
 				require.True(t, bool(opts.QueryStatsEnabled))
 			},
 		},
@@ -257,18 +257,22 @@ func TestLenientTypes_LogOnlyWhenLenient(t *testing.T) {
 		{
 			name:     "every lenient value is reported, not just the first",
 			jsonData: `{"seriesEndpoint":"true","seriesLimit":"10","prometheusVersion":2.4}`,
-			want:     []string{`string->bool coerced "true"`, `string->int64 coerced "10"`, `float64->string coerced 2.4`},
+			want:     []string{`string->bool coerced "true"`, `string->float64 coerced "10"`, `float64->string coerced 2.4`},
 		},
 		{
-			// An integer literal needs no leniency, but a fractional one does even when the
-			// value is whole, because encoding/json rejects it for an integer field.
-			name:     "a whole number is silent while a fractional one is coerced",
+			// Every JSON number shape decodes into a float64 target, so none of these needs
+			// leniency. An integer field would have rejected 1000.0 and 1e3, which is why
+			// seriesLimit is a float: it mirrors the frontend's `number` and stays quiet.
+			name:     "any number shape is accepted without coercion",
 			jsonData: `{"seriesLimit":1000}`,
 		},
 		{
-			name:     "a fractional literal is coerced for an integer property",
+			name:     "a fractional literal needs no coercion either",
 			jsonData: `{"seriesLimit":1000.0}`,
-			want:     []string{`float64->int64 coerced 1000.0`},
+		},
+		{
+			name:     "nor does exponent notation",
+			jsonData: `{"seriesLimit":1e3}`,
 		},
 		{
 			// Same target and outcome as the string case above; only "from" tells them apart.
@@ -288,7 +292,7 @@ func TestLenientTypes_LogOnlyWhenLenient(t *testing.T) {
 			// one that is structurally wrong, so the string source is reported either way.
 			name:     "an unparseable number string is reported as a string, not unknown",
 			jsonData: `{"seriesLimit":"ten","maxSamplesProcessedWarningThreshold":"lots"}`,
-			want:     []string{`string->int64 dropped "ten"`, `string->float64 dropped "lots"`},
+			want:     []string{`string->float64 dropped "ten"`, `string->float64 dropped "lots"`},
 		},
 		{
 			name:     "an unusable shape is dropped",
