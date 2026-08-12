@@ -479,6 +479,23 @@ describe('QueryCache: Prometheus', function () {
     expect(cacheRequest.shouldCache).toBe(true);
   });
 
+  it('should cache when rangeRaw.to is a relative offset (e.g. now-24h)', () => {
+    const request = mockPromRequest({
+      range: {
+        from: dateTime('2023-01-29T20:33:01.332Z'),
+        to: dateTime('2023-01-30T20:33:01.332Z'),
+        raw: { from: 'now-48h', to: 'now-24h' },
+      },
+      rangeRaw: { from: 'now-48h', to: 'now-24h' },
+    });
+    const storage = new QueryCache<PromQuery>({
+      getTargetSignature: getPrometheusTargetSignature,
+      overlapString: '10m',
+    });
+    const cacheRequest = storage.requestInfo(request);
+    expect(cacheRequest.shouldCache).toBe(true);
+  });
+
   it('should not modify the initial request', () => {
     const storage = new QueryCache<PromQuery>({
       getTargetSignature: getPrometheusTargetSignature,

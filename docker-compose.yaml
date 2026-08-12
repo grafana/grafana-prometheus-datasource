@@ -1,7 +1,7 @@
 services:
-  # Vanilla upstream Prometheus so the provisioned 'prometheus' datasource
-  # (url: http://prometheus:9090) actually points at a running server. It
-  # scrapes itself and the Grafana dev container, giving real metric names,
+  # Vanilla upstream Prometheus backing both provisioned datasources: directly
+  # for 'prometheus-direct', and via the gzip-forcing proxy for 'prometheus-gzip'.
+  # It scrapes itself and the Grafana dev container, giving real metric names,
   # label names and label values to exercise the plugin against.
   prometheus:
     image: prom/prometheus
@@ -11,12 +11,46 @@ services:
     ports:
       - 9090:9090/tcp
 
+  # Test-only gzip-forcing reverse proxy in front of Prometheus. The provisioned
+  # datasource points at this (http://prometheus-gzip:9091) instead of directly
+  # at Prometheus so responses are always gzip-compressed with an explicit
+  # Content-Length. That deterministically recreates the framing conditions that
+  # produced the externalized-plugin 500s; vanilla Prometheus does not reliably
+  # emit this shape, which is exactly why the original bug hid from tests.
+  prometheus-gzip:
+    image: golang:1.26-alpine
+    container_name: 'prometheus-gzip'
+    depends_on:
+      - prometheus
+    working_dir: /app
+    volumes:
+      - ./tests/gzip-proxy/main.go:/app/main.go:ro
+    environment:
+      UPSTREAM: http://prometheus:9090
+      LISTEN: ':9091'
+      GOTOOLCHAIN: local
+      GOPROXY: 'off'
+    command: ['go', 'run', 'main.go']
+    healthcheck:
+      # 'go run' has to compile the proxy before it listens, and depends_on alone
+      # only waits for the container to start, not for that to finish. Proxying
+      # /-/healthy confirms both this process is listening and upstream
+      # Prometheus is actually serving, so cold starts can't race resource calls.
+      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://localhost:9091/-/healthy']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
   grafana:
     extends:
       file: .config/docker-compose-base.yaml
       service: grafana
     depends_on:
-      - prometheus
+      prometheus:
+        condition: service_started
+      prometheus-gzip:
+        condition: service_healthy
     environment:
       # Grafana 13 enables splashScreen by default; the overlay blocks Playwright interactions.
       GF_FEATURE_TOGGLES_splashScreen: 'false'

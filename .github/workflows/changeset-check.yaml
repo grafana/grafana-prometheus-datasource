@@ -58,6 +58,19 @@ jobs:
           echo "Found changeset file(s):"
           echo "$added_files"
 
+      - name: Verify library changesets have datasource mirrors
+        if: steps.skip-bot.outputs.skip != 'true' && steps.skip-label.outputs.skip != 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "$BASE_SHA"
+          merge_base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
+          mapfile -t added_files < <(git diff --name-only --diff-filter=A "$merge_base" "$HEAD_SHA" -- \
+            '.changeset/*.md' ':(exclude).changeset/README.md')
+          node scripts/check-changeset-mirrors.js "${added_files[@]}"
+
       - name: Verify promlib changesets are patch-only
         if: steps.skip-bot.outputs.skip != 'true' && steps.skip-label.outputs.skip != 'true'
         env:

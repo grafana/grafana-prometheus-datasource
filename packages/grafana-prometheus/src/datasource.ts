@@ -845,7 +845,7 @@ export const extractResourceMatcher = (
 ): string | undefined => {
   // Extract metric names from queries we have already
   const metricMatch = populateMatchParamsFromQueries(queries);
-  const labelFilters: QueryBuilderLabelFilter[] = adhocFilters.map((f) => ({
+  const labelFilters: QueryBuilderLabelFilter[] = adhocFilters.map(remapOneOf).map((f) => ({
     label: f.key,
     value: f.value,
     op: f.operator,
