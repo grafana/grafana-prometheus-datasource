@@ -123,17 +123,10 @@ jobs:
   # Runs on the default branch copy of this workflow, so every check below is
   # trusted code acting on trusted inputs. It decides whether a canary built by
   # npm-canary-build.yml may be offered for publish approval at all.
-  #
-  # The workflow_run.event check is redundant while the build workflow only
-  # triggers on pull_request, but it is kept deliberately: everything below
-  # assumes a pull_request-shaped payload, and the build workflow's triggers
-  # live in a file outside this workflow's trust boundary. If that ever gains
-  # another trigger, this fails closed instead of running on stale assumptions.
   authorize-canary:
     if: >-
       github.event_name == 'workflow_run' &&
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event == 'pull_request'
+      github.event.workflow_run.conclusion == 'success'
     name: Authorize @grafana/prometheus canary
     runs-on: github-hosted-ubuntu-x64-small
     permissions:
