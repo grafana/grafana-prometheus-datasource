@@ -66,7 +66,7 @@ jobs:
             --run-id "$RUN_ID" \
             --run-attempt "$RUN_ATTEMPT" > "$plan_file"
 
-          publish=$(jq -er 'if .publish == true then "true" elif .publish == false then "false" else error("invalid publish value") end' "$plan_file")
+          publish=$(jq -er 'if .publish == true then "true" elif .publish == false then "false" else error("invalid publish value: \(.publish)") end' "$plan_file")
           echo "publish=$publish" >> "$GITHUB_OUTPUT"
 
           if [[ "$publish" == "true" ]]; then
@@ -115,6 +115,9 @@ jobs:
           # The name binds the artifact to this exact run, so the publish workflow
           # can only ever download the tarball built by the run that triggered it.
           name: npm-canary-${{ github.run_id }}-${{ github.run_attempt }}
+          # upload-artifact roots the archive at this directory, so the tarball
+          # sits at the artifact root — verify-npm-canary-tarball.sh depends on
+          # that layout.
           path: ${{ runner.temp }}/npm-canary-artifact
           if-no-files-found: error
           retention-days: 7

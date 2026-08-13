@@ -225,6 +225,14 @@ describe('plan-npm-canary CLI', () => {
     );
   });
 
+  it('rejects an empty value for a required argument', () => {
+    const { exec } = fakeGit();
+
+    expect(() => run({ argv: argv({ '--run-attempt': '' }), exec })).toThrow(
+      'Missing required argument: --run-attempt'
+    );
+  });
+
   it('rejects a flag with no value', () => {
     const { exec } = fakeGit();
 

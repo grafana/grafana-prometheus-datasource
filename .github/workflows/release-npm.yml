@@ -123,6 +123,12 @@ jobs:
   # Runs on the default branch copy of this workflow, so every check below is
   # trusted code acting on trusted inputs. It decides whether a canary built by
   # npm-canary-build.yml may be offered for publish approval at all.
+  #
+  # The workflow_run.event check is redundant while the build workflow only
+  # triggers on pull_request, but it is kept deliberately: everything below
+  # assumes a pull_request-shaped payload, and the build workflow's triggers
+  # live in a file outside this workflow's trust boundary. If that ever gains
+  # another trigger, this fails closed instead of running on stale assumptions.
   authorize-canary:
     if: >-
       github.event_name == 'workflow_run' &&
@@ -172,8 +178,7 @@ jobs:
             '
               if .state != "open" then "The pull request is no longer open."
               elif .head.repo.full_name != $repo then "Fork pull requests cannot publish canaries."
-              elif .base.repo.full_name != $repo or .base.ref != $defaultBranch then
-                "Canaries must target the repository default branch."
+              elif .base.ref != $defaultBranch then "Canaries must target the repository default branch."
               elif .head.sha != $builtHeadSha then "The pull request head changed after the canary was built."
               elif ([.labels[].name] | index("npm-canary") | not) then "The npm-canary label is no longer present."
               else "" end
@@ -323,7 +328,6 @@ jobs:
               .state == "open" and
               .head.repo.full_name == $repo and
               .head.sha == $builtHeadSha and
-              .base.repo.full_name == $repo and
               .base.ref == $defaultBranch and
               ([.labels[].name] | index("npm-canary") != null)
             ' >/dev/null; then

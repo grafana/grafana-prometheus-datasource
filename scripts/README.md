@@ -99,6 +99,11 @@ Once published, the workflow comments the install command on the pull request:
 npm install @grafana/prometheus@<exact-version>
 ```
 
+A canary is built from the pull request's head commit as it stands — not from a
+merge with the latest `main` — so it can differ from what a post-merge release
+would contain. Canaries are for trying a change out, not for verifying the
+eventual release.
+
 #### How it works
 
 1. **`npm-canary-build.yml`** runs in the pull request's unprivileged context.

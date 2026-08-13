@@ -94,6 +94,12 @@ describe('verify-npm-canary-tarball CLI', () => {
     );
   });
 
+  it('rejects an empty value for a required argument', () => {
+    expect(() => run(argv({ '--pr-number': '' }), { readFile: () => '{}', write: () => {} })).toThrow(
+      'Missing required argument: prNumber'
+    );
+  });
+
   it('rejects an unknown flag', () => {
     expect(() => run([...argv(), '--version', '13.1.12'], { readFile: () => '{}', write: () => {} })).toThrow(
       'Invalid argument: --version'

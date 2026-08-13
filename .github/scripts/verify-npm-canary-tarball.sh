@@ -28,7 +28,7 @@ tarball="${entries[0]}"
 
 # `-O` writes the manifest to stdout, so paths inside the archive never decide
 # where anything lands on disk.
-manifest="${RUNNER_TEMP:-/tmp}/npm-canary-package.json"
+manifest="${RUNNER_TEMP}/npm-canary-package.json"
 tar -xOzf "$tarball" package/package.json > "$manifest"
 
 version=$(node scripts/verify-npm-canary-tarball.js \
