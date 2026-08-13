@@ -93,30 +93,46 @@ func (s *LenientString) UnmarshalJSON(data []byte) error {
 type LenientFloat64 float64
 
 func (f *LenientFloat64) UnmarshalJSON(data []byte) error {
+	value, from, ok := readFloat64(data)
+	if !ok {
+		dropped("float64", from, data)
+		return nil
+	}
+
+	*f = LenientFloat64(value)
+	if from != "" {
+		coerced("float64", from, data)
+	}
+
+	return nil
+}
+
+// readFloat64 reports what LenientFloat64 reads, which JSON type it came from ("" meaning the
+// declared type, so no leniency), and whether it could be read at all. Split out so
+// clearDroppedPointers can ask the same question without logging and skewing the counts.
+func readFloat64(data []byte) (value float64, from string, ok bool) {
 	var number float64
 	if err := json.Unmarshal(data, &number); err == nil {
-		*f = LenientFloat64(number)
-		return nil
+		// value was expected float64
+		return number, "", true
 	}
 
 	var str string
 	if err := json.Unmarshal(data, &str); err == nil {
 		if parsed, err := strconv.ParseFloat(strings.TrimSpace(str), 64); err == nil {
-			*f = LenientFloat64(parsed)
-			coerced("float64", "string", data)
-			return nil
+			// value was a number string
+			return parsed, "string", true
 		}
-		dropped("float64", "string", data)
-		return nil
+		// value was a non number string (i.e. "ten")
+		return 0, "string", false
 	}
 
-	dropped("float64", "unknown", data)
-	return nil
+	// value was an unsupported value to coerce from.
+	return 0, "unknown", false
 }
 
-// LenientExemplarTraceIDDestinations ignores a value it cannot read rather than failing the
-// unmarshal. It deliberately does not salvage a partial value: the backend never reads this
-// property, so a guessed one would only disagree with what the frontend reads from jsonData.
+// LenientExemplarTraceIDDestinations ignores a value it cannot read. It does not salvage a
+// partial one: a guess would only disagree with what the frontend reads from jsonData.
 type LenientExemplarTraceIDDestinations []ExemplarTraceIDDestination
 
 func (d *LenientExemplarTraceIDDestinations) UnmarshalJSON(data []byte) error {
@@ -128,4 +144,23 @@ func (d *LenientExemplarTraceIDDestinations) UnmarshalJSON(data []byte) error {
 
 	dropped("exemplarDestinations", "unknown", data)
 	return nil
+}
+
+// encoding/json allocates a pointer field before the lenient type sees the value, so a dropped
+// value leaves it non-nil at zero — indistinguishable from a stored 0, which for seriesLimit is
+// the difference between "apply your own default" and "limit is zero". A lenient type is handed
+// a pointer to the allocated value, never to the field, so only the parser can restore nil.
+func (o *PromOptions) clearDroppedPointers(data []byte) {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return
+	}
+
+	if value, ok := raw["seriesLimit"]; ok {
+		if _, _, readable := readFloat64(value); !readable {
+			// value was an unsupported value to coerce from
+			// set to nil so ensure it is not confused with a stored 0
+			o.SeriesLimit = nil
+		}
+	}
 }

@@ -76,6 +76,7 @@ func ParsePromOptions(settings backend.DataSourceInstanceSettings) (*PromOptions
 	if err := json.Unmarshal(data, &opts); err != nil {
 		return nil, fmt.Errorf("error unmarshalling JSONData: %w", err)
 	}
+	opts.clearDroppedPointers(data)
 	opts.ApplyDefaults()
 	if err := opts.Validate(); err != nil {
 		return nil, err

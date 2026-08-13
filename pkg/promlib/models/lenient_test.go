@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"maps"
 	"net/http"
+	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
@@ -15,9 +17,8 @@ import (
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/models"
 )
 
-// Provisioning, Terraform and operators all store values whose JSON type does not match
-// the struct. Mistyping any property #220 declared was harmless before it, so it must not
-// fail the datasource now.
+// Mistyping any property #220 declared was harmless before it, so it must not fail the
+// datasource now.
 func TestParsePromOptions_LooselyTypedJSONData(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -154,8 +155,7 @@ func TestParsePromOptions_LooselyTypedJSONData(t *testing.T) {
 	}
 }
 
-// These two were already strict before #220, so they stay strict — this shim only absorbs
-// the discrepancies #220 introduced.
+// Already strict before #220, so they stay strict.
 func TestParsePromOptions_PreexistingStrictFieldsStayStrict(t *testing.T) {
 	for _, jsonData := range []string{
 		`{"httpMethod":30}`,
@@ -171,9 +171,8 @@ func TestParsePromOptions_PreexistingStrictFieldsStayStrict(t *testing.T) {
 	}
 }
 
-// Every lenient property must tolerate any stored type. The key list comes from the struct
-// rather than a fixed list on purpose: the original gap was a property nobody remembered to
-// account for, and a property added without a lenient type fails here instead of shipping.
+// Every lenient property must tolerate any stored type. The key list comes from the struct on
+// purpose: the original gap was a property nobody remembered to account for.
 func TestParsePromOptions_LenientFieldsCannotFailTheDatasource(t *testing.T) {
 	values := []string{
 		`"true"`, `"false"`, `"True"`, `"nonsense"`, `true`, `false`, `1`, `0`,
@@ -198,9 +197,8 @@ func TestParsePromOptions_LenientFieldsCannotFailTheDatasource(t *testing.T) {
 	}
 }
 
-// strictJSONDataFields fail the datasource on a type mismatch, by design. A property only
-// belongs here if it was strict before #220 or is validated separately — if a new property
-// shows up in the test above, give it a lenient type from lenient.go rather than listing it.
+// strictJSONDataFields fail the datasource on a type mismatch, by design. Only add a property
+// here if it predates #220 or is validated separately; otherwise give it a lenient type.
 var strictJSONDataFields = map[string]bool{
 	"httpMethod":   true,
 	"timeInterval": true,
@@ -208,8 +206,7 @@ var strictJSONDataFields = map[string]bool{
 }
 
 // jsonDataKeys returns every json key PromOptions declares. Marshalling a zero value lets
-// encoding/json resolve the keys promoted from embedded structs, so this stays in step with
-// how jsonData is actually decoded. No field uses omitempty, so every key is present.
+// encoding/json resolve promoted keys; no field uses omitempty, so all of them are present.
 func jsonDataKeys(t *testing.T) []string {
 	t.Helper()
 
@@ -223,9 +220,8 @@ func jsonDataKeys(t *testing.T) []string {
 	return slices.Sorted(maps.Keys(fields))
 }
 
-// The warning is the record a strictness migration is decided on: aggregate by type in Loki,
-// and retire a lenient type once it stops appearing. A correctly typed value is not leniency
-// and must stay silent, or the signal never goes quiet.
+// These warnings are what a strictness migration is decided on, so a correctly typed value must
+// stay silent or the signal never goes quiet.
 func TestLenientTypes_LogOnlyWhenLenient(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -260,9 +256,8 @@ func TestLenientTypes_LogOnlyWhenLenient(t *testing.T) {
 			want:     []string{`string->bool coerced "true"`, `string->float64 coerced "10"`, `float64->string coerced 2.4`},
 		},
 		{
-			// Every JSON number shape decodes into a float64 target, so none of these needs
-			// leniency. An integer field would have rejected 1000.0 and 1e3, which is why
-			// seriesLimit is a float: it mirrors the frontend's `number` and stays quiet.
+			// Every number shape decodes into a float64 target, so none of these needs leniency.
+			// An integer field would have rejected 1000.0 and 1e3.
 			name:     "any number shape is accepted without coercion",
 			jsonData: `{"seriesLimit":1000}`,
 		},
@@ -281,15 +276,14 @@ func TestLenientTypes_LogOnlyWhenLenient(t *testing.T) {
 			want:     []string{`float64->bool coerced 1`},
 		},
 		{
-			// float64 and bool are separate labels rather than one combined value, so each
-			// can be aggregated on its own.
+			// Separate labels rather than one combined value, so each aggregates on its own.
 			name:     "a boolean read as a string names bool as the source",
 			jsonData: `{"prometheusVersion":true}`,
 			want:     []string{`bool->string coerced true`},
 		},
 		{
-			// A value that is the right JSON type but unreadable is a different problem from
-			// one that is structurally wrong, so the string source is reported either way.
+			// An unreadable string is a different problem from a structurally wrong value, so the
+			// string source is reported either way.
 			name:     "an unparseable number string is reported as a string, not unknown",
 			jsonData: `{"seriesLimit":"ten","maxSamplesProcessedWarningThreshold":"lots"}`,
 			want:     []string{`string->float64 dropped "ten"`, `string->float64 dropped "lots"`},
@@ -318,9 +312,8 @@ func TestLenientTypes_LogOnlyWhenLenient(t *testing.T) {
 	}
 }
 
-// captureLenientLogs parses jsonData with the package logger swapped for a recorder, and
-// returns "from->to outcome value" for each warning emitted. Swapping a package-level logger
-// means these cases cannot run in parallel.
+// captureLenientLogs returns "from->to outcome value" for each warning emitted. It swaps a
+// package-level logger, so these cases cannot run in parallel.
 func captureLenientLogs(t *testing.T, jsonData string) []string {
 	t.Helper()
 
@@ -337,8 +330,7 @@ func captureLenientLogs(t *testing.T, jsonData string) []string {
 	return recorder.lenient
 }
 
-// lenientLogRecorder captures every warning, which is every warning the lenient types emit:
-// they are the only thing in this package that logs.
+// Captures every warning, which is all of them: the lenient types are the only thing that logs.
 type lenientLogRecorder struct {
 	log.Logger
 	lenient []string
@@ -353,4 +345,71 @@ func (r *lenientLogRecorder) Warn(_ string, args ...any) {
 	}
 	r.lenient = append(r.lenient,
 		fmt.Sprintf("%v->%v %v %v", fields["from"], fields["to"], fields["outcome"], fields["value"]))
+}
+
+// seriesLimit is a pointer because unset means "apply your own default" where 0 means "limit is
+// zero", so an ignored value must leave it unset rather than assert a limit nobody chose.
+func TestParsePromOptions_DroppedPointerIsLeftUnset(t *testing.T) {
+	cases := []struct {
+		name     string
+		jsonData string
+		want     *float64
+	}{
+		{name: "absent stays unset", jsonData: `{}`},
+		{name: "null stays unset", jsonData: `{"seriesLimit":null}`},
+		{name: "ignored string is left unset", jsonData: `{"seriesLimit":"ten"}`},
+		{name: "ignored object is left unset", jsonData: `{"seriesLimit":{}}`},
+		{name: "ignored array is left unset", jsonData: `{"seriesLimit":[]}`},
+		{name: "ignored boolean is left unset", jsonData: `{"seriesLimit":true}`},
+
+		{name: "a stored number is kept", jsonData: `{"seriesLimit":1000}`, want: ptr(1000)},
+		{name: "an explicit zero is kept, not mistaken for unset", jsonData: `{"seriesLimit":0}`, want: ptr(0)},
+		{name: "a quoted number is coerced and kept", jsonData: `{"seriesLimit":"1000"}`, want: ptr(1000)},
+		{name: "a quoted zero is coerced and kept", jsonData: `{"seriesLimit":"0"}`, want: ptr(0)},
+		{name: "a fractional number is kept", jsonData: `{"seriesLimit":1000.5}`, want: ptr(1000.5)},
+		{name: "exponent notation is kept", jsonData: `{"seriesLimit":1e3}`, want: ptr(1000)},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			opts, err := models.ParsePromOptions(backend.DataSourceInstanceSettings{
+				JSONData: []byte(tc.jsonData),
+			})
+			require.NoError(t, err)
+
+			if tc.want == nil {
+				require.Nil(t, opts.SeriesLimit)
+				return
+			}
+			require.NotNil(t, opts.SeriesLimit)
+			require.Equal(t, *tc.want, float64(*opts.SeriesLimit))
+		})
+	}
+}
+
+func ptr(v float64) *float64 { return &v }
+
+// clearDroppedPointers names seriesLimit explicitly, so a pointer property added later would
+// silently keep its allocated zero. This fails when that happens.
+func TestPointerPropertiesAreAccountedFor(t *testing.T) {
+	corrected := map[string]bool{"seriesLimit": true}
+
+	var walk func(reflect.Type)
+	walk = func(structType reflect.Type) {
+		for i := range structType.NumField() {
+			field := structType.Field(i)
+			name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
+			if field.Anonymous && name == "" && field.Type.Kind() == reflect.Struct {
+				walk(field.Type)
+				continue
+			}
+			if name == "" || name == "-" || field.Type.Kind() != reflect.Pointer {
+				continue
+			}
+			require.True(t, corrected[name],
+				"%q is a pointer property: a dropped value would leave it non-nil at zero. "+
+					"Handle it in clearDroppedPointers and add it here.", name)
+		}
+	}
+	walk(reflect.TypeOf(models.PromOptions{}))
 }
