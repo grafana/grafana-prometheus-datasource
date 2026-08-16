@@ -3,7 +3,7 @@ module github.com/grafana/grafana-prometheus-datasource
 go 1.26.5
 
 require (
-	github.com/grafana/grafana-plugin-sdk-go v0.295.0
+	github.com/grafana/grafana-plugin-sdk-go v0.296.1
 	github.com/stretchr/testify v1.11.1
 )
 
