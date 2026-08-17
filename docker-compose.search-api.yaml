@@ -9,4 +9,6 @@ services:
 
   grafana:
     volumes:
-      - ./devenv/prometheus/search-api-provisioning:/etc/grafana/provisioning:ro
+      # Different target from the base provisioning/ mount, so this file layers
+      # on top instead of replacing prometheus-direct / prometheus-gzip.
+      - ./devenv/prometheus/search-api-provisioning/search-api.yml:/etc/grafana/provisioning/datasources/search-api.yml:ro
