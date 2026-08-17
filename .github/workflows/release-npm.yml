@@ -374,7 +374,7 @@ jobs:
           # contain the published code, and record that permanently in Sigstore's
           # public transparency log.
           NPM_CONFIG_PROVENANCE: 'false'
-        run: npm publish "$TARBALL" --access public --tag canary --ignore-scripts
+        run: npm publish "$TARBALL" --registry=https://registry.npmjs.org --access public --tag canary --ignore-scripts
 
   # Keep the GitHub write separate from npm publishing so a transient comment
   # failure can be retried without attempting to republish the same version.
