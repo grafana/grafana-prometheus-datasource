@@ -42,53 +42,52 @@ func (r *Resource) ExecuteSearch(
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		// Errors are small, non-streaming Prometheus JSON responses. Sending the
-		// body once preserves the upstream status and message for Grafana's UI.
-		// The read is bounded so a misbehaving upstream cannot force unbounded
-		// buffering here.
-		body, err := io.ReadAll(io.LimitReader(resp.Body, MaxSearchErrorBodyBytes))
-		if err != nil {
-			return fmt.Errorf("error reading search error response: %v", err)
-		}
-		// The buffered body no longer matches the upstream framing/encoding
-		// headers, so strip them to avoid a length/encoding mismatch that a
-		// downstream proxy would reject.
-		errorHeaders := resp.Header.Clone()
-		errorHeaders.Del("Content-Length")
-		errorHeaders.Del("Content-Encoding")
-		errorHeaders.Del("Transfer-Encoding")
-		return sender.Send(&backend.CallResourceResponse{
-			Status:  resp.StatusCode,
-			Headers: errorHeaders,
-			Body:    body,
-		})
-	}
-
 	// resp.Header may be nil (a RoundTripper is permitted to return one), and
 	// http.Header(nil).Clone() stays nil, so start from an empty header set to
-	// keep the writes below safe.
+	// keep the writes below safe. Strip framing/encoding headers up front: both
+	// the buffered error path and the streamed success path rewrite the body, so
+	// the upstream Content-Length / Content-Encoding / Transfer-Encoding would
+	// no longer match what we forward.
 	headers := resp.Header.Clone()
 	if headers == nil {
 		headers = http.Header{}
 	}
-	headers.Set("Content-Type", "application/x-ndjson; charset=utf-8")
 	headers.Del("Content-Length")
 	headers.Del("Content-Encoding")
 	headers.Del("Transfer-Encoding")
 
 	// We requested gzip explicitly, so Go's transport does not auto-decompress.
-	// Decode it here with a streaming reader that yields plaintext NDJSON without
-	// buffering the whole body. Any other encoding is forwarded as-is.
+	// Decode it here with a streaming reader that yields plaintext without
+	// buffering the whole body. Error responses are gzipped too when the
+	// upstream honors Accept-Encoding. Any other encoding is forwarded as-is.
 	body := io.Reader(resp.Body)
 	if strings.EqualFold(resp.Header.Get("Content-Encoding"), "gzip") {
 		gzReader, err := gzip.NewReader(resp.Body)
 		if err != nil {
-			return fmt.Errorf("error creating gzip reader for search stream: %v", err)
+			return fmt.Errorf("error creating gzip reader for search response: %v", err)
 		}
 		defer gzReader.Close()
 		body = gzReader
 	}
+
+	if resp.StatusCode != http.StatusOK {
+		// Errors are small, non-streaming Prometheus JSON responses. Sending the
+		// body once preserves the upstream status and message for Grafana's UI.
+		// The read is bounded so a misbehaving upstream cannot force unbounded
+		// buffering here. LimitReader wraps the (possibly decompressed) body so
+		// the cap is on plaintext bytes, not compressed wire size.
+		bodyBytes, err := io.ReadAll(io.LimitReader(body, MaxSearchErrorBodyBytes))
+		if err != nil {
+			return fmt.Errorf("error reading search error response: %v", err)
+		}
+		return sender.Send(&backend.CallResourceResponse{
+			Status:  resp.StatusCode,
+			Headers: headers,
+			Body:    bodyBytes,
+		})
+	}
+
+	headers.Set("Content-Type", "application/x-ndjson; charset=utf-8")
 
 	// Grafana applies status and headers only from the first streamed response.
 	// Later Send calls intentionally contain body bytes only.

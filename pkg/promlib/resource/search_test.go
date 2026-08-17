@@ -140,7 +140,9 @@ func TestResourceExecuteSearchStripsFramingHeadersFromErrorResponse(t *testing.T
 	errorBody := `{"status":"error","error":"boom"}`
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Content-Encoding", "gzip")
+		w.Header().Set("Content-Encoding", "identity")
+		w.Header().Set("Content-Length", "999")
+		w.Header().Set("Transfer-Encoding", "chunked")
 		w.WriteHeader(http.StatusBadGateway)
 		_, _ = w.Write([]byte(errorBody))
 	}))
@@ -167,6 +169,41 @@ func TestResourceExecuteSearchStripsFramingHeadersFromErrorResponse(t *testing.T
 	require.Empty(t, http.Header(responses[0].Headers).Get("Content-Encoding"))
 	require.Empty(t, http.Header(responses[0].Headers).Get("Content-Length"))
 	require.Empty(t, http.Header(responses[0].Headers).Get("Transfer-Encoding"))
+}
+
+func TestResourceExecuteSearchDecodesGzipErrorResponse(t *testing.T) {
+	errorBody := `{"status":"error","errorType":"unavailable","error":"search API disabled"}`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		require.Equal(t, "gzip", req.Header.Get("Accept-Encoding"))
+		var buf bytes.Buffer
+		gz := gzip.NewWriter(&buf)
+		_, _ = gz.Write([]byte(errorBody))
+		require.NoError(t, gz.Close())
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Encoding", "gzip")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write(buf.Bytes())
+	}))
+	defer server.Close()
+
+	res := newSearchResource(t, server.URL)
+	var responses []*backend.CallResourceResponse
+	err := res.ExecuteSearch(context.Background(), &backend.CallResourceRequest{
+		Method: http.MethodGet,
+		Path:   "api/v1/search/metric_names",
+		URL:    "/api/v1/search/metric_names",
+	}, backend.CallResourceResponseSenderFunc(func(resp *backend.CallResourceResponse) error {
+		responses = append(responses, resp)
+		return nil
+	}))
+
+	require.NoError(t, err)
+	require.Len(t, responses, 1)
+	require.Equal(t, http.StatusInternalServerError, responses[0].Status)
+	require.Equal(t, errorBody, string(responses[0].Body))
+	require.Equal(t, "application/json", http.Header(responses[0].Headers).Get("Content-Type"))
+	require.Empty(t, http.Header(responses[0].Headers).Get("Content-Encoding"))
 }
 
 func TestResourceExecuteSearchLimitsErrorBodySize(t *testing.T) {
