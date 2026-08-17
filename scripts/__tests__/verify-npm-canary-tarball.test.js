@@ -1,9 +1,16 @@
 /**
  * @jest-environment node
  */
+const { execFileSync, spawnSync } = require('child_process');
+const { mkdirSync, mkdtempSync, rmSync, writeFileSync } = require('fs');
+const { tmpdir } = require('os');
+const path = require('path');
 const { run, verifyCanaryTarball } = require('../verify-npm-canary-tarball');
 
 const EXPECTED = { prNumber: '123', runId: '456789', runAttempt: '2' };
+const EXPECTED_VERSION = '13.1.12-canary.123.456789.2';
+const REPO_ROOT = path.resolve(__dirname, '../..');
+const SHELL_VERIFIER = path.join(REPO_ROOT, '.github/scripts/verify-npm-canary-tarball.sh');
 
 function fixture(packageJson = {}) {
   return {
@@ -13,6 +20,44 @@ function fixture(packageJson = {}) {
       version: '13.1.12-canary.123.456789.2',
       ...packageJson,
     },
+  };
+}
+
+function packedArtifact({ filenameVersion = EXPECTED_VERSION, manifestVersion = EXPECTED_VERSION } = {}) {
+  const root = mkdtempSync(path.join(tmpdir(), 'npm-canary-verifier-'));
+  const artifactDir = path.join(root, 'artifact');
+  const packageDir = path.join(root, 'package');
+  mkdirSync(artifactDir);
+  mkdirSync(packageDir);
+  writeFileSync(
+    path.join(packageDir, 'package.json'),
+    JSON.stringify({ name: '@grafana/prometheus', version: manifestVersion })
+  );
+
+  execFileSync('tar', [
+    '-czf',
+    path.join(artifactDir, `grafana-prometheus-${filenameVersion}.tgz`),
+    '-C',
+    root,
+    'package',
+  ]);
+
+  return {
+    artifactDir,
+    root,
+    verify: () =>
+      spawnSync('bash', [SHELL_VERIFIER], {
+        cwd: REPO_ROOT,
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          ARTIFACT_DIR: artifactDir,
+          PR_NUMBER: EXPECTED.prNumber,
+          RUN_ID: EXPECTED.runId,
+          RUN_ATTEMPT: EXPECTED.runAttempt,
+          RUNNER_TEMP: root,
+        },
+      }),
   };
 }
 
@@ -104,5 +149,47 @@ describe('verify-npm-canary-tarball CLI', () => {
     expect(() => run([...argv(), '--version', '13.1.12'], { readFile: () => '{}', write: () => {} })).toThrow(
       'Invalid argument: --version'
     );
+  });
+});
+
+describe('verify-npm-canary-tarball shell wrapper', () => {
+  const tempDirs = [];
+
+  afterEach(() => {
+    for (const directory of tempDirs.splice(0)) {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('accepts one tarball whose filename matches its packed manifest', () => {
+    const artifact = packedArtifact();
+    tempDirs.push(artifact.root);
+
+    expect(artifact.verify()).toMatchObject({
+      status: 0,
+      stdout: `${EXPECTED_VERSION}\n`,
+      stderr: '',
+    });
+  });
+
+  it('rejects an artifact with an extra top-level entry', () => {
+    const artifact = packedArtifact();
+    tempDirs.push(artifact.root);
+    writeFileSync(path.join(artifact.artifactDir, 'unexpected.txt'), 'not part of the canary');
+
+    expect(artifact.verify()).toMatchObject({
+      status: 1,
+      stderr: 'Error: expected exactly one packed tarball in the canary artifact.\n',
+    });
+  });
+
+  it('rejects a tarball filename that does not match the packed manifest version', () => {
+    const artifact = packedArtifact({ filenameVersion: '13.1.13-canary.123.456789.2' });
+    tempDirs.push(artifact.root);
+
+    expect(artifact.verify()).toMatchObject({
+      status: 1,
+      stderr: 'Error: canary tarball filename does not match the version in its manifest.\n',
+    });
   });
 });

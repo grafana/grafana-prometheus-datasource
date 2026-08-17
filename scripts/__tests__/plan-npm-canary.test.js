@@ -22,7 +22,7 @@ function ids(overrides = {}) {
 
 // Stands in for `git`, keyed on the subcommand plus enough of the arguments to
 // tell the three calls the planner makes apart.
-function fakeGit({ addedPaths = [], files = {}, baseVersion = '13.1.11' } = {}) {
+function fakeGit({ addedPaths = [], files = {}, baseVersion = '13.1.11', mergeBaseVersion = baseVersion } = {}) {
   const calls = [];
   const exec = (args) => {
     calls.push(args);
@@ -38,6 +38,9 @@ function fakeGit({ addedPaths = [], files = {}, baseVersion = '13.1.11' } = {}) 
       const target = args[1];
       if (target === `${BASE_SHA}:packages/grafana-prometheus/package.json`) {
         return JSON.stringify({ name: '@grafana/prometheus', version: baseVersion });
+      }
+      if (target === `${MERGE_BASE}:packages/grafana-prometheus/package.json`) {
+        return JSON.stringify({ name: '@grafana/prometheus', version: mergeBaseVersion });
       }
       const path = target.slice(`${HEAD_SHA}:`.length);
       if (!(path in files)) {
@@ -148,9 +151,8 @@ describe('addedChangesetPaths', () => {
   it('diffs the merge base against the head and returns added changesets', () => {
     const { exec, calls } = fakeGit({ addedPaths: ['.changeset/brave-cats-sing.md'] });
 
-    expect(addedChangesetPaths(BASE_SHA, HEAD_SHA, exec)).toEqual(['.changeset/brave-cats-sing.md']);
-    expect(calls[0]).toEqual(['merge-base', BASE_SHA, HEAD_SHA]);
-    expect(calls[1]).toEqual([
+    expect(addedChangesetPaths(MERGE_BASE, HEAD_SHA, exec)).toEqual(['.changeset/brave-cats-sing.md']);
+    expect(calls[0]).toEqual([
       'diff',
       '--name-only',
       '--diff-filter=A',
@@ -166,7 +168,7 @@ describe('addedChangesetPaths', () => {
   it('rejects a changeset path git would not have produced', () => {
     const { exec } = fakeGit({ addedPaths: ['.changeset/../../etc/passwd.md'] });
 
-    expect(() => addedChangesetPaths(BASE_SHA, HEAD_SHA, exec)).toThrow(
+    expect(() => addedChangesetPaths(MERGE_BASE, HEAD_SHA, exec)).toThrow(
       'Unsafe changeset path: .changeset/../../etc/passwd.md'
     );
   });
@@ -201,6 +203,19 @@ describe('plan-npm-canary CLI', () => {
       version: '13.2.0-canary.123.456789.2',
     });
     expect(output).toEqual([`${JSON.stringify(plan)}\n`]);
+  });
+
+  it('reads the package version from the merge base when the base branch has advanced', () => {
+    const { exec } = fakeGit({
+      addedPaths: ['.changeset/brave-cats-sing.md'],
+      files: { '.changeset/brave-cats-sing.md': changeset('patch') },
+      baseVersion: '13.2.0',
+      mergeBaseVersion: '13.1.11',
+    });
+
+    expect(run({ argv: argv(), exec, write: () => {} })).toMatchObject({
+      version: '13.1.12-canary.123.456789.2',
+    });
   });
 
   it('rejects a base SHA that is not a full commit SHA', () => {

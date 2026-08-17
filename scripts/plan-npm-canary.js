@@ -56,14 +56,13 @@ function requirePositiveInteger(name, value) {
 // Changeset files added between the merge base and the pull request head. Paths
 // come from git rather than from a checkout listing, and are constrained to the
 // names `@changesets/write` produces, so they can never be read as git options.
-function addedChangesetPaths(baseSha, headSha, run) {
-  const mergeBase = run(['merge-base', baseSha, headSha]).trim();
+function addedChangesetPaths(mergeBaseSha, headSha, run) {
   const changed = run([
     'diff',
     '--name-only',
     '--diff-filter=A',
     '-z',
-    mergeBase,
+    mergeBaseSha,
     headSha,
     '--',
     '.changeset/*.md',
@@ -154,13 +153,16 @@ function run({ argv, exec = git, write = (value) => process.stdout.write(value) 
   const options = parseArgs(argv);
   const baseSha = requireCommitSha('--base-sha', options['base-sha']);
   const headSha = requireCommitSha('--head-sha', options['head-sha']);
+  const mergeBaseSha = exec(['merge-base', baseSha, headSha]).trim();
 
   const plan = planCanary({
-    baseVersion: JSON.parse(exec(['show', `${baseSha}:${PACKAGE_JSON}`])).version,
+    baseVersion: JSON.parse(exec(['show', `${mergeBaseSha}:${PACKAGE_JSON}`])).version,
     prNumber: options['pr-number'],
     runId: options['run-id'],
     runAttempt: options['run-attempt'],
-    changesetContents: addedChangesetPaths(baseSha, headSha, exec).map((path) => exec(['show', `${headSha}:${path}`])),
+    changesetContents: addedChangesetPaths(mergeBaseSha, headSha, exec).map((path) =>
+      exec(['show', `${headSha}:${path}`])
+    ),
   });
 
   write(`${JSON.stringify(plan)}\n`);

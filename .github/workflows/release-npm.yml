@@ -1,5 +1,7 @@
 name: Publish @grafana/prometheus to NPM
 
+# zizmor: ignore[concurrency-limits] approval waits must not block newer canaries or cancel active publishes
+
 permissions: {}
 
 on:
@@ -15,12 +17,6 @@ on:
         description: 'Dry run (skip actual publish)'
         type: boolean
         default: false
-
-concurrency:
-  # Serialise canaries per source pull request. Manual releases fall back to the
-  # run ID, which is unique, so they are never queued behind one another.
-  group: ${{ github.workflow }}-${{ github.event.workflow_run.pull_requests[0].number || github.run_id }}
-  cancel-in-progress: false
 
 jobs:
   publish:
@@ -279,7 +275,9 @@ jobs:
       actions: read # Download the already-authorized artifact from the exact source run.
       contents: read
       id-token: write # Required for npm trusted publishing.
-      pull-requests: write # Re-read the pull request after approval, then comment the install command.
+      pull-requests: read # Re-read the pull request after approval.
+    outputs:
+      version: ${{ steps.verify.outputs.version }}
     steps:
       - name: Checkout trusted publisher
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -378,13 +376,22 @@ jobs:
           NPM_CONFIG_PROVENANCE: 'false'
         run: npm publish "$TARBALL" --access public --tag canary --ignore-scripts
 
+  # Keep the GitHub write separate from npm publishing so a transient comment
+  # failure can be retried without attempting to republish the same version.
+  comment-canary:
+    needs: [authorize-canary, publish-canary]
+    name: Comment @grafana/prometheus canary
+    runs-on: github-hosted-ubuntu-x64-small
+    permissions:
+      pull-requests: write # Comment the install command after npm publishing succeeds.
+    steps:
       - name: Comment the install command on the pull request
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ needs.authorize-canary.outputs.pr-number }}
           HEAD_SHA: ${{ needs.authorize-canary.outputs.head-sha }}
-          CANARY_VERSION: ${{ steps.verify.outputs.version }}
+          CANARY_VERSION: ${{ needs.publish-canary.outputs.version }}
         run: |
           set -euo pipefail
           comment="$RUNNER_TEMP/npm-canary-comment.md"
