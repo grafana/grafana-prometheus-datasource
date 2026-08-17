@@ -25,10 +25,55 @@ npm run build
 
 ## Running locally
 
-Start Grafana with the plugin:
+Build the plugin, then start Grafana with the default environment:
 
 ```bash
+mage -v
+npm run build
 docker compose up -d
+```
+
+The default environment starts Grafana, Prometheus, and the gzip-forcing proxy
+used by the e2e tests. Optional environments add one dataset without changing
+the provisioned `prometheus-direct` and `prometheus-gzip` datasource UIDs:
+
+| Command                           | Additional data                                                       |
+| --------------------------------- | --------------------------------------------------------------------- |
+| `npm run server:random-data`      | Random counters, gauges, and histograms                               |
+| `npm run server:high-cardinality` | `fakedata_highcard_http_requests_total` with many label combinations  |
+| `npm run server:utf8`             | UTF-8 metric and label names, including `a.utf8.metric 🤘`            |
+| `npm run server:search-api`       | Prometheus 3.13.1 with the experimental Search API enabled            |
+| `npm run server:full`             | All generators, node exporter, fake-data-gen, rules, and Alertmanager |
+
+The scripts are shorthand for layering one override onto the base file:
+
+```bash
+docker compose -f docker-compose.yaml -f docker-compose.high-cardinality.yaml up --build
+```
+
+The full environment also enables Prometheus's remote-write receiver and
+experimental PromQL functions. Alertmanager is available at
+`http://localhost:9093`; the generators are intentionally only exposed to the
+Compose network and are queried through Prometheus. Unlike Grafana's
+host-oriented devenv, these environments do not enable Prometheus basic auth;
+keeping the in-network endpoint unauthenticated preserves the shared direct and
+gzip-proxy datasource provisioning.
+
+The Search API environment additionally provisions `prometheus-search-api` as
+the default datasource with `enableSearchApi` enabled. Use
+`prometheus-direct` in the same environment to compare classic discovery
+against the experimental metric and label search endpoints.
+
+Stop the active environment before selecting another one:
+
+```bash
+docker compose down --remove-orphans
+```
+
+For an override environment, pass the same files to `down`, for example:
+
+```bash
+docker compose -f docker-compose.yaml -f docker-compose.utf8.yaml down --remove-orphans
 ```
 
 For starting with a specific Grafana version
@@ -76,7 +121,7 @@ level = debug
 
 ### 3. Start Grafana
 
-Start grafana/grafana with `npm ci && npm run start` for the frontend in one terminal and `make run` for the backend in another. Grafana will use 
+Start grafana/grafana with `npm ci && npm run start` for the frontend in one terminal and `make run` for the backend in another. Grafana will use
 the plugin from `workspace/plugins/grafana-prometheus-datasource`, and you can iterate on frontend or backend changes directly.
 
 ### 4. Build the plugin
