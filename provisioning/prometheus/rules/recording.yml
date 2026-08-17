@@ -1,0 +1,11 @@
+groups:
+  - name: devenv-recording-rules
+    rules:
+      - record: instance_path:requests:rate5m
+        expr: rate(prometheus_http_requests_total{job="prometheus"}[5m])
+      - record: path:requests:rate5m
+        expr: sum without (instance) (instance_path:requests:rate5m{job="prometheus"})
+      - record: instance_path:reloads_failures:rate5m
+        expr: rate(prometheus_tsdb_reloads_failures_total{job="prometheus"}[5m])
+      - record: instance_path:reloads:rate5m
+        expr: rate(prometheus_tsdb_reloads_total{job="prometheus"}[5m])
