@@ -12,6 +12,12 @@ var (
 		Name:      "prometheus_plugin_backend_request_count",
 		Help:      "The total amount of prometheus backend plugin requests",
 	}, []string{"endpoint", "status", "errorSource"})
+
+	jsonDataLenientTypeCounter = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "grafana",
+		Name:      "prometheus_plugin_backend_jsondata_lenient_type_count",
+		Help:      "The total amount of datasource jsonData values that did not match their declared type",
+	}, []string{"from", "to", "outcome"})
 )
 
 const (
@@ -36,6 +42,12 @@ func UpdateQueryDataMetrics(err error, resp *backend.QueryDataResponse) {
 	errorSource := getErrorSource(err, resp)
 
 	pluginRequestCounter.WithLabelValues(EndpointQueryData, status, errorSource).Inc()
+}
+
+// UpdateJsonDataLenientTypeMetrics records a jsonData value that didn't match its declared
+// type. outcome is "coerced" when the value could still be read, "dropped" when it could not.
+func UpdateJsonDataLenientTypeMetrics(fromValueType, toValueType, outcome string) {
+	jsonDataLenientTypeCounter.WithLabelValues(fromValueType, toValueType, outcome).Inc()
 }
 
 func getErrorSource(err error, resp *backend.QueryDataResponse) string {

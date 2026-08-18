@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
+	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/instrumentation"
 )
 
 // maxLoggedValueLen keeps a stored object or array from filling a log line.
@@ -26,6 +27,7 @@ func logLenient(fromValueType, toValueType, outcome string, data []byte) {
 	}
 	log.DefaultLogger.Warn("datasource jsonData value does not match its declared type",
 		"from", fromValueType, "to", toValueType, "outcome", outcome, "value", value)
+	instrumentation.UpdateJsonDataLenientTypeMetrics(fromValueType, toValueType, outcome)
 }
 
 // LenientBool also accepts the string and numeric spellings of a boolean.
