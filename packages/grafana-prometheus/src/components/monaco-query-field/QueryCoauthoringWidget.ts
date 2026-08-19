@@ -15,6 +15,7 @@ import { placeHolderScopedVars } from './monaco-completion-provider/validation';
 
 const QUERY_COAUTHORING_WIDGET_INITIAL_HEIGHT = 320;
 const QUERY_COAUTHORING_WIDGET_INITIAL_WIDTH = 360;
+const QUERY_COAUTHORING_WIDGET_EDITOR_MARGIN = 8;
 
 interface QueryCoauthoringPreviewStyles {
   previewChange: string;
@@ -134,6 +135,31 @@ function registerPrometheusQueryCoauthoringWidget<TQuery extends DataQuery>({
     listeners.forEach((listener) => listener());
   };
 
+  const alignWidgetWithinEditor = () => {
+    widgetNode.style.transform = '';
+    const editorNode = editor.getDomNode();
+    if (!editorNode || snapshot.mode === 'hidden') {
+      return;
+    }
+
+    const editorRect = editorNode.getBoundingClientRect();
+    const widgetRect = widgetNode.getBoundingClientRect();
+    const leftBoundary = editorRect.left + QUERY_COAUTHORING_WIDGET_EDITOR_MARGIN;
+    const rightBoundary = editorRect.right - QUERY_COAUTHORING_WIDGET_EDITOR_MARGIN;
+    if (editorRect.width <= 0 || widgetRect.width <= 0 || rightBoundary <= leftBoundary) {
+      return;
+    }
+
+    // Monaco anchors content widgets at the selected column but does not flip them horizontally.
+    // Shift the widget after placement so its controls remain inside the editor pane.
+    const maximumLeft = Math.max(leftBoundary, rightBoundary - widgetRect.width);
+    const alignedLeft = Math.min(Math.max(widgetRect.left, leftBoundary), maximumLeft);
+    const horizontalOffset = alignedLeft - widgetRect.left;
+    if (horizontalOffset !== 0) {
+      widgetNode.style.transform = `translateX(${horizontalOffset}px)`;
+    }
+  };
+
   const widget: monacoTypes.editor.IContentWidget = {
     allowEditorOverflow: true,
     beforeRender: () => {
@@ -145,6 +171,13 @@ function registerPrometheusQueryCoauthoringWidget<TQuery extends DataQuery>({
         height: renderedHeight,
         width: renderedWidth,
       };
+    },
+    afterRender: (position) => {
+      if (position === null) {
+        widgetNode.style.transform = '';
+        return;
+      }
+      alignWidgetWithinEditor();
     },
     getId: () => widgetId,
     getDomNode: () => widgetNode,

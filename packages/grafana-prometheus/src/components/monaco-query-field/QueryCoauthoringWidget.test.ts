@@ -17,11 +17,26 @@ import { registerPrometheusQueryCoauthoring } from './QueryCoauthoringWidget';
 
 const monacoQueryFieldTranslations = enUsTranslations['grafana-prometheus'].components['monaco-query-field'];
 
+function createRect(left: number, right: number, top: number, bottom: number): DOMRect {
+  return {
+    bottom,
+    height: bottom - top,
+    left,
+    right,
+    top,
+    width: right - left,
+    x: left,
+    y: top,
+    toJSON: () => undefined,
+  };
+}
+
 function createEditorHarness() {
   let contentWidget: monacoTypes.editor.IContentWidget | undefined;
   let editorAction: monacoTypes.editor.IActionDescriptor | undefined;
   let layoutListener: VoidFunction | undefined;
   let selectionListener: VoidFunction | undefined;
+  const editorNode = document.createElement('div');
   const actionDisposable = { dispose: jest.fn() };
   const layoutDisposable = { dispose: jest.fn(() => (layoutListener = undefined)) };
   const selectionDisposable = { dispose: jest.fn(() => (selectionListener = undefined)) };
@@ -35,6 +50,7 @@ function createEditorHarness() {
       document.body.append(widget.getDomNode());
     }),
     getModel: jest.fn(),
+    getDomNode: jest.fn(() => editorNode),
     getPosition: jest.fn(() => ({ lineNumber: 1, column: 1 })),
     getSelection: jest.fn(),
     getSelections: jest.fn(() => []),
@@ -151,6 +167,7 @@ describe('registerPrometheusQueryCoauthoring', () => {
       capability,
       dispose,
       editor,
+      getContentWidget,
       layoutDisposable,
       notifySelectionChange,
       onRegister,
@@ -166,6 +183,7 @@ describe('registerPrometheusQueryCoauthoring', () => {
 
     expect(editor.addContentWidget).toHaveBeenCalledTimes(1);
     expect(onRegister).toHaveBeenCalledWith(capability);
+    expect(getComputedStyle(getContentWidget().getDomNode()).zIndex).toBe(String(createTheme().zIndex.portal));
     expect(monacoQueryFieldTranslations.coauthor).toBe('Coauthor');
     expect(monacoQueryFieldTranslations.copy).toBe('Copy');
 
@@ -379,6 +397,45 @@ describe('registerPrometheusQueryCoauthoring', () => {
       } else {
         delete (window as { cancelAnimationFrame?: typeof window.cancelAnimationFrame }).cancelAnimationFrame;
       }
+    }
+  });
+
+  it('keeps the coauthoring widget within the editor horizontal bounds', () => {
+    const { dispose, editor, getContentWidget, notifySelectionChange } = setup();
+    const selection = {
+      getEndPosition: () => ({ lineNumber: 1, column: 12 }),
+      isEmpty: () => false,
+    } as monacoTypes.Selection;
+    jest.mocked(editor.getSelection).mockReturnValue(selection);
+    jest.mocked(editor.getSelections).mockReturnValue([selection]);
+    const editorNode = editor.getDomNode();
+    if (!editorNode) {
+      throw new Error('Expected an editor DOM node.');
+    }
+
+    jest.spyOn(editorNode, 'getBoundingClientRect').mockReturnValue(createRect(600, 1000, 200, 300));
+
+    try {
+      notifySelectionChange();
+      fireEvent.click(screen.getByRole('button', { name: 'Coauthor' }));
+      const widget = getContentWidget();
+      jest.spyOn(widget.getDomNode(), 'getBoundingClientRect').mockReturnValue(createRect(850, 1138, 200, 520));
+
+      widget.afterRender?.(widget.getPosition()?.preference?.[0] ?? null);
+
+      expect(widget.getDomNode()).toHaveStyle({ transform: 'translateX(-146px)' });
+
+      jest.mocked(editorNode.getBoundingClientRect).mockReturnValue(createRect(600, 800, 200, 300));
+      widget.afterRender?.(widget.getPosition()?.preference?.[0] ?? null);
+
+      expect(widget.getDomNode()).toHaveStyle({ transform: 'translateX(-242px)' });
+
+      jest.mocked(editorNode.getBoundingClientRect).mockReturnValue(createRect(600, 1300, 200, 300));
+      widget.afterRender?.(widget.getPosition()?.preference?.[0] ?? null);
+
+      expect(widget.getDomNode().style.transform).toBe('');
+    } finally {
+      dispose();
     }
   });
 

@@ -18,6 +18,12 @@ export function QueryCoauthoringChrome({ registration }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
+    const portalElement = registration.portalElement;
+    portalElement.classList.add(styles.portal);
+    return () => portalElement.classList.remove(styles.portal);
+  }, [registration, styles.portal]);
+
+  useLayoutEffect(() => {
     const widgetElement = registration.portalElement;
     const updateRenderedSize = () => {
       const { height, width } = widgetElement.getBoundingClientRect();
@@ -79,6 +85,9 @@ export function QueryCoauthoringChrome({ registration }: Props) {
 
 function getStyles(theme: GrafanaTheme2) {
   return {
+    portal: css({
+      zIndex: theme.zIndex.portal,
+    }),
     divider: css({
       width: 1,
       alignSelf: 'stretch',
@@ -91,7 +100,6 @@ function getStyles(theme: GrafanaTheme2) {
       padding: theme.spacing(0.5),
     }),
     widget: css({
-      zIndex: theme.zIndex.portal,
       minWidth: 288,
       maxWidth: 360,
       color: theme.colors.text.primary,
