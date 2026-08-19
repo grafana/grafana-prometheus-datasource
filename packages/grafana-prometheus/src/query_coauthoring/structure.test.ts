@@ -119,11 +119,27 @@ describe('extractMetricNames', () => {
     expect(extractMetricNames('{__name__="http_requests_total",job="api"}')).toEqual(['http_requests_total']);
   });
 
+  it('does not infer a concrete metric from a __name__ regex matcher', () => {
+    expect(extractMetricNames('{__name__=~"http_.*"}')).toEqual([]);
+  });
+
+  it('does not treat labels whose names contain __name__ as metric names', () => {
+    expect(extractMetricNames('{service__name__="api"}')).toEqual([]);
+  });
+
+  it('decodes PromQL escapes in an exact __name__ matcher', () => {
+    expect(extractMetricNames('{__name__="http\\x2erequests"}')).toEqual(['http.requests']);
+  });
+
   it('extracts and decodes quoted UTF-8 metric names', () => {
     expect(extractMetricNames('{"http.requests",job="api"} + {"http\\\"responses",job="api"}')).toEqual([
       'http.requests',
       'http"responses',
     ]);
+  });
+
+  it('does not treat quoted label matchers as quoted metric names', () => {
+    expect(extractMetricNames('{"job"="api"} + {"__name__"="http_requests_total"}')).toEqual([]);
   });
 });
 

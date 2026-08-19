@@ -1,5 +1,12 @@
 import { type SyntaxNode } from '@lezer/common';
-import { parser, QuotedLabelName, StringLiteral } from '@prometheus-io/lezer-promql';
+import {
+  LabelName,
+  MatchOp,
+  parser,
+  QuotedLabelName,
+  StringLiteral,
+  UnquotedLabelMatcher,
+} from '@prometheus-io/lezer-promql';
 
 import { ErrorId, replaceBuiltInVariable } from '../querybuilder/parsingUtils';
 
@@ -132,10 +139,25 @@ export function extractMetricNames(query: string): string[] {
         return false;
       }
 
-      const selector = query.slice(node.from, node.to);
-      const nameMatcher = /__name__\s*=\s*"((?:\\.|[^"\\])*)"/.exec(selector);
-      if (nameMatcher) {
-        names.add(nameMatcher[1].replace(/\\"/g, '"').replace(/\\\\/g, '\\'));
+      const nameMatcher = node.node
+        .getChild('LabelMatchers')
+        ?.getChildren(UnquotedLabelMatcher)
+        .find((matcher) => {
+          const labelName = matcher.getChild(LabelName);
+          const matchOp = matcher.getChild(MatchOp);
+          return (
+            labelName !== null &&
+            query.slice(labelName.from, labelName.to) === '__name__' &&
+            matchOp !== null &&
+            query.slice(matchOp.from, matchOp.to) === '='
+          );
+        });
+      const metricNameNode = nameMatcher?.getChild(StringLiteral);
+      if (metricNameNode) {
+        const metricName = decodePromQLStringLiteral(query.slice(metricNameNode.from, metricNameNode.to));
+        if (metricName !== undefined) {
+          names.add(metricName);
+        }
       }
       return false;
     },

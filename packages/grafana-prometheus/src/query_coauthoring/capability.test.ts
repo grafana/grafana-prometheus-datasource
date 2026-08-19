@@ -1,5 +1,13 @@
-import { createPrometheusCoauthoringCapability } from './capability';
+import { createPrometheusCoauthoringCapability, QUERY_COAUTHORING_MAX_CONTEXT_LABELS } from './capability';
 import { type PromMetricsMetadata } from '../types';
+
+function deferred<T>() {
+  let resolve = (_value: T) => {};
+  const promise = new Promise<T>((nextResolve) => {
+    resolve = nextResolve;
+  });
+  return { promise, resolve };
+}
 
 function setup(initialValue = 'rate(http_requests_total[5m])') {
   let value = initialValue;
@@ -47,8 +55,8 @@ function setup(initialValue = 'rate(http_requests_total[5m])') {
     retrieveMetricsMetadata,
     queryMetricsMetadata,
     queryMetricLabels,
-    previewChangeClassName: 'coauthoring-preview-change',
-    previewOriginalClassName: 'coauthoring-preview-original',
+    getPreviewChangeClassName: () => 'coauthoring-preview-change',
+    getPreviewOriginalClassName: () => 'coauthoring-preview-original',
   });
 
   return {
@@ -114,6 +122,84 @@ describe('createPrometheusCoauthoringCapability', () => {
       metricMetadata: [{ name: 'http_requests_total', type: 'counter', help: 'Fetched metadata.' }],
     });
     expect(queryMetricsMetadata).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps labels and metric identity when metadata enrichment fails', async () => {
+    const { capability, retrieveMetricsMetadata, queryMetricsMetadata } = setup();
+    retrieveMetricsMetadata.mockReturnValue({});
+    queryMetricsMetadata.mockRejectedValue(new Error('metadata unavailable'));
+
+    await expect(capability.getContext()).resolves.toEqual({
+      query: 'rate(http_requests_total[5m])',
+      focusRanges: [{ from: 5, to: 24 }],
+      metricMetadata: [
+        {
+          name: 'http_requests_total',
+          type: undefined,
+          help: undefined,
+          unit: undefined,
+          labels: ['handler', 'job'],
+        },
+      ],
+    });
+  });
+
+  it('loads metadata and labels concurrently', async () => {
+    const { capability, queryMetricLabels, queryMetricsMetadata, retrieveMetricsMetadata } = setup();
+    const metadata = deferred<PromMetricsMetadata>();
+    const labels = deferred<string[]>();
+    retrieveMetricsMetadata.mockReturnValue({});
+    queryMetricsMetadata.mockReturnValue(metadata.promise);
+    queryMetricLabels.mockReturnValue(labels.promise);
+
+    const contextPromise = capability.getContext();
+    await Promise.resolve();
+
+    expect(queryMetricsMetadata).toHaveBeenCalledTimes(1);
+    expect(queryMetricLabels).toHaveBeenCalledTimes(1);
+
+    metadata.resolve({ http_requests_total: { type: 'counter', help: 'Fetched metadata.' } });
+    labels.resolve(['__name__', 'job']);
+
+    await expect(contextPromise).resolves.toMatchObject({
+      metricMetadata: [{ name: 'http_requests_total', type: 'counter', labels: ['job'] }],
+    });
+  });
+
+  it('retains cached metadata when a refresh resolves without the missing metric', async () => {
+    const { capability, queryMetricsMetadata } = setup('http_requests_total + missing_metric');
+    queryMetricsMetadata.mockResolvedValue({});
+
+    await expect(capability.getContext()).resolves.toMatchObject({
+      metricMetadata: [
+        { name: 'http_requests_total', type: 'counter', labels: ['handler', 'job'] },
+        { name: 'missing_metric', type: undefined, labels: ['handler', 'job'] },
+      ],
+    });
+  });
+
+  it('treats synchronous metadata provider failures as optional enrichment', async () => {
+    const { capability, queryMetricsMetadata, retrieveMetricsMetadata } = setup();
+    retrieveMetricsMetadata.mockImplementation(() => {
+      throw new Error('cache unavailable');
+    });
+    queryMetricsMetadata.mockImplementation(() => {
+      throw new Error('metadata unavailable');
+    });
+
+    await expect(capability.getContext()).resolves.toMatchObject({
+      metricMetadata: [{ name: 'http_requests_total', type: undefined, labels: ['handler', 'job'] }],
+    });
+  });
+
+  it('applies the shared label context budget after filtering and sorting', async () => {
+    const { capability, queryMetricLabels } = setup();
+    const labels = Array.from({ length: QUERY_COAUTHORING_MAX_CONTEXT_LABELS + 5 }, (_, index) => `label_${index}`);
+    queryMetricLabels.mockResolvedValue(['__name__', ...labels]);
+
+    const context = await capability.getContext();
+
+    expect(context.metricMetadata[0].labels).toEqual(labels.sort().slice(0, QUERY_COAUTHORING_MAX_CONTEXT_LABELS));
   });
 
   it('uses the interpolated query for metric metadata while preserving the original query', async () => {
@@ -186,5 +272,32 @@ describe('createPrometheusCoauthoringCapability', () => {
     capability.focus();
     expect(focus).toHaveBeenCalled();
     expect(capability).not.toHaveProperty('runQuery');
+  });
+
+  it('clears the invocation snapshot on explicit dismissal', async () => {
+    const { capability, setValue } = setup();
+    const listener = jest.fn();
+    capability.subscribeToInvocation(listener);
+    capability.invoke({ anchorElement: document.createElement('div'), dismiss: jest.fn() });
+
+    setValue('up');
+    listener.mock.calls[0][0].dismiss();
+
+    await expect(capability.getContext()).resolves.toMatchObject({ query: 'up' });
+  });
+
+  it('does not let dismissal of an earlier invocation clear the current snapshot', async () => {
+    const { capability, setValue } = setup();
+    const listener = jest.fn();
+    capability.subscribeToInvocation(listener);
+    capability.invoke({ anchorElement: document.createElement('div'), dismiss: jest.fn() });
+    const firstInvocation = listener.mock.calls[0][0];
+
+    setValue('up');
+    capability.invoke({ anchorElement: document.createElement('div'), dismiss: jest.fn() });
+    setValue('down');
+    firstInvocation.dismiss();
+
+    await expect(capability.getContext()).resolves.toMatchObject({ query: 'up' });
   });
 });

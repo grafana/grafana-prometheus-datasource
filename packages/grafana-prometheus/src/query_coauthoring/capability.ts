@@ -13,9 +13,13 @@ import {
 /** @internal */
 export interface QueryEditorCoauthoringMetricMetadata {
   name: string;
+  /** May be absent when lookup fails, enrichment is budgeted out, or Prometheus has no value. */
   type?: string;
+  /** May be absent when lookup fails, enrichment is budgeted out, or Prometheus has no value. */
   help?: string;
+  /** May be absent when lookup fails, enrichment is budgeted out, or Prometheus has no value. */
   unit?: string;
+  /** May be absent when lookup fails, label enrichment is budgeted out, or the metric has no labels. */
   labels?: string[];
 }
 
@@ -50,6 +54,11 @@ export interface QueryEditorCoauthoringInvocation {
  *
  * @remarks
  * This interface is internal to Grafana and can change without notice. It is not a plugin API.
+ * Data source context is limited to the query, its focused ranges, and Prometheus metric metadata. The host supplies
+ * data source identity and the current panel time range separately.
+ * Context includes at most 20 metrics. Label lookup is attempted for at most five metrics and returns at most 30
+ * labels per metric; metadata help is truncated to 500 characters. Optional metadata and labels can be absent because
+ * of those budgets, lookup failure, or genuinely absent Prometheus data.
  *
  * @internal
  */
@@ -125,8 +134,8 @@ interface CreateCapabilityOptions<TQuery extends DataQuery> {
   retrieveMetricsMetadata: () => PromMetricsMetadata;
   queryMetricsMetadata: () => Promise<PromMetricsMetadata>;
   queryMetricLabels: (metricName: string) => Promise<string[]>;
-  previewChangeClassName: string;
-  previewOriginalClassName: string;
+  getPreviewChangeClassName: () => string;
+  getPreviewOriginalClassName: () => string;
 }
 
 interface InvocationSnapshot {
@@ -142,7 +151,8 @@ interface PreviewState {
 
 const MAX_CONTEXT_METRICS = 20;
 const MAX_LABEL_METRICS = 5;
-const MAX_CONTEXT_LABELS = 30;
+/** Shared by the Prometheus label request and the returned coauthoring context's per-metric label budget. @internal */
+export const QUERY_COAUTHORING_MAX_CONTEXT_LABELS = 30;
 const MAX_METADATA_HELP_LENGTH = 500;
 
 /**
@@ -157,8 +167,8 @@ export function createPrometheusCoauthoringCapability<TQuery extends DataQuery>(
   retrieveMetricsMetadata,
   queryMetricsMetadata,
   queryMetricLabels,
-  previewChangeClassName,
-  previewOriginalClassName,
+  getPreviewChangeClassName,
+  getPreviewOriginalClassName,
 }: CreateCapabilityOptions<TQuery>): PrometheusCoauthoringCapability<TQuery> {
   const listeners = new Set<(invocation: QueryEditorCoauthoringInvocation) => void>();
   let invocationSnapshot: InvocationSnapshot | undefined;
@@ -207,42 +217,47 @@ export function createPrometheusCoauthoringCapability<TQuery extends DataQuery>(
     getContext: async () => {
       const snapshot = invocationSnapshot ?? captureSnapshot();
       const metricNames = extractMetricNames(interpolate(snapshot.query)).slice(0, MAX_CONTEXT_METRICS);
-      let metadata = retrieveMetricsMetadata();
-      const metadataPromise = metricNames.some((name) => !metadata[name])
-        ? queryMetricsMetadata()
-        : Promise.resolve(metadata);
-      const metricLabels = new Map(
-        await Promise.all(
-          metricNames.slice(0, MAX_LABEL_METRICS).map(async (name) => {
-            const labels = await queryMetricLabels(name).catch(() => []);
-            return [
-              name,
-              labels
-                .filter((label) => label !== '__name__')
-                .sort()
-                .slice(0, MAX_CONTEXT_LABELS),
-            ] as const;
-          })
-        )
+      let cachedMetadata: PromMetricsMetadata = {};
+      try {
+        cachedMetadata = retrieveMetricsMetadata();
+      } catch {
+        // Cached metadata is optional enrichment and must not prevent the remaining context from loading.
+      }
+      const metadataPromise = metricNames.some((name) => !cachedMetadata[name])
+        ? Promise.resolve()
+            .then(queryMetricsMetadata)
+            .then((freshMetadata) => ({ ...cachedMetadata, ...freshMetadata }))
+            .catch(() => cachedMetadata)
+        : Promise.resolve(cachedMetadata);
+      const metricLabelsPromise = Promise.all(
+        metricNames.slice(0, MAX_LABEL_METRICS).map(async (name) => {
+          const labels = await Promise.resolve()
+            .then(() => queryMetricLabels(name))
+            .catch(() => []);
+          return [
+            name,
+            labels
+              .filter((label) => label !== '__name__')
+              .sort()
+              .slice(0, QUERY_COAUTHORING_MAX_CONTEXT_LABELS),
+          ] as const;
+        })
       );
-      metadata = await metadataPromise;
+      const [metadata, metricLabelEntries] = await Promise.all([metadataPromise, metricLabelsPromise]);
+      const metricLabels = new Map(metricLabelEntries);
 
       return {
         query: snapshot.query,
         focusRanges: snapshot.focusRanges,
-        metricMetadata: metricNames.flatMap((name) => {
+        metricMetadata: metricNames.map((name) => {
           const item = metadata[name];
-          return item
-            ? [
-                {
-                  name,
-                  type: item.type || undefined,
-                  help: item.help ? item.help.slice(0, MAX_METADATA_HELP_LENGTH) : undefined,
-                  unit: item.unit || undefined,
-                  labels: metricLabels.get(name),
-                },
-              ]
-            : [];
+          return {
+            name,
+            type: item?.type || undefined,
+            help: item?.help ? item.help.slice(0, MAX_METADATA_HELP_LENGTH) : undefined,
+            unit: item?.unit || undefined,
+            labels: metricLabels.get(name),
+          };
         }),
       };
     },
@@ -281,11 +296,11 @@ export function createPrometheusCoauthoringCapability<TQuery extends DataQuery>(
                 endColumn: end.column,
               },
               options: {
-                ...(replacesText ? { inlineClassName: previewOriginalClassName } : {}),
+                ...(replacesText ? { inlineClassName: getPreviewOriginalClassName() } : {}),
                 ...(proposed
                   ? replacesText
-                    ? { before: { content: proposed, inlineClassName: previewChangeClassName } }
-                    : { after: { content: proposed, inlineClassName: previewChangeClassName } }
+                    ? { before: { content: proposed, inlineClassName: getPreviewChangeClassName() } }
+                    : { after: { content: proposed, inlineClassName: getPreviewChangeClassName() } }
                   : {}),
               },
             };
@@ -310,8 +325,19 @@ export function createPrometheusCoauthoringCapability<TQuery extends DataQuery>(
     },
     invoke: (invocation) => {
       clearPreview();
-      invocationSnapshot = captureSnapshot();
-      listeners.forEach((listener) => listener(invocation));
+      const snapshot = captureSnapshot();
+      invocationSnapshot = snapshot;
+      listeners.forEach((listener) =>
+        listener({
+          ...invocation,
+          dismiss: () => {
+            if (invocationSnapshot === snapshot) {
+              invocationSnapshot = undefined;
+            }
+            invocation.dismiss();
+          },
+        })
+      );
     },
     focus: () => editor.focus(),
   };

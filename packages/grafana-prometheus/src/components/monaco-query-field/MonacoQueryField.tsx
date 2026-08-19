@@ -2,14 +2,19 @@
 import { css } from '@emotion/css';
 import { parser } from '@prometheus-io/lezer-promql';
 import { promLanguageDefinition } from 'monaco-promql';
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLatest } from 'react-use';
 import { v4 as uuidv4 } from 'uuid';
 
 import { type GrafanaTheme2 } from '@grafana/data';
 import { selectors } from '@grafana/e2e-selectors';
-import { type Monaco, type monacoTypes, ReactMonacoEditor, useTheme2 } from '@grafana/ui';
+import { type Monaco, type MonacoEditor, type monacoTypes, ReactMonacoEditor, useTheme2 } from '@grafana/ui';
 
+import {
+  type QueryEditorCoauthoringCapability,
+  type QueryEditorCoauthoringRegistrar,
+} from '../../query_coauthoring/capability';
+import { type PromQuery } from '../../types';
 import { type Props } from './MonacoQueryFieldProps';
 import { registerPrometheusQueryCoauthoring } from './QueryCoauthoringWidget';
 import { getOverrideServices } from './getOverrideServices';
@@ -143,12 +148,6 @@ const getStyles = (theme: GrafanaTheme2, placeholder: string) => {
       alignSelf: 'stretch',
       background: theme.colors.border.weak,
     }),
-    coauthoringShortcut: css({
-      color: theme.colors.text.secondary,
-      fontSize: theme.typography.bodySmall.fontSize,
-      paddingRight: theme.spacing(0.5),
-      whiteSpace: 'nowrap',
-    }),
     coauthoringPreviewChange: css({
       color: theme.colors.primary.text,
       background: theme.colors.action.selected,
@@ -161,7 +160,7 @@ const getStyles = (theme: GrafanaTheme2, placeholder: string) => {
 };
 
 const MonacoQueryField = (props: Props) => {
-  const id = uuidv4();
+  const [id] = useState(() => uuidv4());
 
   // we need only one instance of `overrideServices` during the lifetime of the react component
   const overrideServicesRef = useRef(getOverrideServices());
@@ -186,18 +185,92 @@ const MonacoQueryField = (props: Props) => {
   const datasourceRef = useLatest(datasource);
   const timeRangeRef = useLatest(timeRange);
   const createQueryForCoauthoringRef = useLatest(createQueryForCoauthoring);
+  const registrarRef = useLatest(onRegisterQueryEditorCoauthoring);
 
   const autocompleteDisposeFun = useRef<(() => void) | null>(null);
-  const coauthoringDisposeFun = useRef<(() => void) | null>(null);
+  const coauthoringRegistrationRef = useRef<ReturnType<typeof registerPrometheusQueryCoauthoring> | null>(null);
+  const registeredCapabilityRef = useRef<QueryEditorCoauthoringCapability<PromQuery>>();
+  const registeredRegistrarRef = useRef<QueryEditorCoauthoringRegistrar<PromQuery>>();
+  const registrationForwarderRef = useRef<QueryEditorCoauthoringRegistrar<PromQuery>>();
+  if (!registrationForwarderRef.current) {
+    registrationForwarderRef.current = (capability) => {
+      const nextRegistrar = registrarRef.current;
+      const previousRegistrar = registeredRegistrarRef.current;
+      if (previousRegistrar && previousRegistrar !== nextRegistrar) {
+        previousRegistrar(undefined);
+      }
+
+      registeredCapabilityRef.current = capability;
+      registeredRegistrarRef.current = capability ? nextRegistrar : undefined;
+      nextRegistrar?.(capability);
+    };
+  }
+  const [coauthoringMount, setCoauthoringMount] = useState<{ editor: MonacoEditor; monaco: Monaco }>();
 
   const theme = useTheme2();
-  const styles = getStyles(theme, placeholder);
+  const styles = useMemo(() => getStyles(theme, placeholder), [placeholder, theme]);
+  const coauthoringStyles = useMemo(
+    () => ({
+      button: styles.coauthoringButton,
+      divider: styles.coauthoringDivider,
+      previewChange: styles.coauthoringPreviewChange,
+      previewOriginal: styles.coauthoringPreviewOriginal,
+      toolbar: styles.coauthoringToolbar,
+      widget: styles.coauthoringWidget,
+    }),
+    [styles]
+  );
+  const coauthoringStylesRef = useLatest(coauthoringStyles);
+  const coauthoringAvailable = Boolean(onRegisterQueryEditorCoauthoring && createQueryForCoauthoring);
+
+  useEffect(() => {
+    const capability = registeredCapabilityRef.current;
+    const previousRegistrar = registeredRegistrarRef.current;
+    if (!capability || previousRegistrar === onRegisterQueryEditorCoauthoring) {
+      return;
+    }
+
+    previousRegistrar?.(undefined);
+    onRegisterQueryEditorCoauthoring?.(capability);
+    registeredRegistrarRef.current = onRegisterQueryEditorCoauthoring;
+  }, [onRegisterQueryEditorCoauthoring]);
+
+  useEffect(() => {
+    const createQuery = createQueryForCoauthoringRef.current;
+    const onRegister = registrationForwarderRef.current;
+    if (!coauthoringMount || !coauthoringAvailable || !createQuery || !onRegister) {
+      return;
+    }
+
+    const registration = registerPrometheusQueryCoauthoring({
+      editor: coauthoringMount.editor,
+      createQuery: (value) => (createQueryForCoauthoringRef.current ?? createQuery)(value),
+      getDatasource: () => datasourceRef.current,
+      getLanguageProvider: () => lpRef.current,
+      getTimeRange: () => timeRangeRef.current,
+      monaco: coauthoringMount.monaco,
+      onRegister,
+      styles: coauthoringStylesRef.current,
+      widgetId: `prometheus-query-coauthoring-${id}`,
+    });
+    coauthoringRegistrationRef.current = registration;
+
+    return () => {
+      if (coauthoringRegistrationRef.current === registration) {
+        coauthoringRegistrationRef.current = null;
+      }
+      registration.dispose();
+    };
+  }, [coauthoringAvailable, coauthoringMount, id]);
+
+  useEffect(() => {
+    coauthoringRegistrationRef.current?.updateStyles(coauthoringStyles);
+  }, [coauthoringStyles]);
 
   useEffect(() => {
     // when we unmount, we unregister the autocomplete-function, if it was registered
     return () => {
       autocompleteDisposeFun.current?.();
-      coauthoringDisposeFun.current?.();
     };
   }, []);
 
@@ -219,27 +292,7 @@ const MonacoQueryField = (props: Props) => {
           ensurePromQL(monaco);
         }}
         onMount={(editor, monaco) => {
-          if (onRegisterQueryEditorCoauthoring && createQueryForCoauthoringRef.current) {
-            coauthoringDisposeFun.current = registerPrometheusQueryCoauthoring({
-              editor,
-              createQuery: (value) => createQueryForCoauthoringRef.current!(value),
-              getDatasource: () => datasourceRef.current,
-              getLanguageProvider: () => lpRef.current,
-              getTimeRange: () => timeRangeRef.current,
-              monaco,
-              onRegister: onRegisterQueryEditorCoauthoring,
-              styles: {
-                button: styles.coauthoringButton,
-                divider: styles.coauthoringDivider,
-                previewChange: styles.coauthoringPreviewChange,
-                previewOriginal: styles.coauthoringPreviewOriginal,
-                shortcut: styles.coauthoringShortcut,
-                toolbar: styles.coauthoringToolbar,
-                widget: styles.coauthoringWidget,
-              },
-              widgetId: `prometheus-query-coauthoring-${id}`,
-            });
-          }
+          setCoauthoringMount({ editor, monaco });
 
           const isEditorFocused = editor.createContextKey<boolean>('isEditorFocused' + id, false);
           // we setup on-blur

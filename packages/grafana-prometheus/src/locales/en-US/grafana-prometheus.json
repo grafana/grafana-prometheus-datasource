@@ -45,7 +45,8 @@
         "series-limit": "Series limit"
       },
       "monaco-query-field": {
-        "coauthor": "✦ Coauthor",
+        "coauthor": "Coauthor",
+        "coauthor-promql-query": "Coauthor PromQL query",
         "copy": "Copy"
       },
       "prom-cheat-sheet": {
