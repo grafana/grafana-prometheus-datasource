@@ -100,8 +100,8 @@ function getStyles(theme: GrafanaTheme2) {
       padding: theme.spacing(0.5),
     }),
     widget: css({
-      minWidth: 288,
-      maxWidth: 360,
+      width: 'max-content',
+      maxWidth: 'calc(100vw - 16px)',
       color: theme.colors.text.primary,
       background: theme.colors.background.secondary,
       border: `1px solid ${theme.colors.border.weak}`,

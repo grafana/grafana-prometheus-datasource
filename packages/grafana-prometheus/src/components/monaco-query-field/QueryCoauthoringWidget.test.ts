@@ -175,6 +175,7 @@ describe('registerPrometheusQueryCoauthoring', () => {
     } = setup();
     const clearPreview = jest.spyOn(capability, 'clearPreview');
     const selection = {
+      getStartPosition: () => ({ lineNumber: 1, column: 4 }),
       getEndPosition: () => ({ lineNumber: 1, column: 12 }),
       isEmpty: () => false,
     } as monacoTypes.Selection;
@@ -237,6 +238,7 @@ describe('registerPrometheusQueryCoauthoring', () => {
     const onInvoke = jest.fn();
     capability.subscribeToInvocation(onInvoke);
     const selection = {
+      getStartPosition: () => ({ lineNumber: 1, column: 4 }),
       getEndPosition: () => ({ lineNumber: 1, column: 12 }),
       isEmpty: () => false,
     } as monacoTypes.Selection;
@@ -253,7 +255,7 @@ describe('registerPrometheusQueryCoauthoring', () => {
       dismiss: expect.any(Function),
     });
     const invocation = onInvoke.mock.calls[0][0];
-    expect(invocation.anchorElement).toBeVisible();
+    expect(invocation.anchorElement).toBeInTheDocument();
     expect(invocation.anchorElement).not.toHaveAttribute('role');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Coauthor' })).not.toBeInTheDocument();
@@ -304,6 +306,7 @@ describe('registerPrometheusQueryCoauthoring', () => {
     const onInvoke = jest.fn();
     capability.subscribeToInvocation(onInvoke);
     const selection = {
+      getStartPosition: () => ({ lineNumber: 1, column: 4 }),
       getEndPosition: () => ({ lineNumber: 1, column: 12 }),
       isEmpty: () => false,
     } as monacoTypes.Selection;
@@ -317,12 +320,17 @@ describe('registerPrometheusQueryCoauthoring', () => {
 
       fireEvent.click(screen.getByRole('button', { name: 'Coauthor' }));
 
-      expect(widget.getPosition()?.preference).toEqual([1, 2]);
-      expect(widget.beforeRender?.()).toEqual({ height: 320, width: 360 });
-      expect(widget.beforeRender?.()).toEqual({ height: 320, width: 360 });
+      expect(widget.getPosition()).toMatchObject({
+        position: { lineNumber: 1, column: 4 },
+        preference: [2, 1],
+      });
+      expect(widget.beforeRender?.()).toEqual({ height: 320, width: 403 });
+      expect(widget.beforeRender?.()).toEqual({ height: 320, width: 403 });
+      expect(widget.getDomNode()).toHaveStyle({ visibility: 'hidden' });
       expect(screen.getByTestId('prometheus-query-coauthoring-widget').style.maxHeight).toBe('');
       expect(widget.getDomNode().style.maxHeight).toBe('');
       const layoutCallsAfterInvocation = jest.mocked(editor.layoutContentWidget).mock.calls.length;
+      onInvoke.mock.calls[0][0].anchorElement.append(document.createElement('div'));
 
       jest.spyOn(widget.getDomNode(), 'getBoundingClientRect').mockReturnValue({
         bottom: 240,
@@ -359,6 +367,8 @@ describe('registerPrometheusQueryCoauthoring', () => {
       frameCallbacks.get(1)?.(0);
       frameCallbacks.delete(1);
       expect(editor.layoutContentWidget).toHaveBeenCalledTimes(layoutCallsAfterInvocation + 1);
+      widget.afterRender?.(widget.getPosition()?.preference?.[0] ?? null);
+      expect(widget.getDomNode().style.visibility).toBe('');
 
       jest.mocked(widget.getDomNode().getBoundingClientRect).mockReturnValue({
         bottom: 40,
@@ -400,22 +410,18 @@ describe('registerPrometheusQueryCoauthoring', () => {
     }
   });
 
-  it('keeps the coauthoring widget within the editor horizontal bounds', () => {
+  it('keeps the coauthoring widget within the viewport without constraining it to the editor width', () => {
+    const innerWidthDescriptor = Object.getOwnPropertyDescriptor(window, 'innerWidth');
     const { dispose, editor, getContentWidget, notifySelectionChange } = setup();
     const selection = {
+      getStartPosition: () => ({ lineNumber: 1, column: 4 }),
       getEndPosition: () => ({ lineNumber: 1, column: 12 }),
       isEmpty: () => false,
     } as monacoTypes.Selection;
     jest.mocked(editor.getSelection).mockReturnValue(selection);
     jest.mocked(editor.getSelections).mockReturnValue([selection]);
-    const editorNode = editor.getDomNode();
-    if (!editorNode) {
-      throw new Error('Expected an editor DOM node.');
-    }
-
-    jest.spyOn(editorNode, 'getBoundingClientRect').mockReturnValue(createRect(600, 1000, 200, 300));
-
     try {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1000 });
       notifySelectionChange();
       fireEvent.click(screen.getByRole('button', { name: 'Coauthor' }));
       const widget = getContentWidget();
@@ -425,17 +431,20 @@ describe('registerPrometheusQueryCoauthoring', () => {
 
       expect(widget.getDomNode()).toHaveStyle({ transform: 'translateX(-146px)' });
 
-      jest.mocked(editorNode.getBoundingClientRect).mockReturnValue(createRect(600, 800, 200, 300));
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: 800 });
       widget.afterRender?.(widget.getPosition()?.preference?.[0] ?? null);
 
-      expect(widget.getDomNode()).toHaveStyle({ transform: 'translateX(-242px)' });
+      expect(widget.getDomNode()).toHaveStyle({ transform: 'translateX(-346px)' });
 
-      jest.mocked(editorNode.getBoundingClientRect).mockReturnValue(createRect(600, 1300, 200, 300));
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1300 });
       widget.afterRender?.(widget.getPosition()?.preference?.[0] ?? null);
 
       expect(widget.getDomNode().style.transform).toBe('');
     } finally {
       dispose();
+      if (innerWidthDescriptor) {
+        Object.defineProperty(window, 'innerWidth', innerWidthDescriptor);
+      }
     }
   });
 
@@ -454,6 +463,7 @@ describe('registerPrometheusQueryCoauthoring', () => {
     Object.defineProperty(window, 'cancelAnimationFrame', { configurable: true, value: cancelAnimationFrame });
     const { dispose, editor, notifyLayoutChange, notifySelectionChange } = setup();
     const selection = {
+      getStartPosition: () => ({ lineNumber: 1, column: 4 }),
       getEndPosition: () => ({ lineNumber: 1, column: 12 }),
       isEmpty: () => false,
     } as monacoTypes.Selection;
@@ -517,6 +527,7 @@ describe('registerPrometheusQueryCoauthoring', () => {
     const onInvoke = jest.fn();
     capability.subscribeToInvocation(onInvoke);
     const selection = {
+      getStartPosition: () => ({ lineNumber: 1, column: 4 }),
       getEndPosition: () => ({ lineNumber: 1, column: 12 }),
       isEmpty: () => false,
     } as monacoTypes.Selection;
@@ -543,10 +554,12 @@ describe('registerPrometheusQueryCoauthoring', () => {
   it('preserves multiple selections and copies each selected fragment without the async clipboard API', async () => {
     const { dispose, editor, notifySelectionChange } = setup();
     const firstSelection = {
+      getStartPosition: () => ({ lineNumber: 1, column: 4 }),
       getEndPosition: () => ({ lineNumber: 1, column: 12 }),
       isEmpty: () => false,
     } as monacoTypes.Selection;
     const secondSelection = {
+      getStartPosition: () => ({ lineNumber: 1, column: 16 }),
       getEndPosition: () => ({ lineNumber: 1, column: 24 }),
       isEmpty: () => false,
     } as monacoTypes.Selection;

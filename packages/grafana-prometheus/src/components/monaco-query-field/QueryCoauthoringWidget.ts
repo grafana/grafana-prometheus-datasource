@@ -14,8 +14,8 @@ import {
 import { placeHolderScopedVars } from './monaco-completion-provider/validation';
 
 const QUERY_COAUTHORING_WIDGET_INITIAL_HEIGHT = 320;
-const QUERY_COAUTHORING_WIDGET_INITIAL_WIDTH = 360;
-const QUERY_COAUTHORING_WIDGET_EDITOR_MARGIN = 8;
+const QUERY_COAUTHORING_WIDGET_INITIAL_WIDTH = 403;
+const QUERY_COAUTHORING_WIDGET_VIEWPORT_MARGIN = 8;
 
 interface QueryCoauthoringPreviewStyles {
   previewChange: string;
@@ -119,6 +119,8 @@ function registerPrometheusQueryCoauthoringWidget<TQuery extends DataQuery>({
   const widgetNode = document.createElement('div');
   const listeners = new Set<VoidFunction>();
   let activeInvocation = 0;
+  let assistantAnchorElement: HTMLElement | undefined;
+  let hasMeasuredAssistant = false;
   let assistantMounted = false;
   let disposed = false;
   let pendingRelayoutFrame: number | undefined;
@@ -135,23 +137,22 @@ function registerPrometheusQueryCoauthoringWidget<TQuery extends DataQuery>({
     listeners.forEach((listener) => listener());
   };
 
-  const alignWidgetWithinEditor = () => {
+  const alignWidgetWithinViewport = () => {
     widgetNode.style.transform = '';
-    const editorNode = editor.getDomNode();
-    if (!editorNode || snapshot.mode === 'hidden') {
+    if (snapshot.mode === 'hidden') {
       return;
     }
 
-    const editorRect = editorNode.getBoundingClientRect();
     const widgetRect = widgetNode.getBoundingClientRect();
-    const leftBoundary = editorRect.left + QUERY_COAUTHORING_WIDGET_EDITOR_MARGIN;
-    const rightBoundary = editorRect.right - QUERY_COAUTHORING_WIDGET_EDITOR_MARGIN;
-    if (editorRect.width <= 0 || widgetRect.width <= 0 || rightBoundary <= leftBoundary) {
+    const viewport = window.visualViewport;
+    const leftBoundary = (viewport?.offsetLeft ?? 0) + QUERY_COAUTHORING_WIDGET_VIEWPORT_MARGIN;
+    const rightBoundary =
+      (viewport?.offsetLeft ?? 0) + (viewport?.width ?? window.innerWidth) - QUERY_COAUTHORING_WIDGET_VIEWPORT_MARGIN;
+    if (widgetRect.width <= 0 || rightBoundary <= leftBoundary) {
       return;
     }
 
-    // Monaco anchors content widgets at the selected column but does not flip them horizontally.
-    // Shift the widget after placement so its controls remain inside the editor pane.
+    // Monaco anchors content widgets at the selected column but does not keep overflowing widgets inside the viewport.
     const maximumLeft = Math.max(leftBoundary, rightBoundary - widgetRect.width);
     const alignedLeft = Math.min(Math.max(widgetRect.left, leftBoundary), maximumLeft);
     const horizontalOffset = alignedLeft - widgetRect.left;
@@ -177,16 +178,19 @@ function registerPrometheusQueryCoauthoringWidget<TQuery extends DataQuery>({
         widgetNode.style.transform = '';
         return;
       }
-      alignWidgetWithinEditor();
+      alignWidgetWithinViewport();
+      if (snapshot.mode !== 'coauthoring' || hasMeasuredAssistant) {
+        widgetNode.style.visibility = '';
+      }
     },
     getId: () => widgetId,
     getDomNode: () => widgetNode,
     getPosition: () => ({
       position: widgetPosition,
-      preference:
-        snapshot.mode === 'coauthoring'
-          ? [monaco.editor.ContentWidgetPositionPreference.ABOVE, monaco.editor.ContentWidgetPositionPreference.BELOW]
-          : [monaco.editor.ContentWidgetPositionPreference.BELOW, monaco.editor.ContentWidgetPositionPreference.ABOVE],
+      preference: [
+        monaco.editor.ContentWidgetPositionPreference.BELOW,
+        monaco.editor.ContentWidgetPositionPreference.ABOVE,
+      ],
     }),
   };
 
@@ -237,14 +241,21 @@ function registerPrometheusQueryCoauthoringWidget<TQuery extends DataQuery>({
   };
 
   const hasSelection = () => editor.getSelections()?.some((selection) => !selection.isEmpty()) ?? false;
-  const updateWidgetPosition = () => {
-    widgetPosition = editor.getSelection()?.getEndPosition() ?? editor.getPosition() ?? widgetPosition;
+  const updateWidgetPosition = (edge: 'start' | 'end') => {
+    const selection = editor.getSelection();
+    widgetPosition =
+      (edge === 'start' ? selection?.getStartPosition() : selection?.getEndPosition()) ??
+      editor.getPosition() ??
+      widgetPosition;
   };
   const showSelectionToolbar = () => {
     if (disposed) {
       return;
     }
-    updateWidgetPosition();
+    updateWidgetPosition('end');
+    assistantAnchorElement = undefined;
+    hasMeasuredAssistant = false;
+    widgetNode.style.visibility = '';
     const mode = hasSelection() ? 'selection-toolbar' : 'hidden';
     publish({ mode });
     if (mode === 'hidden') {
@@ -260,8 +271,13 @@ function registerPrometheusQueryCoauthoringWidget<TQuery extends DataQuery>({
       return;
     }
     activeInvocation++;
+    assistantAnchorElement = undefined;
+    hasMeasuredAssistant = false;
     assistantMounted = false;
-    updateWidgetPosition();
+    // Monaco first positions with the conservative fallback height. Keep that speculative placement from painting
+    // until React has mounted and measured the Assistant, then reveal it after the measured relayout.
+    widgetNode.style.visibility = 'hidden';
+    updateWidgetPosition('start');
     renderedHeight = QUERY_COAUTHORING_WIDGET_INITIAL_HEIGHT;
     publish({ mode: 'coauthoring' });
     startPositionTracking();
@@ -282,6 +298,7 @@ function registerPrometheusQueryCoauthoringWidget<TQuery extends DataQuery>({
       return;
     }
     assistantMounted = true;
+    assistantAnchorElement = anchorElement;
     const invocation = activeInvocation;
     capability.invoke({
       anchorElement,
@@ -309,7 +326,16 @@ function registerPrometheusQueryCoauthoringWidget<TQuery extends DataQuery>({
       renderedWidth = width;
       changed = true;
     }
-    if (changed) {
+    const measuredAssistant =
+      snapshot.mode === 'coauthoring' &&
+      assistantMounted &&
+      Boolean(assistantAnchorElement?.childElementCount) &&
+      height > 0;
+    const firstAssistantMeasurement = measuredAssistant && !hasMeasuredAssistant;
+    if (firstAssistantMeasurement) {
+      hasMeasuredAssistant = true;
+    }
+    if (changed || firstAssistantMeasurement) {
       scheduleRelayout();
     }
   };
