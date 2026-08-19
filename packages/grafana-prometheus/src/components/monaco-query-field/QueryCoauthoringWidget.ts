@@ -13,29 +13,30 @@ import {
 } from '../../query_coauthoring/capability';
 import { placeHolderScopedVars } from './monaco-completion-provider/validation';
 
-const QUERY_COAUTHORING_WIDGET_PREFERRED_HEIGHT = 320;
-const QUERY_COAUTHORING_WIDGET_VIEWPORT_PADDING = 24;
+const QUERY_COAUTHORING_WIDGET_INITIAL_HEIGHT = 320;
+const QUERY_COAUTHORING_WIDGET_INITIAL_WIDTH = 360;
 
-interface QueryCoauthoringWidgetStyles {
-  button: string;
-  divider: string;
-  toolbar: string;
-  widget: string;
-}
-
-interface QueryCoauthoringStyles extends QueryCoauthoringWidgetStyles {
+interface QueryCoauthoringPreviewStyles {
   previewChange: string;
   previewOriginal: string;
 }
 
-interface QueryCoauthoringRegistration {
-  dispose: VoidFunction;
-  updateStyles: (styles: QueryCoauthoringStyles) => void;
+export type QueryCoauthoringWidgetMode = 'hidden' | 'selection-toolbar' | 'coauthoring';
+
+export interface QueryCoauthoringWidgetSnapshot {
+  mode: QueryCoauthoringWidgetMode;
 }
 
-interface QueryCoauthoringWidgetRegistration {
+export interface QueryCoauthoringRegistration {
   dispose: VoidFunction;
-  updateStyles: (styles: QueryCoauthoringWidgetStyles) => void;
+  getSelectedText: () => string;
+  getSnapshot: () => QueryCoauthoringWidgetSnapshot;
+  invoke: VoidFunction;
+  mountAssistant: (anchorElement: HTMLElement) => void;
+  portalElement: HTMLElement;
+  subscribe: (listener: VoidFunction) => VoidFunction;
+  updatePreviewStyles: (styles: QueryCoauthoringPreviewStyles) => void;
+  updateRenderedSize: (size: { height: number; width: number }) => void;
 }
 
 interface RegisterPrometheusQueryCoauthoringOptions<TQuery extends DataQuery> {
@@ -46,7 +47,7 @@ interface RegisterPrometheusQueryCoauthoringOptions<TQuery extends DataQuery> {
   getTimeRange: () => TimeRange;
   monaco: Monaco;
   onRegister: QueryEditorCoauthoringRegistrar<TQuery>;
-  styles: QueryCoauthoringStyles;
+  previewStyles: QueryCoauthoringPreviewStyles;
   widgetId: string;
 }
 
@@ -55,7 +56,6 @@ interface RegisterQueryCoauthoringWidgetOptions<TQuery extends DataQuery> {
   editor: MonacoEditor;
   monaco: Monaco;
   onRegister: QueryEditorCoauthoringRegistrar<TQuery>;
-  styles: QueryCoauthoringWidgetStyles;
   widgetId: string;
 }
 
@@ -72,10 +72,10 @@ export function registerPrometheusQueryCoauthoring<TQuery extends DataQuery>({
   getTimeRange,
   monaco,
   onRegister,
-  styles,
+  previewStyles,
   widgetId,
 }: RegisterPrometheusQueryCoauthoringOptions<TQuery>): QueryCoauthoringRegistration {
-  const currentStyles = { ...styles };
+  const currentPreviewStyles = { ...previewStyles };
   const capability = createPrometheusCoauthoringCapability({
     editor,
     createQuery,
@@ -88,24 +88,22 @@ export function registerPrometheusQueryCoauthoring<TQuery extends DataQuery>({
         `{__name__="${escapeLabelValueInExactSelector(metricName)}"}`,
         QUERY_COAUTHORING_MAX_CONTEXT_LABELS
       ),
-    getPreviewChangeClassName: () => currentStyles.previewChange,
-    getPreviewOriginalClassName: () => currentStyles.previewOriginal,
+    getPreviewChangeClassName: () => currentPreviewStyles.previewChange,
+    getPreviewOriginalClassName: () => currentPreviewStyles.previewOriginal,
   });
 
-  const widgetRegistration = registerPrometheusQueryCoauthoringWidget({
+  const registration = registerPrometheusQueryCoauthoringWidget({
     capability,
     editor,
     monaco,
     onRegister,
-    styles: currentStyles,
     widgetId,
   });
 
   return {
-    dispose: widgetRegistration.dispose,
-    updateStyles: (nextStyles) => {
-      Object.assign(currentStyles, nextStyles);
-      widgetRegistration.updateStyles(currentStyles);
+    ...registration,
+    updatePreviewStyles: (nextStyles) => {
+      Object.assign(currentPreviewStyles, nextStyles);
     },
   };
 }
@@ -115,84 +113,47 @@ function registerPrometheusQueryCoauthoringWidget<TQuery extends DataQuery>({
   editor,
   monaco,
   onRegister,
-  styles,
   widgetId,
-}: RegisterQueryCoauthoringWidgetOptions<TQuery>): QueryCoauthoringWidgetRegistration {
+}: RegisterQueryCoauthoringWidgetOptions<TQuery>): Omit<QueryCoauthoringRegistration, 'updatePreviewStyles'> {
   const widgetNode = document.createElement('div');
-  const toolbarNode = document.createElement('div');
-  const hostNode = document.createElement('div');
-  const copyButton = document.createElement('button');
-  const divider = document.createElement('span');
-  const coauthorButton = document.createElement('button');
-  const coauthorIcon = document.createElement('span');
-  let coauthoringActive = false;
+  const listeners = new Set<VoidFunction>();
+  let activeInvocation = 0;
+  let assistantMounted = false;
   let disposed = false;
   let pendingRelayoutFrame: number | undefined;
+  let renderedHeight = QUERY_COAUTHORING_WIDGET_INITIAL_HEIGHT;
+  let renderedWidth = QUERY_COAUTHORING_WIDGET_INITIAL_WIDTH;
+  let snapshot: QueryCoauthoringWidgetSnapshot = { mode: 'hidden' };
   let widgetPosition = editor.getPosition() ?? { lineNumber: 1, column: 1 };
 
-  widgetNode.style.display = 'none';
-  copyButton.type = 'button';
-  copyButton.textContent = t('grafana-prometheus.components.monaco-query-field.copy', 'Copy');
-  coauthorButton.type = 'button';
-  coauthorIcon.setAttribute('aria-hidden', 'true');
-  coauthorIcon.textContent = '✦';
-  coauthorButton.append(
-    coauthorIcon,
-    document.createTextNode(` ${t('grafana-prometheus.components.monaco-query-field.coauthor', 'Coauthor')}`)
-  );
-  hostNode.style.display = 'none';
-  toolbarNode.append(copyButton, divider, coauthorButton);
-  widgetNode.append(toolbarNode, hostNode);
-
-  const applyStyles = (nextStyles: QueryCoauthoringWidgetStyles) => {
-    widgetNode.className = nextStyles.widget;
-    toolbarNode.className = nextStyles.toolbar;
-    copyButton.className = nextStyles.button;
-    divider.className = nextStyles.divider;
-    coauthorButton.className = nextStyles.button;
-  };
-  applyStyles(styles);
-
-  const getViewportBoundedHeight = () => {
-    const viewportHeight = window.visualViewport?.height || window.innerHeight || document.documentElement.clientHeight;
-    return Math.min(
-      QUERY_COAUTHORING_WIDGET_PREFERRED_HEIGHT,
-      Math.max(1, viewportHeight - QUERY_COAUTHORING_WIDGET_VIEWPORT_PADDING * 2)
-    );
-  };
-  const applyViewportBounds = () => {
-    const height = getViewportBoundedHeight();
-    widgetNode.style.maxHeight = `${height}px`;
-    widgetNode.style.overflowX = 'hidden';
-    widgetNode.style.overflowY = 'auto';
-    return height;
-  };
-  const clearViewportBounds = () => {
-    widgetNode.style.maxHeight = '';
-    widgetNode.style.overflowX = '';
-    widgetNode.style.overflowY = '';
+  const publish = (nextSnapshot: QueryCoauthoringWidgetSnapshot) => {
+    if (snapshot.mode === nextSnapshot.mode) {
+      return;
+    }
+    snapshot = nextSnapshot;
+    listeners.forEach((listener) => listener());
   };
 
   const widget: monacoTypes.editor.IContentWidget = {
     allowEditorOverflow: true,
     beforeRender: () => {
-      if (!coauthoringActive) {
+      if (snapshot.mode !== 'coauthoring') {
         return null;
       }
 
       return {
-        // Assistant mounts after Monaco's first layout pass, so reserve the same viewport-bounded height as the host.
-        height: applyViewportBounds(),
-        width: widgetNode.getBoundingClientRect().width,
+        height: renderedHeight,
+        width: renderedWidth,
       };
     },
     getId: () => widgetId,
     getDomNode: () => widgetNode,
     getPosition: () => ({
       position: widgetPosition,
-      preference: coauthoringActive
-        ? [monaco.editor.ContentWidgetPositionPreference.ABOVE, monaco.editor.ContentWidgetPositionPreference.BELOW]
-        : [monaco.editor.ContentWidgetPositionPreference.BELOW, monaco.editor.ContentWidgetPositionPreference.ABOVE],
+      preference:
+        snapshot.mode === 'coauthoring'
+          ? [monaco.editor.ContentWidgetPositionPreference.ABOVE, monaco.editor.ContentWidgetPositionPreference.BELOW]
+          : [monaco.editor.ContentWidgetPositionPreference.BELOW, monaco.editor.ContentWidgetPositionPreference.ABOVE],
     }),
   };
 
@@ -202,30 +163,44 @@ function registerPrometheusQueryCoauthoringWidget<TQuery extends DataQuery>({
       pendingRelayoutFrame = undefined;
     }
   };
-  const scheduleRelayoutForViewportChange = () => {
-    if (disposed || !coauthoringActive || pendingRelayoutFrame !== undefined) {
+  const scheduleRelayout = () => {
+    if (disposed || pendingRelayoutFrame !== undefined) {
       return;
     }
 
     pendingRelayoutFrame = window.requestAnimationFrame(() => {
       pendingRelayoutFrame = undefined;
-      if (!disposed && coauthoringActive) {
+      if (!disposed) {
         editor.layoutContentWidget(widget);
       }
     });
   };
-  const addViewportListeners = () => {
-    window.addEventListener('resize', scheduleRelayoutForViewportChange);
-    window.addEventListener('scroll', scheduleRelayoutForViewportChange, true);
-    window.visualViewport?.addEventListener('resize', scheduleRelayoutForViewportChange);
-    window.visualViewport?.addEventListener('scroll', scheduleRelayoutForViewportChange);
+  const visualViewport = window.visualViewport;
+  let trackingPositionChanges = false;
+  const schedulePositionRelayout = () => {
+    if (snapshot.mode !== 'hidden') {
+      scheduleRelayout();
+    }
   };
-  const removeViewportListeners = () => {
-    window.removeEventListener('resize', scheduleRelayoutForViewportChange);
-    window.removeEventListener('scroll', scheduleRelayoutForViewportChange, true);
-    window.visualViewport?.removeEventListener('resize', scheduleRelayoutForViewportChange);
-    window.visualViewport?.removeEventListener('scroll', scheduleRelayoutForViewportChange);
-    cancelPendingRelayout();
+  const startPositionTracking = () => {
+    if (trackingPositionChanges) {
+      return;
+    }
+    trackingPositionChanges = true;
+    window.addEventListener('resize', schedulePositionRelayout);
+    window.addEventListener('scroll', schedulePositionRelayout, true);
+    visualViewport?.addEventListener('resize', schedulePositionRelayout);
+    visualViewport?.addEventListener('scroll', schedulePositionRelayout);
+  };
+  const stopPositionTracking = () => {
+    if (!trackingPositionChanges) {
+      return;
+    }
+    trackingPositionChanges = false;
+    window.removeEventListener('resize', schedulePositionRelayout);
+    window.removeEventListener('scroll', schedulePositionRelayout, true);
+    visualViewport?.removeEventListener('resize', schedulePositionRelayout);
+    visualViewport?.removeEventListener('scroll', schedulePositionRelayout);
   };
 
   const hasSelection = () => editor.getSelections()?.some((selection) => !selection.isEmpty()) ?? false;
@@ -237,60 +212,82 @@ function registerPrometheusQueryCoauthoringWidget<TQuery extends DataQuery>({
       return;
     }
     updateWidgetPosition();
-    const visible = hasSelection() && !coauthoringActive;
-    widgetNode.style.display = visible ? 'block' : 'none';
-    toolbarNode.style.display = visible ? 'flex' : 'none';
-    hostNode.style.display = 'none';
-    clearViewportBounds();
+    const mode = hasSelection() ? 'selection-toolbar' : 'hidden';
+    publish({ mode });
+    if (mode === 'hidden') {
+      stopPositionTracking();
+      cancelPendingRelayout();
+    } else {
+      startPositionTracking();
+    }
     editor.layoutContentWidget(widget);
   };
   const startCoauthoring = () => {
-    if (disposed || coauthoringActive || editor.getValue().trim().length === 0) {
+    if (disposed || snapshot.mode === 'coauthoring' || editor.getValue().trim().length === 0) {
       return;
     }
-    coauthoringActive = true;
-    addViewportListeners();
+    activeInvocation++;
+    assistantMounted = false;
     updateWidgetPosition();
-    widgetNode.style.display = 'block';
-    toolbarNode.style.display = 'none';
-    hostNode.style.display = 'block';
-    applyViewportBounds();
+    renderedHeight = QUERY_COAUTHORING_WIDGET_INITIAL_HEIGHT;
+    publish({ mode: 'coauthoring' });
+    startPositionTracking();
     editor.layoutContentWidget(widget);
+  };
+  const getSelectedText = () => {
+    const model = editor.getModel();
+    const selections = editor.getSelections();
+    return model && selections
+      ? selections
+          .filter((selection) => !selection.isEmpty())
+          .map((selection) => model.getValueInRange(selection))
+          .join('\n')
+      : '';
+  };
+  const mountAssistant = (anchorElement: HTMLElement) => {
+    if (disposed || snapshot.mode !== 'coauthoring' || assistantMounted) {
+      return;
+    }
+    assistantMounted = true;
+    const invocation = activeInvocation;
     capability.invoke({
-      anchorElement: hostNode,
+      anchorElement,
       dismiss: () => {
+        if (disposed || invocation !== activeInvocation) {
+          return;
+        }
         capability.clearPreview();
-        coauthoringActive = false;
-        removeViewportListeners();
+        assistantMounted = false;
         showSelectionToolbar();
       },
     });
   };
-  const preserveSelection = (event: MouseEvent) => event.preventDefault();
-
-  copyButton.addEventListener('mousedown', preserveSelection);
-  coauthorButton.addEventListener('mousedown', preserveSelection);
-  copyButton.addEventListener('click', () => {
-    const model = editor.getModel();
-    const selections = editor.getSelections();
-    const selectedText =
-      model && selections
-        ? selections
-            .filter((selection) => !selection.isEmpty())
-            .map((selection) => model.getValueInRange(selection))
-            .join('\n')
-        : '';
-    if (selectedText) {
-      copyText(selectedText);
+  const updateRenderedSize = ({ height, width }: { height: number; width: number }) => {
+    if (disposed) {
+      return;
     }
-  });
-  coauthorButton.addEventListener('click', startCoauthoring);
+
+    let changed = false;
+    if (height > 0 && height !== renderedHeight) {
+      renderedHeight = height;
+      changed = true;
+    }
+    if (width > 0 && width !== renderedWidth) {
+      renderedWidth = width;
+      changed = true;
+    }
+    if (changed) {
+      scheduleRelayout();
+    }
+  };
+
   editor.addContentWidget(widget);
   const selectionDisposable = editor.onDidChangeCursorSelection(() => {
-    if (!coauthoringActive) {
+    if (snapshot.mode !== 'coauthoring') {
       showSelectionToolbar();
     }
   });
+  const layoutDisposable = editor.onDidLayoutChange(schedulePositionRelayout);
   const actionDisposable = editor.addAction({
     id: `${widgetId}.invoke`,
     label: t('grafana-prometheus.components.monaco-query-field.coauthor-promql-query', 'Coauthor PromQL query'),
@@ -298,59 +295,30 @@ function registerPrometheusQueryCoauthoringWidget<TQuery extends DataQuery>({
   });
   onRegister(capability);
   return {
+    portalElement: widgetNode,
+    getSelectedText,
+    getSnapshot: () => snapshot,
+    invoke: startCoauthoring,
+    mountAssistant,
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    updateRenderedSize,
     dispose: () => {
       if (disposed) {
         return;
       }
       disposed = true;
-      removeViewportListeners();
+      stopPositionTracking();
+      cancelPendingRelayout();
       capability.clearPreview();
       actionDisposable.dispose();
+      layoutDisposable.dispose();
       selectionDisposable.dispose();
       editor.removeContentWidget(widget);
       onRegister(undefined);
-    },
-    updateStyles: (nextStyles) => {
-      if (disposed) {
-        return;
-      }
-      applyStyles(nextStyles);
-      editor.layoutContentWidget(widget);
+      listeners.clear();
     },
   };
-}
-
-function copyText(value: string) {
-  const writeText = navigator.clipboard?.writeText;
-  if (writeText) {
-    void writeText.call(navigator.clipboard, value).catch(() => copyTextFallback(value));
-    return;
-  }
-
-  copyTextFallback(value);
-}
-
-function copyTextFallback(value: string) {
-  if (typeof document.execCommand !== 'function') {
-    return;
-  }
-
-  const activeElement = document.activeElement;
-  const textarea = document.createElement('textarea');
-  textarea.value = value;
-  textarea.setAttribute('readonly', '');
-  textarea.style.position = 'fixed';
-  textarea.style.opacity = '0';
-  document.body.append(textarea);
-  try {
-    textarea.select();
-    document.execCommand('copy');
-  } catch {
-    // Copying is best-effort in browsers without the async clipboard API.
-  } finally {
-    textarea.remove();
-    if (activeElement instanceof HTMLElement) {
-      activeElement.focus();
-    }
-  }
 }

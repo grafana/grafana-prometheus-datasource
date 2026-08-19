@@ -16,6 +16,7 @@ import {
 } from '../../query_coauthoring/capability';
 import { type PromQuery } from '../../types';
 import { type Props } from './MonacoQueryFieldProps';
+import { QueryCoauthoringChrome } from './QueryCoauthoringChrome';
 import { registerPrometheusQueryCoauthoring } from './QueryCoauthoringWidget';
 import { getOverrideServices } from './getOverrideServices';
 import { DataProvider } from './monaco-completion-provider/data_provider';
@@ -107,47 +108,6 @@ const getStyles = (theme: GrafanaTheme2, placeholder: string) => {
         opacity: 0.6,
       },
     }),
-    coauthoringWidget: css({
-      zIndex: theme.zIndex.portal,
-      minWidth: 288,
-      maxWidth: 360,
-      color: theme.colors.text.primary,
-      background: theme.colors.background.secondary,
-      border: `1px solid ${theme.colors.border.weak}`,
-      borderRadius: theme.shape.radius.default,
-      boxShadow: theme.shadows.z3,
-      overflow: 'hidden',
-    }),
-    coauthoringToolbar: css({
-      display: 'flex',
-      alignItems: 'center',
-      gap: theme.spacing(0.5),
-      padding: theme.spacing(0.5),
-    }),
-    coauthoringButton: css({
-      appearance: 'none',
-      border: 0,
-      borderRadius: theme.shape.radius.default,
-      color: theme.colors.text.primary,
-      background: 'transparent',
-      cursor: 'pointer',
-      font: 'inherit',
-      fontSize: theme.typography.bodySmall.fontSize,
-      lineHeight: theme.typography.bodySmall.lineHeight,
-      padding: theme.spacing(0.5, 1),
-      '&:hover': {
-        background: theme.colors.action.hover,
-      },
-      '&:focus-visible': {
-        outline: `2px solid ${theme.colors.primary.border}`,
-        outlineOffset: -2,
-      },
-    }),
-    coauthoringDivider: css({
-      width: 1,
-      alignSelf: 'stretch',
-      background: theme.colors.border.weak,
-    }),
     coauthoringPreviewChange: css({
       color: theme.colors.primary.text,
       background: theme.colors.action.selected,
@@ -188,7 +148,6 @@ const MonacoQueryField = (props: Props) => {
   const registrarRef = useLatest(onRegisterQueryEditorCoauthoring);
 
   const autocompleteDisposeFun = useRef<(() => void) | null>(null);
-  const coauthoringRegistrationRef = useRef<ReturnType<typeof registerPrometheusQueryCoauthoring> | null>(null);
   const registeredCapabilityRef = useRef<QueryEditorCoauthoringCapability<PromQuery>>();
   const registeredRegistrarRef = useRef<QueryEditorCoauthoringRegistrar<PromQuery>>();
   const registrationForwarderRef = useRef<QueryEditorCoauthoringRegistrar<PromQuery>>();
@@ -206,21 +165,19 @@ const MonacoQueryField = (props: Props) => {
     };
   }
   const [coauthoringMount, setCoauthoringMount] = useState<{ editor: MonacoEditor; monaco: Monaco }>();
+  const [coauthoringRegistration, setCoauthoringRegistration] =
+    useState<ReturnType<typeof registerPrometheusQueryCoauthoring>>();
 
   const theme = useTheme2();
   const styles = useMemo(() => getStyles(theme, placeholder), [placeholder, theme]);
-  const coauthoringStyles = useMemo(
+  const coauthoringPreviewStyles = useMemo(
     () => ({
-      button: styles.coauthoringButton,
-      divider: styles.coauthoringDivider,
       previewChange: styles.coauthoringPreviewChange,
       previewOriginal: styles.coauthoringPreviewOriginal,
-      toolbar: styles.coauthoringToolbar,
-      widget: styles.coauthoringWidget,
     }),
     [styles]
   );
-  const coauthoringStylesRef = useLatest(coauthoringStyles);
+  const coauthoringPreviewStylesRef = useLatest(coauthoringPreviewStyles);
   const coauthoringAvailable = Boolean(onRegisterQueryEditorCoauthoring && createQueryForCoauthoring);
 
   useEffect(() => {
@@ -250,22 +207,20 @@ const MonacoQueryField = (props: Props) => {
       getTimeRange: () => timeRangeRef.current,
       monaco: coauthoringMount.monaco,
       onRegister,
-      styles: coauthoringStylesRef.current,
+      previewStyles: coauthoringPreviewStylesRef.current,
       widgetId: `prometheus-query-coauthoring-${id}`,
     });
-    coauthoringRegistrationRef.current = registration;
+    setCoauthoringRegistration(registration);
 
     return () => {
-      if (coauthoringRegistrationRef.current === registration) {
-        coauthoringRegistrationRef.current = null;
-      }
+      setCoauthoringRegistration((current) => (current === registration ? undefined : current));
       registration.dispose();
     };
   }, [coauthoringAvailable, coauthoringMount, id]);
 
   useEffect(() => {
-    coauthoringRegistrationRef.current?.updateStyles(coauthoringStyles);
-  }, [coauthoringStyles]);
+    coauthoringRegistration?.updatePreviewStyles(coauthoringPreviewStyles);
+  }, [coauthoringPreviewStyles, coauthoringRegistration]);
 
   useEffect(() => {
     // when we unmount, we unregister the autocomplete-function, if it was registered
@@ -467,6 +422,7 @@ const MonacoQueryField = (props: Props) => {
           }
         }}
       />
+      {coauthoringRegistration && <QueryCoauthoringChrome registration={coauthoringRegistration} />}
     </div>
   );
 };

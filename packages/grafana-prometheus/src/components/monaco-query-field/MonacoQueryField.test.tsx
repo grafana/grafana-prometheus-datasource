@@ -26,6 +26,10 @@ jest.mock('./QueryCoauthoringWidget', () => ({
   registerPrometheusQueryCoauthoring: jest.fn(),
 }));
 
+jest.mock('./QueryCoauthoringChrome', () => ({
+  QueryCoauthoringChrome: () => null,
+}));
+
 const lightTheme = {
   colors: {
     action: { hover: '#eee', selected: '#ddd' },
@@ -107,12 +111,19 @@ describe('MonacoQueryField query coauthoring lifecycle', () => {
   });
 
   it('registers on late availability without restarting for registrar, query factory, or style changes', () => {
-    const registrations: Array<{ dispose: jest.Mock; updateStyles: jest.Mock }> = [];
+    const registrations: Array<{ dispose: jest.Mock; updatePreviewStyles: jest.Mock }> = [];
     jest.mocked(registerPrometheusQueryCoauthoring).mockImplementation((options) => {
       const capability = { getValue: jest.fn() } as never;
       const registration = {
         dispose: jest.fn(() => options.onRegister(undefined)),
-        updateStyles: jest.fn(),
+        getSelectedText: jest.fn(() => ''),
+        getSnapshot: jest.fn(() => ({ mode: 'hidden' as const })),
+        invoke: jest.fn(),
+        mountAssistant: jest.fn(),
+        portalElement: document.createElement('div'),
+        subscribe: jest.fn(() => jest.fn()),
+        updatePreviewStyles: jest.fn(),
+        updateRenderedSize: jest.fn(),
       };
       registrations.push(registration);
       options.onRegister(capability);
@@ -163,7 +174,7 @@ describe('MonacoQueryField query coauthoring lifecycle', () => {
     expect(firstRegistrar).toHaveBeenLastCalledWith(undefined);
     expect(secondRegistrar).toHaveBeenCalledWith(capability);
 
-    const styleUpdatesBeforeThemeChange = registrations[0].updateStyles.mock.calls.length;
+    const styleUpdatesBeforeThemeChange = registrations[0].updatePreviewStyles.mock.calls.length;
     mockTheme = { ...lightTheme };
     rerender(
       <MonacoQueryField
@@ -175,7 +186,7 @@ describe('MonacoQueryField query coauthoring lifecycle', () => {
 
     expect(registrations[0].dispose).not.toHaveBeenCalled();
     expect(registerPrometheusQueryCoauthoring).toHaveBeenCalledTimes(1);
-    expect(registrations[0].updateStyles).toHaveBeenCalledTimes(styleUpdatesBeforeThemeChange + 1);
+    expect(registrations[0].updatePreviewStyles).toHaveBeenCalledTimes(styleUpdatesBeforeThemeChange + 1);
 
     rerender(
       <MonacoQueryField

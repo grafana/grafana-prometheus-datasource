@@ -1,6 +1,8 @@
-import { screen } from '@testing-library/react';
+import { createElement } from 'react';
 
-import { type TimeRange } from '@grafana/data';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+
+import { createTheme, ThemeContext, type TimeRange } from '@grafana/data';
 import { type Monaco, type MonacoEditor, type monacoTypes } from '@grafana/ui';
 
 import { type PrometheusDatasource } from '../../datasource';
@@ -10,6 +12,7 @@ import {
   type PrometheusCoauthoringCapability,
   QUERY_COAUTHORING_MAX_CONTEXT_LABELS,
 } from '../../query_coauthoring/capability';
+import { QueryCoauthoringChrome } from './QueryCoauthoringChrome';
 import { registerPrometheusQueryCoauthoring } from './QueryCoauthoringWidget';
 
 const monacoQueryFieldTranslations = enUsTranslations['grafana-prometheus'].components['monaco-query-field'];
@@ -17,9 +20,11 @@ const monacoQueryFieldTranslations = enUsTranslations['grafana-prometheus'].comp
 function createEditorHarness() {
   let contentWidget: monacoTypes.editor.IContentWidget | undefined;
   let editorAction: monacoTypes.editor.IActionDescriptor | undefined;
+  let layoutListener: VoidFunction | undefined;
   let selectionListener: VoidFunction | undefined;
   const actionDisposable = { dispose: jest.fn() };
-  const selectionDisposable = { dispose: jest.fn() };
+  const layoutDisposable = { dispose: jest.fn(() => (layoutListener = undefined)) };
+  const selectionDisposable = { dispose: jest.fn(() => (selectionListener = undefined)) };
   const editor = {
     addAction: jest.fn((action: monacoTypes.editor.IActionDescriptor) => {
       editorAction = action;
@@ -35,6 +40,10 @@ function createEditorHarness() {
     getSelections: jest.fn(() => []),
     getValue: jest.fn(() => 'rate(http_requests_total[5m])'),
     layoutContentWidget: jest.fn(),
+    onDidLayoutChange: jest.fn((listener: VoidFunction) => {
+      layoutListener = listener;
+      return layoutDisposable;
+    }),
     onDidChangeCursorSelection: jest.fn((listener: VoidFunction) => {
       selectionListener = listener;
       return selectionDisposable;
@@ -65,8 +74,10 @@ function createEditorHarness() {
       return editorAction;
     },
     monaco,
-    notifySelectionChange: () => selectionListener?.(),
+    notifyLayoutChange: () => act(() => layoutListener?.()),
+    notifySelectionChange: () => act(() => selectionListener?.()),
     actionDisposable,
+    layoutDisposable,
     selectionDisposable,
   };
 }
@@ -77,7 +88,9 @@ function setup() {
     editor,
     getContentWidget,
     getEditorAction,
+    layoutDisposable,
     monaco,
+    notifyLayoutChange,
     notifySelectionChange,
     selectionDisposable,
   } = createEditorHarness();
@@ -96,16 +109,15 @@ function setup() {
     getTimeRange: () => ({}) as TimeRange,
     monaco,
     onRegister,
-    styles: {
-      button: 'button',
-      divider: 'divider',
+    previewStyles: {
       previewChange: 'preview-change',
       previewOriginal: 'preview-original',
-      toolbar: 'toolbar',
-      widget: 'widget',
     },
     widgetId: 'test-query-coauthoring',
   });
+  const renderChrome = (theme = createTheme()) =>
+    createElement(ThemeContext.Provider, { value: theme }, createElement(QueryCoauthoringChrome, { registration }));
+  const chrome = render(renderChrome());
   const capability = onRegister.mock.calls[0][0] as PrometheusCoauthoringCapability;
 
   return {
@@ -115,49 +127,64 @@ function setup() {
     editor,
     getContentWidget,
     getEditorAction,
+    layoutDisposable,
+    notifyLayoutChange,
     notifySelectionChange,
     onRegister,
+    registration,
     selectionDisposable,
-    updateStyles: registration.updateStyles,
+    rerenderChrome: (theme: ReturnType<typeof createTheme>) => chrome.rerender(renderChrome(theme)),
+    unmountChrome: chrome.unmount,
+    updatePreviewStyles: registration.updatePreviewStyles,
   };
 }
 
 describe('registerPrometheusQueryCoauthoring', () => {
-  afterEach(() => document.body.replaceChildren());
+  afterEach(() => {
+    cleanup();
+    document.body.replaceChildren();
+  });
 
-  it('registers the capability and cleans up the editor widget', () => {
+  it('registers the capability, renders accessible React chrome, and cleans up the editor widget', () => {
     const {
       actionDisposable,
       capability,
       dispose,
       editor,
-      getContentWidget,
+      layoutDisposable,
+      notifySelectionChange,
       onRegister,
       selectionDisposable,
-      updateStyles,
     } = setup();
     const clearPreview = jest.spyOn(capability, 'clearPreview');
+    const selection = {
+      getEndPosition: () => ({ lineNumber: 1, column: 12 }),
+      isEmpty: () => false,
+    } as monacoTypes.Selection;
+    jest.mocked(editor.getSelection).mockReturnValue(selection);
+    jest.mocked(editor.getSelections).mockReturnValue([selection]);
 
     expect(editor.addContentWidget).toHaveBeenCalledTimes(1);
     expect(onRegister).toHaveBeenCalledWith(capability);
     expect(monacoQueryFieldTranslations.coauthor).toBe('Coauthor');
+    expect(monacoQueryFieldTranslations.copy).toBe('Copy');
 
-    updateStyles({
-      button: 'next-button',
-      divider: 'next-divider',
-      previewChange: 'next-preview-change',
-      previewOriginal: 'next-preview-original',
-      toolbar: 'next-toolbar',
-      widget: 'next-widget',
-    });
+    notifySelectionChange();
+    expect(screen.getByRole('button', { name: 'Copy' })).toBeVisible();
+    const coauthorButton = screen.getByRole('button', { name: 'Coauthor' });
+    expect(coauthorButton).toBeVisible();
+    expect(coauthorButton).toHaveAccessibleName('Coauthor');
 
-    expect(getContentWidget().getDomNode()).toHaveClass('next-widget');
-    expect(screen.getByRole('button', { name: 'Coauthor', hidden: true })).toHaveClass('next-button');
+    jest.mocked(editor.getSelections).mockReturnValue([]);
+    notifySelectionChange();
+    expect(screen.queryByRole('button', { name: 'Copy' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Coauthor' })).not.toBeInTheDocument();
 
     dispose();
 
     expect(clearPreview).toHaveBeenCalledTimes(1);
     expect(actionDisposable.dispose).toHaveBeenCalledTimes(1);
+    expect(layoutDisposable.dispose).toHaveBeenCalledTimes(1);
     expect(selectionDisposable.dispose).toHaveBeenCalledTimes(1);
     expect(editor.removeContentWidget).toHaveBeenCalledTimes(1);
     expect(onRegister).toHaveBeenLastCalledWith(undefined);
@@ -176,7 +203,7 @@ describe('registerPrometheusQueryCoauthoring', () => {
     });
     expect(action).not.toHaveProperty('keybindings');
 
-    action.run(editor);
+    act(() => action.run(editor));
 
     expect(onInvoke).toHaveBeenCalledWith({
       anchorElement: expect.any(HTMLElement),
@@ -186,8 +213,8 @@ describe('registerPrometheusQueryCoauthoring', () => {
     dispose();
   });
 
-  it('offers coauthoring for a selection and restores the selection actions after dismissal', () => {
-    const { capability, editor, notifySelectionChange } = setup();
+  it('preserves selection, keeps one Assistant host across React rerenders, and restores the toolbar after dismissal', () => {
+    const { capability, dispose, editor, notifySelectionChange, rerenderChrome } = setup();
     const clearPreview = jest.spyOn(capability, 'clearPreview');
     const onInvoke = jest.fn();
     capability.subscribeToInvocation(onInvoke);
@@ -199,7 +226,9 @@ describe('registerPrometheusQueryCoauthoring', () => {
     jest.mocked(editor.getSelections).mockReturnValue([selection]);
 
     notifySelectionChange();
-    screen.getByRole('button', { name: 'Coauthor' }).click();
+    const coauthorButton = screen.getByRole('button', { name: 'Coauthor' });
+    expect(fireEvent.mouseDown(coauthorButton)).toBe(false);
+    fireEvent.click(coauthorButton);
 
     expect(onInvoke).toHaveBeenCalledWith({
       anchorElement: expect.any(HTMLElement),
@@ -208,19 +237,32 @@ describe('registerPrometheusQueryCoauthoring', () => {
     const invocation = onInvoke.mock.calls[0][0];
     expect(invocation.anchorElement).toBeVisible();
     expect(invocation.anchorElement).not.toHaveAttribute('role');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Coauthor' })).not.toBeInTheDocument();
 
-    invocation.dismiss();
+    const anchorElement = invocation.anchorElement;
+    const widgetElement = screen.getByTestId('prometheus-query-coauthoring-widget');
+    const darkThemeClassName = widgetElement.className;
+    rerenderChrome(createTheme({ colors: { mode: 'light' } }));
+    expect(onInvoke).toHaveBeenCalledTimes(1);
+    expect(onInvoke.mock.calls[0][0].anchorElement).toBe(anchorElement);
+    expect(screen.getByTestId('prometheus-query-coauthoring-widget')).toBe(widgetElement);
+    expect(widgetElement.className).not.toBe(darkThemeClassName);
+
+    act(() => invocation.dismiss());
 
     expect(clearPreview).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('button', { name: 'Coauthor' })).toBeVisible();
+
+    dispose();
   });
 
-  it('reserves viewport space above the active widget and relayouts it when its fixed anchor can move', () => {
-    const innerHeightDescriptor = Object.getOwnPropertyDescriptor(window, 'innerHeight');
+  it('uses the committed React size for deterministic placement without owning a second height budget', () => {
+    const resizeObserverDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'ResizeObserver');
     const requestAnimationFrameDescriptor = Object.getOwnPropertyDescriptor(window, 'requestAnimationFrame');
     const cancelAnimationFrameDescriptor = Object.getOwnPropertyDescriptor(window, 'cancelAnimationFrame');
     const frameCallbacks = new Map<number, FrameRequestCallback>();
+    let notifyResize: VoidFunction | undefined;
     let nextFrame = 1;
     const requestAnimationFrame = jest.fn((callback: FrameRequestCallback) => {
       const frame = nextFrame++;
@@ -228,10 +270,19 @@ describe('registerPrometheusQueryCoauthoring', () => {
       return frame;
     });
     const cancelAnimationFrame = jest.fn((frame: number) => frameCallbacks.delete(frame));
-    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 577 });
+    const resizeObserver = {
+      disconnect: jest.fn(),
+      observe: jest.fn(),
+      unobserve: jest.fn(),
+    } as unknown as ResizeObserver;
+    const ResizeObserverMock = jest.fn((callback: ResizeObserverCallback) => {
+      notifyResize = () => callback([], resizeObserver);
+      return resizeObserver;
+    });
+    Object.defineProperty(globalThis, 'ResizeObserver', { configurable: true, value: ResizeObserverMock });
     Object.defineProperty(window, 'requestAnimationFrame', { configurable: true, value: requestAnimationFrame });
     Object.defineProperty(window, 'cancelAnimationFrame', { configurable: true, value: cancelAnimationFrame });
-    const { capability, dispose, editor, getContentWidget, notifySelectionChange } = setup();
+    const { capability, dispose, editor, getContentWidget, notifySelectionChange, unmountChrome } = setup();
     const onInvoke = jest.fn();
     capability.subscribeToInvocation(onInvoke);
     const selection = {
@@ -246,47 +297,151 @@ describe('registerPrometheusQueryCoauthoring', () => {
       const widget = getContentWidget();
       expect(widget.getPosition()?.preference).toEqual([2, 1]);
 
-      screen.getByRole('button', { name: 'Coauthor' }).click();
+      fireEvent.click(screen.getByRole('button', { name: 'Coauthor' }));
 
       expect(widget.getPosition()?.preference).toEqual([1, 2]);
-      expect(widget.beforeRender?.()).toEqual({ height: 320, width: 0 });
-      expect(widget.getDomNode()).toHaveStyle({ maxHeight: '320px', overflowY: 'auto' });
-      Object.defineProperty(window, 'innerHeight', { configurable: true, value: 240 });
-      expect(widget.beforeRender?.()).toEqual({ height: 192, width: 0 });
-      expect(widget.getDomNode()).toHaveStyle({ maxHeight: '192px', overflowY: 'auto' });
+      expect(widget.beforeRender?.()).toEqual({ height: 320, width: 360 });
+      expect(widget.beforeRender?.()).toEqual({ height: 320, width: 360 });
+      expect(screen.getByTestId('prometheus-query-coauthoring-widget').style.maxHeight).toBe('');
+      expect(widget.getDomNode().style.maxHeight).toBe('');
       const layoutCallsAfterInvocation = jest.mocked(editor.layoutContentWidget).mock.calls.length;
 
-      window.dispatchEvent(new Event('resize'));
-      document.body.dispatchEvent(new Event('scroll'));
+      jest.spyOn(widget.getDomNode(), 'getBoundingClientRect').mockReturnValue({
+        bottom: 240,
+        height: 240,
+        left: 0,
+        right: 300,
+        top: 0,
+        width: 300,
+        x: 0,
+        y: 0,
+        toJSON: () => undefined,
+      });
+      act(() => notifyResize?.());
 
       expect(requestAnimationFrame).toHaveBeenCalledTimes(1);
+      expect(widget.beforeRender?.()).toEqual({ height: 240, width: 300 });
       expect(editor.layoutContentWidget).toHaveBeenCalledTimes(layoutCallsAfterInvocation);
+
+      jest.mocked(widget.getDomNode().getBoundingClientRect).mockReturnValue({
+        bottom: 32,
+        height: 32,
+        left: 0,
+        right: 288,
+        top: 0,
+        width: 288,
+        x: 0,
+        y: 0,
+        toJSON: () => undefined,
+      });
+      act(() => notifyResize?.());
+      expect(requestAnimationFrame).toHaveBeenCalledTimes(1);
+      expect(widget.beforeRender?.()).toEqual({ height: 32, width: 288 });
+
       frameCallbacks.get(1)?.(0);
       frameCallbacks.delete(1);
       expect(editor.layoutContentWidget).toHaveBeenCalledTimes(layoutCallsAfterInvocation + 1);
 
-      window.dispatchEvent(new Event('resize'));
+      jest.mocked(widget.getDomNode().getBoundingClientRect).mockReturnValue({
+        bottom: 40,
+        height: 40,
+        left: 0,
+        right: 288,
+        top: 0,
+        width: 288,
+        x: 0,
+        y: 0,
+        toJSON: () => undefined,
+      });
+      act(() => notifyResize?.());
       expect(requestAnimationFrame).toHaveBeenCalledTimes(2);
-      onInvoke.mock.calls[0][0].dismiss();
-      expect(cancelAnimationFrame).toHaveBeenCalledWith(2);
-      expect(widget.getDomNode().style.maxHeight).toBe('');
 
-      screen.getByRole('button', { name: 'Coauthor' }).click();
-      window.dispatchEvent(new Event('resize'));
-      expect(requestAnimationFrame).toHaveBeenCalledTimes(3);
-
+      unmountChrome();
+      expect(resizeObserver.disconnect).toHaveBeenCalledTimes(1);
       dispose();
-      expect(cancelAnimationFrame).toHaveBeenCalledWith(3);
-      window.dispatchEvent(new Event('resize'));
-      document.body.dispatchEvent(new Event('scroll'));
-
-      expect(requestAnimationFrame).toHaveBeenCalledTimes(3);
-      expect(editor.layoutContentWidget).toHaveBeenCalledTimes(layoutCallsAfterInvocation + 3);
+      expect(cancelAnimationFrame).toHaveBeenCalledWith(2);
+      act(() => notifyResize?.());
+      expect(requestAnimationFrame).toHaveBeenCalledTimes(2);
     } finally {
       dispose();
-      if (innerHeightDescriptor) {
-        Object.defineProperty(window, 'innerHeight', innerHeightDescriptor);
+      if (resizeObserverDescriptor) {
+        Object.defineProperty(globalThis, 'ResizeObserver', resizeObserverDescriptor);
+      } else {
+        delete (globalThis as { ResizeObserver?: typeof ResizeObserver }).ResizeObserver;
       }
+      if (requestAnimationFrameDescriptor) {
+        Object.defineProperty(window, 'requestAnimationFrame', requestAnimationFrameDescriptor);
+      } else {
+        delete (window as { requestAnimationFrame?: typeof window.requestAnimationFrame }).requestAnimationFrame;
+      }
+      if (cancelAnimationFrameDescriptor) {
+        Object.defineProperty(window, 'cancelAnimationFrame', cancelAnimationFrameDescriptor);
+      } else {
+        delete (window as { cancelAnimationFrame?: typeof window.cancelAnimationFrame }).cancelAnimationFrame;
+      }
+    }
+  });
+
+  it('coalesces viewport, ancestor scroll, and editor layout changes into position relayouts', () => {
+    const requestAnimationFrameDescriptor = Object.getOwnPropertyDescriptor(window, 'requestAnimationFrame');
+    const cancelAnimationFrameDescriptor = Object.getOwnPropertyDescriptor(window, 'cancelAnimationFrame');
+    const frameCallbacks = new Map<number, FrameRequestCallback>();
+    let nextFrame = 1;
+    const requestAnimationFrame = jest.fn((callback: FrameRequestCallback) => {
+      const frame = nextFrame++;
+      frameCallbacks.set(frame, callback);
+      return frame;
+    });
+    const cancelAnimationFrame = jest.fn((frame: number) => frameCallbacks.delete(frame));
+    Object.defineProperty(window, 'requestAnimationFrame', { configurable: true, value: requestAnimationFrame });
+    Object.defineProperty(window, 'cancelAnimationFrame', { configurable: true, value: cancelAnimationFrame });
+    const { dispose, editor, notifyLayoutChange, notifySelectionChange } = setup();
+    const selection = {
+      getEndPosition: () => ({ lineNumber: 1, column: 12 }),
+      isEmpty: () => false,
+    } as monacoTypes.Selection;
+    jest.mocked(editor.getSelection).mockReturnValue(selection);
+
+    try {
+      window.dispatchEvent(new Event('resize'));
+      notifyLayoutChange();
+      expect(requestAnimationFrame).not.toHaveBeenCalled();
+
+      jest.mocked(editor.getSelections).mockReturnValue([selection]);
+      notifySelectionChange();
+      const layoutCallsAfterSelection = jest.mocked(editor.layoutContentWidget).mock.calls.length;
+
+      window.dispatchEvent(new Event('resize'));
+      window.dispatchEvent(new Event('scroll'));
+      notifyLayoutChange();
+
+      expect(requestAnimationFrame).toHaveBeenCalledTimes(1);
+      expect(editor.layoutContentWidget).toHaveBeenCalledTimes(layoutCallsAfterSelection);
+
+      act(() => frameCallbacks.get(1)?.(0));
+      frameCallbacks.delete(1);
+      expect(editor.layoutContentWidget).toHaveBeenCalledTimes(layoutCallsAfterSelection + 1);
+
+      jest.mocked(editor.getSelections).mockReturnValue([]);
+      notifySelectionChange();
+      window.dispatchEvent(new Event('resize'));
+      window.dispatchEvent(new Event('scroll'));
+      notifyLayoutChange();
+      expect(requestAnimationFrame).toHaveBeenCalledTimes(1);
+
+      jest.mocked(editor.getSelections).mockReturnValue([selection]);
+      notifySelectionChange();
+      window.dispatchEvent(new Event('scroll'));
+      expect(requestAnimationFrame).toHaveBeenCalledTimes(2);
+
+      dispose();
+      expect(cancelAnimationFrame).toHaveBeenCalledWith(2);
+      window.dispatchEvent(new Event('resize'));
+      window.dispatchEvent(new Event('scroll'));
+      notifyLayoutChange();
+      expect(requestAnimationFrame).toHaveBeenCalledTimes(2);
+    } finally {
+      dispose();
       if (requestAnimationFrameDescriptor) {
         Object.defineProperty(window, 'requestAnimationFrame', requestAnimationFrameDescriptor);
       } else {
@@ -312,13 +467,13 @@ describe('registerPrometheusQueryCoauthoring', () => {
     jest.mocked(editor.getSelections).mockReturnValue([selection]);
 
     notifySelectionChange();
-    screen.getByRole('button', { name: 'Coauthor' }).click();
+    fireEvent.click(screen.getByRole('button', { name: 'Coauthor' }));
     const invocation = onInvoke.mock.calls[0][0];
     const layoutCallsBeforeDispose = jest.mocked(editor.layoutContentWidget).mock.calls.length;
 
     dispose();
     dispose();
-    invocation.dismiss();
+    act(() => invocation.dismiss());
     notifySelectionChange();
 
     expect(editor.layoutContentWidget).toHaveBeenCalledTimes(layoutCallsBeforeDispose);
@@ -328,15 +483,21 @@ describe('registerPrometheusQueryCoauthoring', () => {
     expect(onRegister).toHaveBeenLastCalledWith(undefined);
   });
 
-  it('copies selected text without the async clipboard API', () => {
-    const { editor, notifySelectionChange } = setup();
-    const selection = {
+  it('preserves multiple selections and copies each selected fragment without the async clipboard API', async () => {
+    const { dispose, editor, notifySelectionChange } = setup();
+    const firstSelection = {
       getEndPosition: () => ({ lineNumber: 1, column: 12 }),
       isEmpty: () => false,
     } as monacoTypes.Selection;
-    jest.mocked(editor.getSelections).mockReturnValue([selection]);
+    const secondSelection = {
+      getEndPosition: () => ({ lineNumber: 1, column: 24 }),
+      isEmpty: () => false,
+    } as monacoTypes.Selection;
+    jest.mocked(editor.getSelection).mockReturnValue(secondSelection);
+    jest.mocked(editor.getSelections).mockReturnValue([firstSelection, secondSelection]);
+    const getValueInRange = jest.fn().mockReturnValueOnce('http_requests_total').mockReturnValueOnce('handler="api"');
     jest.mocked(editor.getModel).mockReturnValue({
-      getValueInRange: () => 'http_requests_total',
+      getValueInRange,
     } as unknown as monacoTypes.editor.ITextModel);
     const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
     const execCommandDescriptor = Object.getOwnPropertyDescriptor(document, 'execCommand');
@@ -347,11 +508,16 @@ describe('registerPrometheusQueryCoauthoring', () => {
 
     try {
       notifySelectionChange();
-      screen.getByRole('button', { name: 'Copy' }).click();
+      const copyButton = screen.getByRole('button', { name: 'Copy' });
+      expect(fireEvent.mouseDown(copyButton)).toBe(false);
+      fireEvent.click(copyButton);
 
-      expect(execCommand).toHaveBeenCalledWith('copy');
+      await waitFor(() => expect(execCommand).toHaveBeenCalledWith('copy'));
+      expect(getValueInRange).toHaveBeenNthCalledWith(1, firstSelection);
+      expect(getValueInRange).toHaveBeenNthCalledWith(2, secondSelection);
       expect(document.body.querySelector('textarea')).not.toBeInTheDocument();
     } finally {
+      dispose();
       if (clipboardDescriptor) {
         Object.defineProperty(navigator, 'clipboard', clipboardDescriptor);
       } else {
@@ -393,13 +559,9 @@ describe('registerPrometheusQueryCoauthoring', () => {
       getTimeRange: () => timeRange,
       monaco,
       onRegister,
-      styles: {
-        button: 'button',
-        divider: 'divider',
+      previewStyles: {
         previewChange: 'preview-change',
         previewOriginal: 'preview-original',
-        toolbar: 'toolbar',
-        widget: 'widget',
       },
       widgetId: 'test-current-context',
     });
@@ -437,13 +599,9 @@ describe('registerPrometheusQueryCoauthoring', () => {
       getTimeRange: () => ({}) as TimeRange,
       monaco,
       onRegister,
-      styles: {
-        button: 'button',
-        divider: 'divider',
+      previewStyles: {
         previewChange: 'preview-change',
         previewOriginal: 'preview-original',
-        toolbar: 'toolbar',
-        widget: 'widget',
       },
       widgetId: 'test-utf8-context',
     });
