@@ -65,6 +65,8 @@ export interface QueryEditorCoauthoringInvocation {
 export interface QueryEditorCoauthoringCapability<TQuery extends DataQuery = DataQuery> {
   getValue: () => string;
   getContext: () => Promise<QueryEditorCoauthoringContext>;
+  /** Re-captures the current query and editor focus as the active invocation baseline. */
+  refreshContext: () => Promise<QueryEditorCoauthoringContext>;
   createQuery: (value: string) => TQuery;
   validateQuery: (value: string) => boolean;
   stagePreview: (value: string) => QueryEditorCoauthoringPreview | undefined;
@@ -210,56 +212,62 @@ export function createPrometheusCoauthoringCapability<TQuery extends DataQuery>(
     editor.updateOptions({ readOnly: state.readOnly });
   };
 
+  const buildContext = async (snapshot: InvocationSnapshot): Promise<QueryEditorCoauthoringContext> => {
+    const metricNames = extractMetricNames(interpolate(snapshot.query)).slice(0, MAX_CONTEXT_METRICS);
+    let cachedMetadata: PromMetricsMetadata = {};
+    try {
+      cachedMetadata = retrieveMetricsMetadata();
+    } catch {
+      // Cached metadata is optional enrichment and must not prevent the remaining context from loading.
+    }
+    const metadataPromise = metricNames.some((name) => !cachedMetadata[name])
+      ? Promise.resolve()
+          .then(queryMetricsMetadata)
+          .then((freshMetadata) => ({ ...cachedMetadata, ...freshMetadata }))
+          .catch(() => cachedMetadata)
+      : Promise.resolve(cachedMetadata);
+    const metricLabelsPromise = Promise.all(
+      metricNames.slice(0, MAX_LABEL_METRICS).map(async (name) => {
+        const labels = await Promise.resolve()
+          .then(() => queryMetricLabels(name))
+          .catch(() => []);
+        return [
+          name,
+          labels
+            .filter((label) => label !== '__name__')
+            .sort()
+            .slice(0, QUERY_COAUTHORING_MAX_CONTEXT_LABELS),
+        ] as const;
+      })
+    );
+    const [metadata, metricLabelEntries] = await Promise.all([metadataPromise, metricLabelsPromise]);
+    const metricLabels = new Map(metricLabelEntries);
+
+    return {
+      query: snapshot.query,
+      focusRanges: snapshot.focusRanges,
+      metricMetadata: metricNames.map((name) => {
+        const item = metadata[name];
+        return {
+          name,
+          type: item?.type || undefined,
+          help: item?.help ? item.help.slice(0, MAX_METADATA_HELP_LENGTH) : undefined,
+          unit: item?.unit || undefined,
+          labels: metricLabels.get(name),
+        };
+      }),
+    };
+  };
+
   const capability: PrometheusCoauthoringCapability<TQuery> = {
     getValue: () => {
       return editor.getValue();
     },
-    getContext: async () => {
-      const snapshot = invocationSnapshot ?? captureSnapshot();
-      const metricNames = extractMetricNames(interpolate(snapshot.query)).slice(0, MAX_CONTEXT_METRICS);
-      let cachedMetadata: PromMetricsMetadata = {};
-      try {
-        cachedMetadata = retrieveMetricsMetadata();
-      } catch {
-        // Cached metadata is optional enrichment and must not prevent the remaining context from loading.
-      }
-      const metadataPromise = metricNames.some((name) => !cachedMetadata[name])
-        ? Promise.resolve()
-            .then(queryMetricsMetadata)
-            .then((freshMetadata) => ({ ...cachedMetadata, ...freshMetadata }))
-            .catch(() => cachedMetadata)
-        : Promise.resolve(cachedMetadata);
-      const metricLabelsPromise = Promise.all(
-        metricNames.slice(0, MAX_LABEL_METRICS).map(async (name) => {
-          const labels = await Promise.resolve()
-            .then(() => queryMetricLabels(name))
-            .catch(() => []);
-          return [
-            name,
-            labels
-              .filter((label) => label !== '__name__')
-              .sort()
-              .slice(0, QUERY_COAUTHORING_MAX_CONTEXT_LABELS),
-          ] as const;
-        })
-      );
-      const [metadata, metricLabelEntries] = await Promise.all([metadataPromise, metricLabelsPromise]);
-      const metricLabels = new Map(metricLabelEntries);
-
-      return {
-        query: snapshot.query,
-        focusRanges: snapshot.focusRanges,
-        metricMetadata: metricNames.map((name) => {
-          const item = metadata[name];
-          return {
-            name,
-            type: item?.type || undefined,
-            help: item?.help ? item.help.slice(0, MAX_METADATA_HELP_LENGTH) : undefined,
-            unit: item?.unit || undefined,
-            labels: metricLabels.get(name),
-          };
-        }),
-      };
+    getContext: () => buildContext(invocationSnapshot ?? captureSnapshot()),
+    refreshContext: () => {
+      const snapshot = captureSnapshot();
+      invocationSnapshot = snapshot;
+      return buildContext(snapshot);
     },
     createQuery,
     validateQuery: (value) => validatePromQL(value, interpolate(value)).valid,

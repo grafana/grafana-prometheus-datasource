@@ -111,6 +111,25 @@ describe('createPrometheusCoauthoringCapability', () => {
     expect(queryMetricLabels).toHaveBeenCalledWith('http_requests_total');
   });
 
+  it('refreshes the invocation snapshot from the current editor selection', async () => {
+    const query = 'rate(http_requests_total[5m])';
+    const { capability, setEditorSelections } = setup(query);
+    capability.invoke({ anchorElement: document.createElement('div'), dismiss: jest.fn() });
+
+    setEditorSelections([selection(0, query.length)]);
+
+    await expect(capability.getContext()).resolves.toMatchObject({
+      focusRanges: [{ from: 5, to: 24 }],
+    });
+    await expect(capability.refreshContext()).resolves.toMatchObject({
+      query,
+      focusRanges: [{ from: 0, to: query.length }],
+    });
+    await expect(capability.getContext()).resolves.toMatchObject({
+      focusRanges: [{ from: 0, to: query.length }],
+    });
+  });
+
   it('loads metadata when the language-provider cache is empty', async () => {
     const { capability, retrieveMetricsMetadata, queryMetricsMetadata } = setup();
     retrieveMetricsMetadata.mockReturnValue({});
