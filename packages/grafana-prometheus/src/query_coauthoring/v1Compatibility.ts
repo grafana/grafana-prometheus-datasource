@@ -7,20 +7,24 @@ export interface QueryEditorCoauthoringRangeV1 {
   to: number;
 }
 
-export interface QueryEditorCoauthoringMetricMetadataV1 {
+export interface QueryEditorCoauthoringMetadataV1 {
+  kind: string;
   name: string;
-  type?: string;
-  help?: string;
-  unit?: string;
-  labels?: string[];
+  attributes?: Record<string, string | string[]>;
+}
+
+export interface QueryEditorCoauthoringLanguageV1 {
+  id: string;
+  displayName: string;
+  guidance?: string[];
 }
 
 export interface QueryEditorCoauthoringContextV1 {
   revision: string;
   query: string;
   focusRanges: QueryEditorCoauthoringRangeV1[];
-  language: { id: string; displayName: string };
-  metricMetadata: QueryEditorCoauthoringMetricMetadataV1[];
+  language: QueryEditorCoauthoringLanguageV1;
+  metadata: QueryEditorCoauthoringMetadataV1[];
 }
 
 export interface QueryEditorCoauthoringChangeV1 {

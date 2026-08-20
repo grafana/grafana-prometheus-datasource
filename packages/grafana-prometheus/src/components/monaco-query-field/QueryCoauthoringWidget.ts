@@ -39,6 +39,14 @@ interface RegisterPrometheusQueryCoauthoringOptions<TQuery extends DataQuery> {
   widgetId: string;
 }
 
+const PROMQL_COAUTHORING_GUIDANCE = [
+  'Preserve existing label matchers and Grafana template variables unless the user explicitly asks to change them.',
+  'Metric metadata is advisory. Do not invent metadata that is not provided.',
+  'Use only metric labels provided in the relevant metric context. If the requested grouping is ambiguous or unavailable, ask one concise clarification question.',
+  'Treat slash-separated label names in the user request as alternatives or synonyms, not a request to use every listed label. Choose the single exact available label that best matches.',
+  'For a counter breakdown, place the rate expression inside an aggregation, for example: sum by (label) (rate(metric[range])). A by/without modifier cannot follow a function call.',
+];
+
 /**
  * Registers the internal Prometheus adapter for Grafana's experimental query coauthoring interface.
  *
@@ -118,8 +126,17 @@ export function createPrometheusQueryCoauthoringController<TQuery extends DataQu
       revision: String(revision),
       query: captured.query,
       focusRanges: captured.focusRanges,
-      language: { id: 'promql', displayName: 'PromQL' },
-      metricMetadata: captured.metricMetadata,
+      language: { id: 'promql', displayName: 'PromQL', guidance: PROMQL_COAUTHORING_GUIDANCE },
+      metadata: captured.metricMetadata.map(({ name, type, help, unit, labels }) => ({
+        kind: 'metric',
+        name,
+        attributes: {
+          ...(type ? { type } : {}),
+          ...(help ? { help } : {}),
+          ...(unit ? { unit } : {}),
+          ...(labels?.length ? { labels } : {}),
+        },
+      })),
     };
     return context;
   };

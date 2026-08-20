@@ -422,7 +422,18 @@ describe('registerPrometheusQueryCoauthoring', () => {
     timeRange = currentRange;
 
     await expect(createPrometheusQueryCoauthoringController(registration).begin()).resolves.toMatchObject({
-      metricMetadata: [{ name: 'http_requests_total', type: 'counter', labels: ['handler'] }],
+      language: {
+        id: 'promql',
+        displayName: 'PromQL',
+        guidance: expect.arrayContaining([expect.stringContaining('rate expression inside an aggregation')]),
+      },
+      metadata: [
+        {
+          kind: 'metric',
+          name: 'http_requests_total',
+          attributes: { type: 'counter', labels: ['handler'] },
+        },
+      ],
     });
     expect(currentProvider.queryLabelKeys).toHaveBeenCalledWith(
       currentRange,
