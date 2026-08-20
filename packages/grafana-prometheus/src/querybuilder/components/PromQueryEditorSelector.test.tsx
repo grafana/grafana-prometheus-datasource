@@ -117,6 +117,40 @@ describe('PromQueryEditorSelector', () => {
     expect(screen.queryByTestId('query-with-assistant-button')).not.toBeInTheDocument();
   });
 
+  it('uses the ready exposed host as the coauthoring surface when the legacy registrar is absent', () => {
+    renderWithProps(
+      {},
+      {
+        app: CoreApp.PanelEditor,
+        queryEditorCoauthoringHost: {
+          componentId: 'grafana/query-editor-coauthoring/v1',
+          generation: '1',
+          queryKey: 'prometheus:A',
+          surfaceState: 'ready',
+          onSurfaceStateChange: jest.fn(),
+        },
+      }
+    );
+    expect(screen.queryByTestId('query-with-assistant-button')).not.toBeInTheDocument();
+  });
+
+  it('keeps the assistant fallback when the exposed host is unavailable and no legacy registrar exists', async () => {
+    renderWithProps(
+      {},
+      {
+        app: CoreApp.PanelEditor,
+        queryEditorCoauthoringHost: {
+          componentId: 'grafana/query-editor-coauthoring/v1',
+          generation: '1',
+          queryKey: 'prometheus:A',
+          surfaceState: 'unavailable',
+          onSurfaceStateChange: jest.fn(),
+        },
+      }
+    );
+    expect(await screen.findByTestId('query-with-assistant-button')).toBeInTheDocument();
+  });
+
   it('keeps the assistant button in builder mode when the panel editor offers query coauthoring', async () => {
     renderWithProps(
       { editorMode: QueryEditorMode.Builder },

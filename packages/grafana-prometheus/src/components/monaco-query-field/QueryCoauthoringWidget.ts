@@ -123,11 +123,16 @@ export function createPrometheusQueryCoauthoringController<TQuery extends DataQu
 ): QueryEditorCoauthoringControllerV1<TQuery> {
   let context: QueryEditorCoauthoringContextV1 | undefined;
   let revision = 0;
+  let contextEpoch = 0;
   let disposed = false;
   const listeners = new Set<VoidFunction>();
   let unsubscribeRegistration: VoidFunction | undefined;
   const nextContext = async (refresh: boolean) => {
+    const captureEpoch = contextEpoch;
     const captured = await (refresh ? registration.capability.refreshContext() : registration.capability.getContext());
+    if (captureEpoch !== contextEpoch) {
+      return nextContext(true);
+    }
     revision++;
     context = {
       queryKey,
@@ -159,7 +164,14 @@ export function createPrometheusQueryCoauthoringController<TQuery extends DataQu
     listeners.forEach((listener) => listener());
   };
   const ensureRegistrationSubscription = () => {
-    unsubscribeRegistration ??= registration.subscribe(publish);
+    unsubscribeRegistration ??= registration.subscribe(() => {
+      if (context) {
+        context = undefined;
+        contextEpoch++;
+        revision++;
+      }
+      publish();
+    });
   };
 
   ensureRegistrationSubscription();
@@ -459,8 +471,11 @@ function registerPrometheusQueryCoauthoringWidget<TQuery extends DataQuery>({
   const selectionDisposable = editor.onDidChangeCursorSelection(() => {
     if (snapshot.mode !== 'coauthoring') {
       showSelectionToolbar();
+    } else {
+      publish(snapshot);
     }
   });
+  const contentDisposable = editor.onDidChangeModelContent(() => publish(snapshot));
   const layoutDisposable = editor.onDidLayoutChange(schedulePositionRelayout);
   const actionDisposable = editor.addAction({
     id: `${widgetId}.invoke`,
@@ -494,6 +509,7 @@ function registerPrometheusQueryCoauthoringWidget<TQuery extends DataQuery>({
       cancelPendingRelayout();
       capability.clearPreview();
       actionDisposable.dispose();
+      contentDisposable.dispose();
       layoutDisposable.dispose();
       selectionDisposable.dispose();
       editor.removeContentWidget(widget);

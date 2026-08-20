@@ -38,10 +38,12 @@ function createEditorHarness() {
   let contentWidget: monacoTypes.editor.IContentWidget | undefined;
   let editorAction: monacoTypes.editor.IActionDescriptor | undefined;
   let layoutListener: VoidFunction | undefined;
+  let contentListener: VoidFunction | undefined;
   let selectionListener: VoidFunction | undefined;
   const editorNode = document.createElement('div');
   const actionDisposable = { dispose: jest.fn() };
   const layoutDisposable = { dispose: jest.fn(() => (layoutListener = undefined)) };
+  const contentDisposable = { dispose: jest.fn(() => (contentListener = undefined)) };
   const selectionDisposable = { dispose: jest.fn(() => (selectionListener = undefined)) };
   const editor = {
     addAction: jest.fn((action: monacoTypes.editor.IActionDescriptor) => {
@@ -62,6 +64,10 @@ function createEditorHarness() {
     onDidLayoutChange: jest.fn((listener: VoidFunction) => {
       layoutListener = listener;
       return layoutDisposable;
+    }),
+    onDidChangeModelContent: jest.fn((listener: VoidFunction) => {
+      contentListener = listener;
+      return contentDisposable;
     }),
     onDidChangeCursorSelection: jest.fn((listener: VoidFunction) => {
       selectionListener = listener;
@@ -94,9 +100,11 @@ function createEditorHarness() {
     },
     monaco,
     notifyLayoutChange: () => act(() => layoutListener?.()),
+    notifyContentChange: () => act(() => contentListener?.()),
     notifySelectionChange: () => act(() => selectionListener?.()),
     actionDisposable,
     layoutDisposable,
+    contentDisposable,
     selectionDisposable,
   };
 }
@@ -108,8 +116,10 @@ function setup() {
     getContentWidget,
     getEditorAction,
     layoutDisposable,
+    contentDisposable,
     monaco,
     notifyLayoutChange,
+    notifyContentChange,
     notifySelectionChange,
     selectionDisposable,
   } = createEditorHarness();
@@ -147,6 +157,8 @@ function setup() {
     getContentWidget,
     getEditorAction,
     layoutDisposable,
+    contentDisposable,
+    notifyContentChange,
     notifyLayoutChange,
     notifySelectionChange,
     onRegister,
@@ -168,6 +180,7 @@ describe('registerPrometheusQueryCoauthoring', () => {
     const {
       actionDisposable,
       capability,
+      contentDisposable,
       dispose,
       editor,
       getContentWidget,
@@ -206,6 +219,7 @@ describe('registerPrometheusQueryCoauthoring', () => {
 
     expect(clearPreview).toHaveBeenCalledTimes(1);
     expect(actionDisposable.dispose).toHaveBeenCalledTimes(1);
+    expect(contentDisposable.dispose).toHaveBeenCalledTimes(1);
     expect(layoutDisposable.dispose).toHaveBeenCalledTimes(1);
     expect(selectionDisposable.dispose).toHaveBeenCalledTimes(1);
     expect(editor.removeContentWidget).toHaveBeenCalledTimes(1);
@@ -236,9 +250,14 @@ describe('registerPrometheusQueryCoauthoring', () => {
   });
 
   it('keeps a stable controller snapshot and rejects proposals from an obsolete query revision', async () => {
-    const { capability, registration } = setup();
+    const { capability, notifyContentChange, registration } = setup();
     const dispose = jest.spyOn(registration, 'dispose');
     const getContext = jest.spyOn(capability, 'getContext').mockResolvedValue({
+      query: 'rate(http_requests_total[$__rate_interval])',
+      focusRanges: [],
+      metricMetadata: [],
+    });
+    jest.spyOn(capability, 'refreshContext').mockResolvedValue({
       query: 'rate(http_requests_total[$__rate_interval])',
       focusRanges: [],
       metricMetadata: [],
@@ -264,6 +283,17 @@ describe('registerPrometheusQueryCoauthoring', () => {
       query: 'rate(http_requests_total[$__rate_interval])',
     });
     expect(listener).toHaveBeenCalled();
+
+    notifyContentChange();
+    expect(controller.getSnapshot()).toMatchObject({ revision: '2' });
+    expect(controller.stageEditorDiff('sum(rate(http_requests_total[5m]))')).toEqual({
+      status: 'rejected',
+      reason: 'stale',
+    });
+
+    await act(async () => {
+      await controller.refreshContext();
+    });
 
     jest.spyOn(capability, 'validateQuery').mockReturnValue(false);
     expect(controller.stageEditorDiff('not valid')).toEqual({ status: 'rejected', reason: 'invalid' });

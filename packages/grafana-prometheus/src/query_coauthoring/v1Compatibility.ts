@@ -1,7 +1,6 @@
 import { type DataQuery } from '@grafana/data';
 
-// This is a temporary type-only compatibility surface while released @grafana/data packages catch up with Core's alpha API.
-export const QUERY_EDITOR_COAUTHORING_V1_COMPONENT_ID = 'grafana/query-editor-coauthoring/v1';
+// This temporary internal type-only compatibility surface is removed when released @grafana/data packages include Core's alpha API.
 
 export interface QueryEditorCoauthoringRangeV1 {
   from: number;
@@ -68,7 +67,7 @@ export interface QueryEditorCoauthoringV1Props {
 }
 
 export interface QueryEditorCoauthoringHostDescriptorV1 {
-  componentId: typeof QUERY_EDITOR_COAUTHORING_V1_COMPONENT_ID;
+  componentId: 'grafana/query-editor-coauthoring/v1';
   generation: string;
   queryKey: string;
   surfaceState: 'pending' | 'ready' | 'unavailable' | 'failed';

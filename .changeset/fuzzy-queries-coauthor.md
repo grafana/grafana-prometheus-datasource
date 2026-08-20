@@ -1,5 +1,0 @@
----
-'@grafana/prometheus': patch
----
-
-Add an internal, experimental PromQL coauthoring capability for the Monaco code editor.

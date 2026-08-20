@@ -47,7 +47,9 @@ export const PromQueryEditorSelector = memo<Props>((props) => {
   // This should be filled in from the defaults by now.
   const editorMode = query.editorMode!;
   // Grafana owns experiment gating by withholding this internal registrar when the feature is disabled.
-  const queryCoauthoringAvailable = Boolean(props.onRegisterQueryEditorCoauthoring);
+  // A ready V1 host replaces the legacy path; the registrar keeps the legacy surface as its release-skew fallback.
+  const queryCoauthoringAvailable =
+    props.queryEditorCoauthoringHost?.surfaceState === 'ready' || Boolean(props.onRegisterQueryEditorCoauthoring);
 
   const showAssistant =
     config.featureToggles.queryWithAssistant &&

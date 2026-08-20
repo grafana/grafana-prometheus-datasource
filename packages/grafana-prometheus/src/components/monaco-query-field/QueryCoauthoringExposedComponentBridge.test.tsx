@@ -2,7 +2,6 @@ import { render, screen } from '@testing-library/react';
 
 import { usePluginComponent } from '@grafana/runtime';
 
-import { QUERY_EDITOR_COAUTHORING_V1_COMPONENT_ID } from '../../query_coauthoring/v1Compatibility';
 import { QueryCoauthoringExposedComponentBridge } from './QueryCoauthoringExposedComponentBridge';
 import { type QueryCoauthoringRegistration } from './QueryCoauthoringWidget';
 
@@ -11,6 +10,7 @@ jest.mock('@grafana/runtime', () => ({
 }));
 
 const mockedUsePluginComponent = jest.mocked(usePluginComponent);
+const QUERY_EDITOR_COAUTHORING_V1_COMPONENT_ID = 'grafana/query-editor-coauthoring/v1';
 
 function registration(): QueryCoauthoringRegistration {
   return {
