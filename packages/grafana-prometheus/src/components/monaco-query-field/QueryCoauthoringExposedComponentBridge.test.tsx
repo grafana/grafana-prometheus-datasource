@@ -2,6 +2,8 @@ import { render, screen } from '@testing-library/react';
 
 import { usePluginComponent } from '@grafana/runtime';
 
+import { type QueryEditorCoauthoringV1Props } from '../../query_coauthoring/v1Compatibility';
+
 import { QueryCoauthoringExposedComponentBridge } from './QueryCoauthoringExposedComponentBridge';
 import { type QueryCoauthoringRegistration } from './QueryCoauthoringWidget';
 
@@ -9,7 +11,7 @@ jest.mock('@grafana/runtime', () => ({
   usePluginComponent: jest.fn(),
 }));
 
-const mockedUsePluginComponent = jest.mocked(usePluginComponent);
+const mockedUsePluginComponent = jest.mocked(usePluginComponent<QueryEditorCoauthoringV1Props>);
 const QUERY_EDITOR_COAUTHORING_V1_COMPONENT_ID = 'grafana/query-editor-coauthoring/v1';
 
 function registration(): QueryCoauthoringRegistration {
@@ -33,7 +35,7 @@ describe('QueryCoauthoringExposedComponentBridge', () => {
   });
 
   it('uses the literal public ID and lets the controller factory survive a writable props proxy', () => {
-    function ExposedComponent(props: { createController: () => { getPortalTarget(): HTMLElement } }) {
+    function ExposedComponent(props: QueryEditorCoauthoringV1Props) {
       const writableProps = new Proxy(props, { set: () => true });
       return <div>{writableProps.createController().getPortalTarget().tagName}</div>;
     }

@@ -23,8 +23,8 @@ interface QueryCoauthoringStyles {
   previewOriginal: string;
 }
 
-export interface QueryCoauthoringRegistration extends MonacoQueryCoauthoringHost {
-  capability: PrometheusCoauthoringCapability;
+export interface QueryCoauthoringRegistration<TQuery extends DataQuery = DataQuery> extends MonacoQueryCoauthoringHost {
+  capability: PrometheusCoauthoringCapability<TQuery>;
   updateStyles: (styles: QueryCoauthoringStyles) => void;
 }
 
@@ -53,7 +53,7 @@ export function registerPrometheusQueryCoauthoring<TQuery extends DataQuery>({
   monaco,
   styles,
   widgetId,
-}: RegisterPrometheusQueryCoauthoringOptions<TQuery>): QueryCoauthoringRegistration {
+}: RegisterPrometheusQueryCoauthoringOptions<TQuery>): QueryCoauthoringRegistration<TQuery> {
   const currentStyles = { ...styles };
   const capability = createPrometheusCoauthoringCapability({
     editor,
@@ -91,7 +91,7 @@ export function registerPrometheusQueryCoauthoring<TQuery extends DataQuery>({
 }
 
 export function createPrometheusQueryCoauthoringController<TQuery extends DataQuery>(
-  registration: QueryCoauthoringRegistration
+  registration: QueryCoauthoringRegistration<TQuery>
 ): QueryEditorCoauthoringControllerV1<TQuery> {
   let context: QueryEditorCoauthoringContextV1 | undefined;
   let revision = 0;
@@ -213,7 +213,7 @@ export function createPrometheusQueryCoauthoringController<TQuery extends DataQu
       }
       return {
         status: 'staged',
-        query: registration.capability.createQuery(source) as TQuery,
+        query: registration.capability.createQuery(source),
         changes: preview.changes,
       };
     },
