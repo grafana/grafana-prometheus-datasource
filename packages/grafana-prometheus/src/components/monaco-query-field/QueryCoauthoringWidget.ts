@@ -1,4 +1,5 @@
-import { type DataQuery, type TimeRange } from '@grafana/data';
+import { type TimeRange } from '@grafana/data';
+import { type DataQuery } from '@grafana/schema';
 import { type Monaco, type MonacoEditor } from '@grafana/ui';
 
 import { type PrometheusDatasource } from '../../datasource';
