@@ -16,7 +16,6 @@ export interface QueryEditorCoauthoringMetricMetadataV1 {
 }
 
 export interface QueryEditorCoauthoringContextV1 {
-  queryKey: string;
   revision: string;
   query: string;
   focusRanges: QueryEditorCoauthoringRangeV1[];
@@ -29,7 +28,7 @@ export interface QueryEditorCoauthoringChangeV1 {
   original: string;
   proposed: string;
   kind?: string;
-  focus?: 'inside' | 'outside';
+  focus?: 'inside' | 'outside' | 'mixed';
 }
 
 export type QueryEditorCoauthoringSnapshotV1 =
@@ -41,35 +40,22 @@ export interface QueryEditorCoauthoringControllerV1<TQuery extends DataQuery = D
   getSnapshot(): QueryEditorCoauthoringSnapshotV1;
   subscribe(listener: VoidFunction): VoidFunction;
   getPortalTarget(): HTMLElement;
+  reportSurfaceSize(size: { height: number; width: number }): void;
   begin(): Promise<QueryEditorCoauthoringContextV1>;
   refreshContext(): Promise<QueryEditorCoauthoringContextV1>;
-  stageEditorDiff(
-    source: string
-  ):
+  getQueryText(): string;
+  stageEditorDiff(source: string):
     | {
         status: 'staged';
         query: TQuery;
-        queryKey: string;
-        baselineRevision: string;
         changes: QueryEditorCoauthoringChangeV1[];
       }
     | { status: 'rejected'; reason: 'invalid' | 'unchanged' | 'stale' };
   clearEditorDiff(): void;
   focus(): void;
   dismiss(): void;
-  dispose(): void;
 }
 
 export interface QueryEditorCoauthoringV1Props {
-  surfaceGeneration: string;
   createController(): QueryEditorCoauthoringControllerV1;
-  onSurfaceStateChange(event: { generation: string; state: 'ready' | 'unavailable' | 'failed' }): void;
-}
-
-export interface QueryEditorCoauthoringHostDescriptorV1 {
-  componentId: 'grafana/query-editor-coauthoring/v1';
-  generation: string;
-  queryKey: string;
-  surfaceState: 'pending' | 'ready' | 'unavailable' | 'failed';
-  onSurfaceStateChange(event: { generation: string; state: 'ready' | 'unavailable' | 'failed' }): void;
 }

@@ -36,17 +36,12 @@ export interface QueryEditorCoauthoringPreviewChange {
   original: string;
   proposed: string;
   kind?: string;
+  focus: 'inside' | 'outside' | 'mixed';
 }
 
 /** @internal */
 export interface QueryEditorCoauthoringPreview {
   changes: QueryEditorCoauthoringPreviewChange[];
-}
-
-/** @internal */
-export interface QueryEditorCoauthoringInvocation {
-  anchorElement: HTMLElement;
-  dismiss: () => void;
 }
 
 /**
@@ -71,7 +66,6 @@ export interface QueryEditorCoauthoringCapability<TQuery extends DataQuery = Dat
   validateQuery: (value: string) => boolean;
   stagePreview: (value: string) => QueryEditorCoauthoringPreview | undefined;
   clearPreview: () => void;
-  subscribeToInvocation: (listener: (invocation: QueryEditorCoauthoringInvocation) => void) => () => void;
   focus: () => void;
 }
 
@@ -79,13 +73,8 @@ export interface QueryEditorCoauthoringCapability<TQuery extends DataQuery = Dat
 export interface PrometheusCoauthoringCapability<
   TQuery extends DataQuery = DataQuery,
 > extends QueryEditorCoauthoringCapability<TQuery> {
-  invoke: (invocation: QueryEditorCoauthoringInvocation) => void;
+  captureContext: () => void;
 }
-
-/** @internal */
-export type QueryEditorCoauthoringRegistrar<TQuery extends DataQuery = DataQuery> = (
-  capability: QueryEditorCoauthoringCapability<TQuery> | undefined
-) => void;
 
 interface CodeEditor {
   getValue: () => string;
@@ -172,7 +161,6 @@ export function createPrometheusCoauthoringCapability<TQuery extends DataQuery>(
   getPreviewChangeClassName,
   getPreviewOriginalClassName,
 }: CreateCapabilityOptions<TQuery>): PrometheusCoauthoringCapability<TQuery> {
-  const listeners = new Set<(invocation: QueryEditorCoauthoringInvocation) => void>();
   let invocationSnapshot: InvocationSnapshot | undefined;
   let previewState: PreviewState | undefined;
 
@@ -323,29 +311,14 @@ export function createPrometheusCoauthoringCapability<TQuery extends DataQuery>(
           original: snapshot.query.slice(change.originalRange.from, change.originalRange.to),
           proposed: value.slice(change.proposedRange.from, change.proposedRange.to),
           kind: change.proposedAnchor?.kind ?? change.originalAnchor?.kind,
+          focus: change.focus,
         })),
       };
     },
     clearPreview,
-    subscribeToInvocation: (listener) => {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    },
-    invoke: (invocation) => {
+    captureContext: () => {
       clearPreview();
-      const snapshot = captureSnapshot();
-      invocationSnapshot = snapshot;
-      listeners.forEach((listener) =>
-        listener({
-          ...invocation,
-          dismiss: () => {
-            if (invocationSnapshot === snapshot) {
-              invocationSnapshot = undefined;
-            }
-            invocation.dismiss();
-          },
-        })
-      );
+      invocationSnapshot = captureSnapshot();
     },
     focus: () => editor.focus(),
   };

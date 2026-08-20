@@ -1,11 +1,8 @@
-import { useCallback, useEffect, useLayoutEffect } from 'react';
+import { useCallback, useMemo } from 'react';
 
 import { usePluginComponent } from '@grafana/runtime';
 
-import {
-  type QueryEditorCoauthoringHostDescriptorV1,
-  type QueryEditorCoauthoringV1Props,
-} from '../../query_coauthoring/v1Compatibility';
+import { type QueryEditorCoauthoringV1Props } from '../../query_coauthoring/v1Compatibility';
 
 import {
   createPrometheusQueryCoauthoringController,
@@ -13,64 +10,34 @@ import {
 } from './QueryCoauthoringWidget';
 
 interface Props {
-  host: QueryEditorCoauthoringHostDescriptorV1 | undefined;
+  enabled: boolean;
   registration: QueryCoauthoringRegistration | undefined;
 }
 
 const QUERY_EDITOR_COAUTHORING_V1_COMPONENT_ID = 'grafana/query-editor-coauthoring/v1';
 
-export function QueryCoauthoringExposedComponentBridge({ host, registration }: Props) {
-  if (!host || !registration) {
+export function QueryCoauthoringExposedComponentBridge({ enabled, registration }: Props) {
+  if (!enabled || !registration) {
     return null;
   }
 
-  return <LoadedQueryCoauthoringExposedComponentBridge host={host} registration={registration} />;
+  return <LoadedQueryCoauthoringExposedComponentBridge registration={registration} />;
 }
 
-function LoadedQueryCoauthoringExposedComponentBridge({ host, registration }: Required<Props>) {
-  const { component: CoauthoringComponent, isLoading } = usePluginComponent<QueryEditorCoauthoringV1Props>(
+function LoadedQueryCoauthoringExposedComponentBridge({
+  registration,
+}: {
+  registration: QueryCoauthoringRegistration;
+}) {
+  const { component: CoauthoringComponent } = usePluginComponent<QueryEditorCoauthoringV1Props>(
     QUERY_EDITOR_COAUTHORING_V1_COMPONENT_ID
   );
-  const createController = useCallback(() => {
-    if (!registration || !host) {
-      throw new Error('The query coauthoring controller is not ready.');
-    }
-    return createPrometheusQueryCoauthoringController(registration, host.queryKey);
-  }, [host?.queryKey, registration]);
-
-  useEffect(() => {
-    if (host && !isLoading && !CoauthoringComponent) {
-      host.onSurfaceStateChange({ generation: host.generation, state: 'unavailable' });
-    }
-  }, [CoauthoringComponent, host, isLoading]);
-
-  useLayoutEffect(() => {
-    if (!host || !registration || !CoauthoringComponent) {
-      return;
-    }
-
-    const updateRenderedSize = () => {
-      const { height, width } = registration.portalElement.getBoundingClientRect();
-      registration.updateRenderedSize({ height, width });
-    };
-    updateRenderedSize();
-    if (typeof ResizeObserver === 'undefined') {
-      return;
-    }
-    const resizeObserver = new ResizeObserver(updateRenderedSize);
-    resizeObserver.observe(registration.portalElement);
-    return () => resizeObserver.disconnect();
-  }, [CoauthoringComponent, host, registration]);
+  const controller = useMemo(() => createPrometheusQueryCoauthoringController(registration), [registration]);
+  const createController = useCallback(() => controller, [controller]);
 
   if (!CoauthoringComponent) {
     return null;
   }
 
-  return (
-    <CoauthoringComponent
-      surfaceGeneration={host.generation}
-      createController={createController}
-      onSurfaceStateChange={host.onSurfaceStateChange}
-    />
-  );
+  return <CoauthoringComponent createController={createController} />;
 }

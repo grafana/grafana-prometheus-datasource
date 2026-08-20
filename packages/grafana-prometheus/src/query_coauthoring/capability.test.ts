@@ -88,13 +88,8 @@ function selection(from: number, to: number) {
 describe('createPrometheusCoauthoringCapability', () => {
   it('captures lexical selection boundaries and only relevant cached metric metadata', async () => {
     const { capability, queryMetricLabels } = setup();
-    const anchorElement = document.createElement('div');
-    const listener = jest.fn();
-    capability.subscribeToInvocation(listener);
+    capability.captureContext();
 
-    capability.invoke({ anchorElement, dismiss: jest.fn() });
-
-    expect(listener).toHaveBeenCalledWith(expect.objectContaining({ anchorElement }));
     await expect(capability.getContext()).resolves.toEqual({
       query: 'rate(http_requests_total[5m])',
       focusRanges: [{ from: 5, to: 24 }],
@@ -114,7 +109,7 @@ describe('createPrometheusCoauthoringCapability', () => {
   it('refreshes the invocation snapshot from the current editor selection', async () => {
     const query = 'rate(http_requests_total[5m])';
     const { capability, setEditorSelections } = setup(query);
-    capability.invoke({ anchorElement: document.createElement('div'), dismiss: jest.fn() });
+    capability.captureContext();
 
     setEditorSelections([selection(0, query.length)]);
 
@@ -233,7 +228,7 @@ describe('createPrometheusCoauthoringCapability', () => {
 
   it('stages a reversible read-only preview and highlights proposed changes', () => {
     const { capability, editor, setValue, setSelections, deltaDecorations, updateOptions } = setup();
-    capability.invoke({ anchorElement: document.createElement('div'), dismiss: jest.fn() });
+    capability.captureContext();
 
     expect(capability.stagePreview('increase(http_requests_total[5m])')).toEqual({
       changes: [
@@ -271,7 +266,7 @@ describe('createPrometheusCoauthoringCapability', () => {
 
   it('does not lock the editor for a no-op proposal', () => {
     const { capability, deltaDecorations, updateOptions } = setup();
-    capability.invoke({ anchorElement: document.createElement('div'), dismiss: jest.fn() });
+    capability.captureContext();
 
     expect(capability.stagePreview('rate(http_requests_total[5m])')).toBeUndefined();
     expect(deltaDecorations).not.toHaveBeenCalled();
@@ -293,29 +288,13 @@ describe('createPrometheusCoauthoringCapability', () => {
     expect(capability).not.toHaveProperty('runQuery');
   });
 
-  it('clears the invocation snapshot on explicit dismissal', async () => {
+  it('replaces the captured context when a new session begins', async () => {
     const { capability, setValue } = setup();
-    const listener = jest.fn();
-    capability.subscribeToInvocation(listener);
-    capability.invoke({ anchorElement: document.createElement('div'), dismiss: jest.fn() });
+    capability.captureContext();
 
     setValue('up');
-    listener.mock.calls[0][0].dismiss();
-
-    await expect(capability.getContext()).resolves.toMatchObject({ query: 'up' });
-  });
-
-  it('does not let dismissal of an earlier invocation clear the current snapshot', async () => {
-    const { capability, setValue } = setup();
-    const listener = jest.fn();
-    capability.subscribeToInvocation(listener);
-    capability.invoke({ anchorElement: document.createElement('div'), dismiss: jest.fn() });
-    const firstInvocation = listener.mock.calls[0][0];
-
-    setValue('up');
-    capability.invoke({ anchorElement: document.createElement('div'), dismiss: jest.fn() });
+    capability.captureContext();
     setValue('down');
-    firstInvocation.dismiss();
 
     await expect(capability.getContext()).resolves.toMatchObject({ query: 'up' });
   });
