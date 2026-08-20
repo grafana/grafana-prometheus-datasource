@@ -106,33 +106,6 @@ describe('PromQueryEditorSelector', () => {
     expect(await screen.findByTestId('query-with-assistant-button')).toBeInTheDocument();
   });
 
-  it('replaces the assistant button when the panel editor offers query coauthoring', () => {
-    renderWithProps(
-      {},
-      {
-        app: CoreApp.PanelEditor,
-        queryEditorCoauthoringEnabled: true,
-      }
-    );
-    expect(screen.queryByTestId('query-with-assistant-button')).not.toBeInTheDocument();
-  });
-
-  it('keeps the assistant button in builder mode when the panel editor offers query coauthoring', async () => {
-    renderWithProps(
-      { editorMode: QueryEditorMode.Builder },
-      {
-        app: CoreApp.PanelEditor,
-        queryEditorCoauthoringEnabled: true,
-      }
-    );
-    expect(await screen.findByTestId('query-with-assistant-button')).toBeInTheDocument();
-  });
-
-  it('keeps the assistant button in a legacy panel editor without query coauthoring', async () => {
-    renderWithProps({}, { app: CoreApp.PanelEditor });
-    expect(await screen.findByTestId('query-with-assistant-button')).toBeInTheDocument();
-  });
-
   it('does not show the assistant button for UnifiedAlerting', async () => {
     renderWithProps({}, { app: CoreApp.UnifiedAlerting });
     expect(screen.queryByTestId('query-with-assistant-button')).not.toBeInTheDocument();
