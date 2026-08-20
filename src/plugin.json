@@ -104,7 +104,10 @@
     ]
   },
   "dependencies": {
-    "grafanaDependency": ">=12.3.0-0"
+    "grafanaDependency": ">=12.3.0-0",
+    "extensions": {
+      "exposedComponents": ["grafana/query-editor-coauthoring/v1"]
+    }
   },
   "languages": [
     "en-US",

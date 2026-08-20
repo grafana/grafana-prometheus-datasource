@@ -17,6 +17,7 @@ import {
 import { type PromQuery } from '../../types';
 import { type Props } from './MonacoQueryFieldProps';
 import { QueryCoauthoringChrome } from './QueryCoauthoringChrome';
+import { QueryCoauthoringExposedComponentBridge } from './QueryCoauthoringExposedComponentBridge';
 import { registerPrometheusQueryCoauthoring } from './QueryCoauthoringWidget';
 import { getOverrideServices } from './getOverrideServices';
 import { DataProvider } from './monaco-completion-provider/data_provider';
@@ -136,6 +137,7 @@ const MonacoQueryField = (props: Props) => {
     timeRange,
     onRegisterQueryEditorCoauthoring,
     createQueryForCoauthoring,
+    queryEditorCoauthoringHost,
   } = props;
 
   const lpRef = useLatest(languageProvider);
@@ -178,7 +180,9 @@ const MonacoQueryField = (props: Props) => {
     [styles]
   );
   const coauthoringPreviewStylesRef = useLatest(coauthoringPreviewStyles);
-  const coauthoringAvailable = Boolean(onRegisterQueryEditorCoauthoring && createQueryForCoauthoring);
+  const coauthoringAvailable = Boolean(
+    (onRegisterQueryEditorCoauthoring || queryEditorCoauthoringHost) && createQueryForCoauthoring
+  );
 
   useEffect(() => {
     const capability = registeredCapabilityRef.current;
@@ -422,7 +426,13 @@ const MonacoQueryField = (props: Props) => {
           }
         }}
       />
-      {coauthoringRegistration && <QueryCoauthoringChrome registration={coauthoringRegistration} />}
+      <QueryCoauthoringExposedComponentBridge
+        host={queryEditorCoauthoringHost}
+        registration={coauthoringRegistration}
+      />
+      {coauthoringRegistration && queryEditorCoauthoringHost?.surfaceState !== 'ready' && (
+        <QueryCoauthoringChrome registration={coauthoringRegistration} />
+      )}
     </div>
   );
 };

@@ -13,7 +13,10 @@ import {
   QUERY_COAUTHORING_MAX_CONTEXT_LABELS,
 } from '../../query_coauthoring/capability';
 import { QueryCoauthoringChrome } from './QueryCoauthoringChrome';
-import { registerPrometheusQueryCoauthoring } from './QueryCoauthoringWidget';
+import {
+  createPrometheusQueryCoauthoringController,
+  registerPrometheusQueryCoauthoring,
+} from './QueryCoauthoringWidget';
 
 const monacoQueryFieldTranslations = enUsTranslations['grafana-prometheus'].components['monaco-query-field'];
 
@@ -230,6 +233,52 @@ describe('registerPrometheusQueryCoauthoring', () => {
     });
 
     dispose();
+  });
+
+  it('keeps a stable controller snapshot and rejects proposals from an obsolete query revision', async () => {
+    const { capability, registration } = setup();
+    const dispose = jest.spyOn(registration, 'dispose');
+    const getContext = jest.spyOn(capability, 'getContext').mockResolvedValue({
+      query: 'rate(http_requests_total[$__rate_interval])',
+      focusRanges: [],
+      metricMetadata: [],
+    });
+    const getValue = jest.spyOn(capability, 'getValue').mockReturnValue('rate(http_requests_total[$__rate_interval])');
+    jest.spyOn(capability, 'stagePreview').mockReturnValue({ changes: [] });
+    jest.spyOn(capability, 'createQuery').mockReturnValue({ expr: 'sum(rate(http_requests_total[5m]))', refId: 'A' });
+    const controller = createPrometheusQueryCoauthoringController(registration, 'prometheus:A');
+    const listener = jest.fn();
+    const unsubscribe = controller.subscribe(listener);
+
+    expect(controller.getSnapshot()).toBe(controller.getSnapshot());
+
+    let context: Awaited<ReturnType<typeof controller.begin>>;
+    await act(async () => {
+      context = await controller.begin();
+    });
+    await expect(controller.begin()).resolves.toBe(context!);
+    expect(getContext).toHaveBeenCalledTimes(1);
+    expect(context!).toMatchObject({
+      queryKey: 'prometheus:A',
+      revision: '1',
+      query: 'rate(http_requests_total[$__rate_interval])',
+    });
+    expect(listener).toHaveBeenCalled();
+
+    jest.spyOn(capability, 'validateQuery').mockReturnValue(false);
+    expect(controller.stageEditorDiff('not valid')).toEqual({ status: 'rejected', reason: 'invalid' });
+
+    jest.mocked(capability.validateQuery).mockReturnValue(true);
+    getValue.mockReturnValue('rate(http_requests_total[5m])');
+    expect(controller.stageEditorDiff('sum(rate(http_requests_total[5m]))')).toEqual({
+      status: 'rejected',
+      reason: 'stale',
+    });
+
+    unsubscribe();
+    controller.dispose();
+    controller.dispose();
+    expect(dispose).toHaveBeenCalledTimes(1);
   });
 
   it('preserves selection, keeps one Assistant host across React rerenders, and restores the toolbar after dismissal', () => {

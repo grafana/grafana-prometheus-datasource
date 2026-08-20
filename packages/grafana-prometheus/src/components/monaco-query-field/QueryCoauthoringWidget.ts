@@ -11,6 +11,11 @@ import {
   QUERY_COAUTHORING_MAX_CONTEXT_LABELS,
   type QueryEditorCoauthoringRegistrar,
 } from '../../query_coauthoring/capability';
+import {
+  type QueryEditorCoauthoringContextV1,
+  type QueryEditorCoauthoringControllerV1,
+  type QueryEditorCoauthoringSnapshotV1,
+} from '../../query_coauthoring/v1Compatibility';
 import { placeHolderScopedVars } from './monaco-completion-provider/validation';
 
 const QUERY_COAUTHORING_WIDGET_INITIAL_HEIGHT = 320;
@@ -29,6 +34,8 @@ export interface QueryCoauthoringWidgetSnapshot {
 }
 
 export interface QueryCoauthoringRegistration {
+  capability: PrometheusCoauthoringCapability;
+  dismiss: VoidFunction;
   dispose: VoidFunction;
   getSelectedText: () => string;
   getSnapshot: () => QueryCoauthoringWidgetSnapshot;
@@ -103,8 +110,119 @@ export function registerPrometheusQueryCoauthoring<TQuery extends DataQuery>({
 
   return {
     ...registration,
+    capability,
     updatePreviewStyles: (nextStyles) => {
       Object.assign(currentPreviewStyles, nextStyles);
+    },
+  };
+}
+
+export function createPrometheusQueryCoauthoringController<TQuery extends DataQuery>(
+  registration: QueryCoauthoringRegistration,
+  queryKey: string
+): QueryEditorCoauthoringControllerV1<TQuery> {
+  let context: QueryEditorCoauthoringContextV1 | undefined;
+  let revision = 0;
+  let disposed = false;
+  const listeners = new Set<VoidFunction>();
+  let unsubscribeRegistration: VoidFunction | undefined;
+  const nextContext = async (refresh: boolean) => {
+    const captured = await (refresh ? registration.capability.refreshContext() : registration.capability.getContext());
+    revision++;
+    context = {
+      queryKey,
+      revision: String(revision),
+      query: captured.query,
+      focusRanges: captured.focusRanges,
+      language: { id: 'promql', displayName: 'PromQL' },
+      metricMetadata: captured.metricMetadata,
+    };
+    return context;
+  };
+  const snapshot = (): QueryEditorCoauthoringSnapshotV1 => {
+    const widgetSnapshot = registration.getSnapshot();
+    if (widgetSnapshot.mode === 'hidden') {
+      return { mode: 'hidden' };
+    }
+    if (widgetSnapshot.mode === 'selection-toolbar') {
+      return {
+        mode: 'selection',
+        selectedText: registration.getSelectedText(),
+        revision: context?.revision ?? String(revision),
+      };
+    }
+    return { mode: 'session', revision: context?.revision ?? String(revision) };
+  };
+  let currentSnapshot = snapshot();
+  const publish = () => {
+    currentSnapshot = snapshot();
+    listeners.forEach((listener) => listener());
+  };
+  const ensureRegistrationSubscription = () => {
+    unsubscribeRegistration ??= registration.subscribe(publish);
+  };
+
+  ensureRegistrationSubscription();
+
+  return {
+    getSnapshot: () => currentSnapshot,
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    getPortalTarget: () => registration.portalElement,
+    begin: async () => {
+      if (context) {
+        return context;
+      }
+      registration.invoke();
+      registration.capability.invoke({ anchorElement: registration.portalElement, dismiss: registration.dismiss });
+      const next = await nextContext(false);
+      publish();
+      return next;
+    },
+    refreshContext: async () => {
+      const next = await nextContext(true);
+      publish();
+      return next;
+    },
+    stageEditorDiff: (source) => {
+      if (!context || registration.capability.getValue() !== context.query) {
+        return { status: 'rejected', reason: 'stale' };
+      }
+      if (!registration.capability.validateQuery(source)) {
+        return { status: 'rejected', reason: 'invalid' };
+      }
+      const preview = registration.capability.stagePreview(source);
+      if (!preview) {
+        return { status: 'rejected', reason: source === context.query ? 'unchanged' : 'stale' };
+      }
+      return {
+        status: 'staged',
+        query: registration.capability.createQuery(source) as TQuery,
+        queryKey,
+        baselineRevision: context.revision,
+        changes: preview.changes,
+      };
+    },
+    clearEditorDiff: () => {
+      registration.capability.clearPreview();
+      publish();
+    },
+    focus: registration.capability.focus,
+    dismiss: () => {
+      registration.dismiss();
+      publish();
+    },
+    dispose: () => {
+      if (disposed) {
+        return;
+      }
+      disposed = true;
+      unsubscribeRegistration?.();
+      unsubscribeRegistration = undefined;
+      listeners.clear();
+      registration.dispose();
     },
   };
 }
@@ -130,9 +248,6 @@ function registerPrometheusQueryCoauthoringWidget<TQuery extends DataQuery>({
   let widgetPosition = editor.getPosition() ?? { lineNumber: 1, column: 1 };
 
   const publish = (nextSnapshot: QueryCoauthoringWidgetSnapshot) => {
-    if (snapshot.mode === nextSnapshot.mode) {
-      return;
-    }
     snapshot = nextSnapshot;
     listeners.forEach((listener) => listener());
   };
@@ -354,6 +469,12 @@ function registerPrometheusQueryCoauthoringWidget<TQuery extends DataQuery>({
   });
   onRegister(capability);
   return {
+    capability,
+    dismiss: () => {
+      capability.clearPreview();
+      assistantMounted = false;
+      showSelectionToolbar();
+    },
     portalElement: widgetNode,
     getSelectedText,
     getSnapshot: () => snapshot,
