@@ -164,6 +164,32 @@ describe('PrometheusDatasource', () => {
       expect(fetchMock.mock.calls[0][0].url).not.toContain('bar=baz%20baz&foo=foo');
       expect(fetchMock.mock.calls[0][0].data).toEqual({ bar: 'baz baz', foo: 'foo' });
     });
+    it('should honor a caller supplied method even when the DS HTTP method is GET', () => {
+      // `/suggestions` is sent as a POST with a JSON body regardless of the configured
+      // HTTP method, so the caller supplied method and Content-Type must both survive.
+      const getSettings = cloneDeep(instanceSettings);
+      getSettings.jsonData.httpMethod = 'GET';
+      const promDs = new PrometheusDatasource(getSettings, templateSrvStub);
+      promDs.metadataRequest(
+        '/suggestions',
+        { queries: [{ expr: 'up' }], limit: 100 },
+        { method: 'POST', headers: { 'Content-Type': 'application/json' } }
+      );
+      expect(fetchMock.mock.calls.length).toBe(1);
+      expect(fetchMock.mock.calls[0][0].method).toBe('POST');
+      expect(fetchMock.mock.calls[0][0].url).toBe('/api/datasources/uid/ABCDEF/resources/suggestions');
+      expect(fetchMock.mock.calls[0][0].headers['Content-Type']).toBe('application/json');
+      expect(fetchMock.mock.calls[0][0].data).toEqual({ queries: [{ expr: 'up' }], limit: 100 });
+      expect(fetchMock.mock.calls[0][0].params).toBeUndefined();
+    });
+    it('should send a form encoded body when the caller does not set a Content-Type', () => {
+      const postSettings = cloneDeep(instanceSettings);
+      postSettings.jsonData.httpMethod = 'POST';
+      const promDs = new PrometheusDatasource(postSettings, templateSrvStub);
+      promDs.metadataRequest('api/v1/series', { 'match[]': 'up' });
+      expect(fetchMock.mock.calls.length).toBe(1);
+      expect(fetchMock.mock.calls[0][0].headers['Content-Type']).toBe('application/x-www-form-urlencoded');
+    });
   });
 
   describe('customQueryParams', () => {

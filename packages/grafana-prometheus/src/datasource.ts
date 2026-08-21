@@ -270,8 +270,8 @@ export class PrometheusDatasource
    * Applies the configured custom query parameters to a set of request parameters.
    * Explicitly provided parameters always win over the configured ones.
    */
-  private withCustomQueryParameters(params: Record<string, string>): Record<string, string> {
-    const data: Record<string, string> = { ...params };
+  private withCustomQueryParameters(params: Record<string, unknown>): Record<string, unknown> {
+    const data: Record<string, unknown> = { ...params };
     for (const [key, value] of this.customQueryParameters) {
       if (data[key] == null) {
         data[key] = value;
@@ -291,18 +291,19 @@ export class PrometheusDatasource
   private resourceRequest<T>(
     method: string,
     path: string,
-    data: Record<string, string>,
+    data: Record<string, unknown>,
     options: Partial<BackendSrvRequest>
   ): Promise<T> {
-    if (method === 'POST') {
-      return this.postResource<T>(path, data, {
-        ...options,
-        // Prometheus expects a form encoded body, the backend forwards it as-is.
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...options.headers },
-      });
+    if (method.toUpperCase() === 'GET') {
+      return this.getResource<T>(path, data, options);
     }
 
-    return this.getResource<T>(path, data, options);
+    return this.postResource<T>(path, data, {
+      ...options,
+      // Prometheus expects a form encoded body and the backend forwards it as-is. Callers that need
+      // a different encoding (`/suggestions` sends JSON) set their own Content-Type.
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...options.headers },
+    });
   }
 
   async importFromAbstractQueries(abstractQueries: AbstractQuery[]): Promise<PromQuery[]> {
@@ -326,7 +327,7 @@ export class PrometheusDatasource
     // If URL includes endpoint that supports POST and GET method, try to use configured method. This might fail as POST is supported only in v2.10+.
     if (GET_AND_POST_METADATA_ENDPOINTS.some((endpoint) => url.includes(endpoint))) {
       try {
-        return await this.resourceRequest<T>(this.httpMethod, path, data, {
+        return await this.resourceRequest<T>(options?.method ?? this.httpMethod, path, data, {
           hideFromInspector: true,
           showErrorAlert: false,
           ...options,
@@ -335,13 +336,18 @@ export class PrometheusDatasource
         // If status code of error is Method Not Allowed (405) and HTTP method is POST, retry with GET
         if (this.httpMethod === 'POST' && isFetchError(err) && (err.status === 405 || err.status === 400)) {
           console.warn(`Couldn't use configured POST HTTP method for this request. Trying to use GET method instead.`);
-        } else {
-          throw err;
+          // A deliberate GET retry, so any caller supplied method is ignored here.
+          return await this.resourceRequest<T>('GET', path, data, {
+            hideFromInspector: true,
+            ...options,
+          });
         }
+
+        throw err;
       }
     }
 
-    return await this.resourceRequest<T>('GET', path, data, {
+    return await this.resourceRequest<T>(options?.method ?? 'GET', path, data, {
       hideFromInspector: true,
       ...options,
     });
