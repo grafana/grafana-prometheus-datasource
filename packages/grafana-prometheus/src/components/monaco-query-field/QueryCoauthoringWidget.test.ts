@@ -31,8 +31,8 @@ function createEditorHarness() {
   let layoutListener: VoidFunction | undefined;
   let contentListener: VoidFunction | undefined;
   let selectionListener: VoidFunction | undefined;
-  let mouseDownListener: VoidFunction | undefined;
-  let mouseUpListener: VoidFunction | undefined;
+  let mouseDownListener: ((event: monacoTypes.editor.IEditorMouseEvent) => void) | undefined;
+  let mouseUpListener: ((event: monacoTypes.editor.IEditorMouseEvent) => void) | undefined;
   const actionDisposable = { dispose: jest.fn() };
   const layoutDisposable = { dispose: jest.fn(() => (layoutListener = undefined)) };
   const contentDisposable = { dispose: jest.fn(() => (contentListener = undefined)) };
@@ -66,11 +66,11 @@ function createEditorHarness() {
       selectionListener = listener;
       return selectionDisposable;
     }),
-    onMouseDown: jest.fn((listener: VoidFunction) => {
+    onMouseDown: jest.fn((listener: (event: monacoTypes.editor.IEditorMouseEvent) => void) => {
       mouseDownListener = listener;
       return mouseDownDisposable;
     }),
-    onMouseUp: jest.fn((listener: VoidFunction) => {
+    onMouseUp: jest.fn((listener: (event: monacoTypes.editor.IEditorMouseEvent) => void) => {
       mouseUpListener = listener;
       return mouseUpDisposable;
     }),
@@ -102,8 +102,10 @@ function createEditorHarness() {
     monaco,
     mouseDownDisposable,
     mouseUpDisposable,
-    notifyMouseDown: () => act(() => mouseDownListener?.()),
-    notifyMouseUp: () => act(() => mouseUpListener?.()),
+    notifyMouseDown: (element?: HTMLElement) =>
+      act(() => mouseDownListener?.({ target: { element } } as unknown as monacoTypes.editor.IEditorMouseEvent)),
+    notifyMouseUp: (element?: HTMLElement) =>
+      act(() => mouseUpListener?.({ target: { element } } as unknown as monacoTypes.editor.IEditorMouseEvent)),
     notifyContentChange: () => act(() => contentListener?.()),
     notifyLayoutChange: () => act(() => layoutListener?.()),
     notifySelectionChange: () => act(() => selectionListener?.()),
@@ -218,6 +220,58 @@ describe('registerPrometheusQueryCoauthoring', () => {
     jest.spyOn(widget.getDomNode(), 'getBoundingClientRect').mockReturnValue(createRect(500, 678, 400, 434));
     widget.afterRender?.(1);
     expect(widget.getDomNode()).toHaveStyle({ transform: 'translate(-89px, -4px)' });
+    dispose();
+  });
+
+  it('opens the coauthoring surface when Monaco observes a pointer sequence inside its toolbar', () => {
+    const { dispose, editor, notifyMouseDown, notifyMouseUp, notifySelectionChange, registration } = setup();
+    const selection = createSelection();
+    jest.mocked(editor.getSelection).mockReturnValue(selection);
+    jest.mocked(editor.getSelections).mockReturnValue([selection]);
+    jest.mocked(editor.getModel).mockReturnValue({
+      getOffsetAt: ({ column }: monacoTypes.Position) => column - 1,
+      getPositionAt: (offset: number) => ({ lineNumber: 1, column: offset + 1 }),
+      getValueInRange: () => 'rate',
+    } as unknown as monacoTypes.editor.ITextModel);
+    const portal = registration.portalElement;
+    const renderSurface = () => {
+      portal.replaceChildren();
+      if (registration.getSnapshot().mode === 'selection-toolbar') {
+        const button = document.createElement('button');
+        button.textContent = 'Explain or modify';
+        button.addEventListener('click', registration.invoke);
+        portal.append(button);
+      } else if (registration.getSnapshot().mode === 'session') {
+        portal.textContent = 'Reading highlighted query...';
+      }
+    };
+    const unsubscribe = registration.subscribe(renderSurface);
+
+    notifySelectionChange();
+    expect(registration.getSnapshot()).toEqual({ mode: 'selection-toolbar' });
+    const button = portal.querySelector('button');
+    expect(button).not.toBeNull();
+
+    notifyMouseDown(button ?? undefined);
+    notifyMouseUp(button ?? undefined);
+    if (button?.isConnected) {
+      button.click();
+    }
+    expect(portal).toHaveTextContent('Reading highlighted query...');
+    expect(registration.getSelectedText()).toBe('rate');
+    unsubscribe();
+    dispose();
+  });
+
+  it('hides the toolbar immediately for an editor-originated pointer gesture', () => {
+    const { dispose, editor, notifyMouseDown, notifySelectionChange, registration } = setup();
+    const selection = createSelection();
+    jest.mocked(editor.getSelection).mockReturnValue(selection);
+    jest.mocked(editor.getSelections).mockReturnValue([selection]);
+
+    notifySelectionChange();
+    notifyMouseDown(document.createElement('span'));
+    expect(registration.getSnapshot()).toEqual({ mode: 'hidden' });
     dispose();
   });
 

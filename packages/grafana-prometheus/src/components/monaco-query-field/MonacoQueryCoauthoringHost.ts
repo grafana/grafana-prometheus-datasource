@@ -261,13 +261,19 @@ export function createMonacoQueryCoauthoringHost({
       showSelectionToolbar();
     }
   });
-  const mouseDownDisposable = editor.onMouseDown(() => {
+  const mouseDownDisposable = editor.onMouseDown((event) => {
+    if (event.target.element && widgetNode.contains(event.target.element)) {
+      return;
+    }
     if (snapshot.mode !== 'session') {
       mouseSelecting = true;
       hideSelectionToolbar();
     }
   });
-  const mouseUpDisposable = editor.onMouseUp(() => {
+  const mouseUpDisposable = editor.onMouseUp((event) => {
+    if (event.target.element && widgetNode.contains(event.target.element)) {
+      return;
+    }
     if (snapshot.mode !== 'session') {
       mouseSelecting = false;
       if (!keyboardSelecting) {
