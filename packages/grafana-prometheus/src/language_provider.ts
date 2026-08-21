@@ -129,7 +129,7 @@ export class PrometheusLanguageProvider implements PrometheusLanguageProviderInt
   request = async (url: string, params = {}, options?: Partial<BackendSrvRequest>) => {
     try {
       const res = await this.datasource.metadataRequest(url, params, options);
-      return res.data.data;
+      return res.data;
     } catch (error) {
       if (!isCancelledError(error)) {
         console.error(error);

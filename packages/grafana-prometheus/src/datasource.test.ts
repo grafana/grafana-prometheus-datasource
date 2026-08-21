@@ -143,7 +143,8 @@ describe('PrometheusDatasource', () => {
       ds.metadataRequest('/foo', { bar: 'baz baz', foo: 'foo' });
       expect(fetchMock.mock.calls.length).toBe(1);
       expect(fetchMock.mock.calls[0][0].method).toBe('GET');
-      expect(fetchMock.mock.calls[0][0].url).toContain('bar=baz%20baz&foo=foo');
+      expect(fetchMock.mock.calls[0][0].url).toBe('/api/datasources/uid/ABCDEF/resources/foo');
+      expect(fetchMock.mock.calls[0][0].params).toEqual({ bar: 'baz baz', foo: 'foo' });
     });
     it('should still perform a GET request with the DS HTTP method set to POST and not POST-friendly endpoint', () => {
       const postSettings = cloneDeep(instanceSettings);
@@ -175,7 +176,8 @@ describe('PrometheusDatasource', () => {
       it('added to metadata request', () => {
         promDs.metadataRequest('/foo');
         expect(fetchMock.mock.calls.length).toBe(1);
-        expect(fetchMock.mock.calls[0][0].url).toBe('/api/datasources/uid/ABCDEF/resources/foo?customQuery=123');
+        expect(fetchMock.mock.calls[0][0].url).toBe('/api/datasources/uid/ABCDEF/resources/foo');
+        expect(fetchMock.mock.calls[0][0].params).toEqual({ customQuery: '123' });
       });
     });
 
@@ -188,7 +190,8 @@ describe('PrometheusDatasource', () => {
       it('added to metadata request with non-POST endpoint', () => {
         promDs.metadataRequest('/foo');
         expect(fetchMock.mock.calls.length).toBe(1);
-        expect(fetchMock.mock.calls[0][0].url).toBe('/api/datasources/uid/ABCDEF/resources/foo?customQuery=123');
+        expect(fetchMock.mock.calls[0][0].url).toBe('/api/datasources/uid/ABCDEF/resources/foo');
+        expect(fetchMock.mock.calls[0][0].params).toEqual({ customQuery: '123' });
       });
 
       it('added to metadata request with POST endpoint', () => {

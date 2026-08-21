@@ -82,10 +82,8 @@ describe('PrometheusMetricFindQuery', () => {
     it('should handle scalar result', async () => {
       datasource.metadataRequest = jest.fn().mockResolvedValue({
         data: {
-          data: {
-            resultType: 'scalar',
-            result: [1234567, '42'],
-          },
+          resultType: 'scalar',
+          result: [1234567, '42'],
         },
       });
 
@@ -98,15 +96,13 @@ describe('PrometheusMetricFindQuery', () => {
     it('should handle vector result', async () => {
       datasource.metadataRequest = jest.fn().mockResolvedValue({
         data: {
-          data: {
-            resultType: 'vector',
-            result: [
-              {
-                metric: { __name__: 'metric', label: 'value' },
-                value: [1234567, '42'],
-              },
-            ],
-          },
+          resultType: 'vector',
+          result: [
+            {
+              metric: { __name__: 'metric', label: 'value' },
+              value: [1234567, '42'],
+            },
+          ],
         },
       });
 
@@ -124,10 +120,8 @@ describe('PrometheusMetricFindQuery', () => {
     it('should handle scalar result with timestamp', async () => {
       datasource.metadataRequest = jest.fn().mockResolvedValue({
         data: {
-          data: {
-            resultType: 'scalar',
-            result: [1443454528.0, '2'],
-          },
+          resultType: 'scalar',
+          result: [1443454528.0, '2'],
         },
       });
 
@@ -140,15 +134,13 @@ describe('PrometheusMetricFindQuery', () => {
     it('should handle vector result with metric name and labels', async () => {
       datasource.metadataRequest = jest.fn().mockResolvedValue({
         data: {
-          data: {
-            resultType: 'vector',
-            result: [
-              {
-                metric: { __name__: 'metric', job: 'testjob' },
-                value: [1443454528.0, '3846'],
-              },
-            ],
-          },
+          resultType: 'vector',
+          result: [
+            {
+              metric: { __name__: 'metric', job: 'testjob' },
+              value: [1443454528.0, '3846'],
+            },
+          ],
         },
       });
 
@@ -161,9 +153,7 @@ describe('PrometheusMetricFindQuery', () => {
     it('should throw error for unknown result type', async () => {
       datasource.metadataRequest = jest.fn().mockResolvedValue({
         data: {
-          data: {
-            resultType: 'unknown',
-          },
+          resultType: 'unknown',
         },
       });
 
@@ -175,11 +165,7 @@ describe('PrometheusMetricFindQuery', () => {
   describe('Series Query', () => {
     it('should return series', async () => {
       const metric = { __name__: 'metric', label: 'value' };
-      datasource.metadataRequest = jest.fn().mockResolvedValue({
-        data: {
-          data: [metric],
-        },
-      });
+      datasource.metadataRequest = jest.fn().mockResolvedValue({ data: [metric] });
 
       const query = new PrometheusMetricFindQuery(datasource, 'metric{label="value"}');
       const results = await query.process(timeRange);
@@ -194,11 +180,7 @@ describe('PrometheusMetricFindQuery', () => {
 
     it('should return series with metric name and labels', async () => {
       const metric = { __name__: 'up', instance: '127.0.0.1:1234', job: 'job1' };
-      datasource.metadataRequest = jest.fn().mockResolvedValue({
-        data: {
-          data: [metric],
-        },
-      });
+      datasource.metadataRequest = jest.fn().mockResolvedValue({ data: [metric] });
 
       const query = new PrometheusMetricFindQuery(datasource, 'up{job="job1"}');
       const results = await query.process(timeRange);
