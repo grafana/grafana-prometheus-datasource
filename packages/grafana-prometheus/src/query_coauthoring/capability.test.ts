@@ -27,6 +27,7 @@ function setup(initialValue = 'rate(http_requests_total[5m])') {
     readOnly = options.readOnly;
   });
   const editor = {
+    deltaDecorations,
     getValue: () => value,
     setValue,
     getSelections: () => selections,
@@ -34,7 +35,6 @@ function setup(initialValue = 'rate(http_requests_total[5m])') {
     getModel: () => ({
       getOffsetAt: ({ column }: { column: number }) => column - 1,
       getPositionAt: (offset: number) => ({ lineNumber: 1, column: offset + 1 }),
-      deltaDecorations,
     }),
     getRawOptions: () => ({ readOnly }),
     updateOptions,

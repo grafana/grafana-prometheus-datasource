@@ -31,10 +31,14 @@ function createEditorHarness() {
   let layoutListener: VoidFunction | undefined;
   let contentListener: VoidFunction | undefined;
   let selectionListener: VoidFunction | undefined;
+  let mouseDownListener: VoidFunction | undefined;
+  let mouseUpListener: VoidFunction | undefined;
   const actionDisposable = { dispose: jest.fn() };
   const layoutDisposable = { dispose: jest.fn(() => (layoutListener = undefined)) };
   const contentDisposable = { dispose: jest.fn(() => (contentListener = undefined)) };
   const selectionDisposable = { dispose: jest.fn(() => (selectionListener = undefined)) };
+  const mouseDownDisposable = { dispose: jest.fn(() => (mouseDownListener = undefined)) };
+  const mouseUpDisposable = { dispose: jest.fn(() => (mouseUpListener = undefined)) };
   const editor = {
     addAction: jest.fn((action: monacoTypes.editor.IActionDescriptor) => {
       editorAction = action;
@@ -62,10 +66,20 @@ function createEditorHarness() {
       selectionListener = listener;
       return selectionDisposable;
     }),
+    onMouseDown: jest.fn((listener: VoidFunction) => {
+      mouseDownListener = listener;
+      return mouseDownDisposable;
+    }),
+    onMouseUp: jest.fn((listener: VoidFunction) => {
+      mouseUpListener = listener;
+      return mouseUpDisposable;
+    }),
     removeContentWidget: jest.fn((widget: monacoTypes.editor.IContentWidget) => widget.getDomNode().remove()),
   } as unknown as MonacoEditor;
   const monaco = {
     editor: { ContentWidgetPositionPreference: { BELOW: 2, ABOVE: 1 } },
+    KeyMod: { CtrlCmd: 2048 },
+    KeyCode: { Period: 84 },
   } as unknown as Monaco;
 
   return {
@@ -86,6 +100,10 @@ function createEditorHarness() {
     },
     layoutDisposable,
     monaco,
+    mouseDownDisposable,
+    mouseUpDisposable,
+    notifyMouseDown: () => act(() => mouseDownListener?.()),
+    notifyMouseUp: () => act(() => mouseUpListener?.()),
     notifyContentChange: () => act(() => contentListener?.()),
     notifyLayoutChange: () => act(() => layoutListener?.()),
     notifySelectionChange: () => act(() => selectionListener?.()),
@@ -134,6 +152,8 @@ describe('registerPrometheusQueryCoauthoring', () => {
       editor,
       getContentWidget,
       layoutDisposable,
+      mouseDownDisposable,
+      mouseUpDisposable,
       notifySelectionChange,
       registration,
       selectionDisposable,
@@ -156,18 +176,145 @@ describe('registerPrometheusQueryCoauthoring', () => {
     expect(actionDisposable.dispose).toHaveBeenCalledTimes(1);
     expect(contentDisposable.dispose).toHaveBeenCalledTimes(1);
     expect(layoutDisposable.dispose).toHaveBeenCalledTimes(1);
+    expect(mouseDownDisposable.dispose).toHaveBeenCalledTimes(1);
+    expect(mouseUpDisposable.dispose).toHaveBeenCalledTimes(1);
     expect(selectionDisposable.dispose).toHaveBeenCalledTimes(1);
     expect(editor.removeContentWidget).toHaveBeenCalledTimes(1);
   });
 
-  it('offers a command-palette action without a direct shortcut', async () => {
+  it('offers a command-palette action and the displayed direct shortcut', async () => {
     const { dispose, editor, getEditorAction, registration } = setup();
     const action = getEditorAction();
     expect(action).toMatchObject({ label: 'Coauthor PromQL query', run: expect.any(Function) });
-    expect(action).not.toHaveProperty('keybindings');
+    expect(action.keybindings).toEqual([2048 | 84]);
 
     act(() => action.run(editor));
     expect(registration.getSnapshot()).toEqual({ mode: 'session' });
+    dispose();
+  });
+
+  it('waits for a selection gesture to settle, then anchors the toolbar above its midpoint', () => {
+    const { dispose, editor, getContentWidget, notifyMouseDown, notifyMouseUp, notifySelectionChange, registration } =
+      setup();
+    const selection = createSelection(4, 12);
+    jest.mocked(editor.getSelection).mockReturnValue(selection);
+    jest.mocked(editor.getSelections).mockReturnValue([selection]);
+    jest.mocked(editor.getModel).mockReturnValue({
+      getOffsetAt: (position: { column: number }) => position.column - 1,
+      getPositionAt: (offset: number) => ({ lineNumber: 1, column: offset + 1 }),
+    } as unknown as monacoTypes.editor.ITextModel);
+
+    notifyMouseDown();
+    notifySelectionChange();
+    expect(registration.getSnapshot()).toEqual({ mode: 'hidden' });
+
+    notifyMouseUp();
+    expect(registration.getSnapshot()).toEqual({ mode: 'selection-toolbar' });
+    const widget = getContentWidget();
+    expect(widget.getPosition()).toEqual({
+      position: { lineNumber: 1, column: 8 },
+      preference: [1],
+    });
+    jest.spyOn(widget.getDomNode(), 'getBoundingClientRect').mockReturnValue(createRect(500, 678, 400, 434));
+    widget.afterRender?.(1);
+    expect(widget.getDomNode()).toHaveStyle({ transform: 'translate(-89px, -4px)' });
+    dispose();
+  });
+
+  it('viewport-clamps the visually centered selection toolbar', () => {
+    const { dispose, editor, getContentWidget, notifySelectionChange } = setup();
+    const selection = createSelection();
+    jest.mocked(editor.getSelection).mockReturnValue(selection);
+    jest.mocked(editor.getSelections).mockReturnValue([selection]);
+
+    notifySelectionChange();
+
+    const widget = getContentWidget();
+    const getBoundingClientRect = jest.spyOn(widget.getDomNode(), 'getBoundingClientRect');
+    getBoundingClientRect.mockReturnValue(createRect(20, 198, 400, 434));
+    widget.afterRender?.(1);
+    expect(widget.getDomNode()).toHaveStyle({ transform: 'translate(-12px, -4px)' });
+
+    getBoundingClientRect.mockReturnValue(createRect(950, 1128, 400, 434));
+    widget.afterRender?.(1);
+    expect(widget.getDomNode()).toHaveStyle({ transform: 'translate(-112px, -4px)' });
+    dispose();
+  });
+
+  it('waits for keyboard selection modifiers to be released', () => {
+    const { dispose, editor, notifySelectionChange, registration } = setup();
+    const selection = createSelection();
+    jest.mocked(editor.getSelection).mockReturnValue(selection);
+    jest.mocked(editor.getSelections).mockReturnValue([selection]);
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Shift', shiftKey: true }));
+    notifySelectionChange();
+    expect(registration.getSnapshot()).toEqual({ mode: 'hidden' });
+
+    document.dispatchEvent(new KeyboardEvent('keyup', { key: 'Shift' }));
+    expect(registration.getSnapshot()).toEqual({ mode: 'selection-toolbar' });
+    dispose();
+  });
+
+  it('waits for both mouse and keyboard selection gestures to settle', () => {
+    const { dispose, editor, notifyMouseDown, notifyMouseUp, notifySelectionChange, registration } = setup();
+    const selection = createSelection();
+    jest.mocked(editor.getSelection).mockReturnValue(selection);
+    jest.mocked(editor.getSelections).mockReturnValue([selection]);
+
+    notifyMouseDown();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Shift', shiftKey: true }));
+    notifySelectionChange();
+    expect(registration.getSnapshot()).toEqual({ mode: 'hidden' });
+
+    notifyMouseUp();
+    expect(registration.getSnapshot()).toEqual({ mode: 'hidden' });
+
+    document.dispatchEvent(new KeyboardEvent('keyup', { key: 'Shift' }));
+    expect(registration.getSnapshot()).toEqual({ mode: 'selection-toolbar' });
+    dispose();
+  });
+
+  it('clears unsettled modifier state across shortcut invocation, dismissal, and a new mouse selection', () => {
+    const { dispose, editor, getEditorAction, notifyMouseDown, notifyMouseUp, notifySelectionChange, registration } =
+      setup();
+    const selection = createSelection();
+    jest.mocked(editor.getSelection).mockReturnValue(selection);
+    jest.mocked(editor.getSelections).mockReturnValue([selection]);
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Control', ctrlKey: true }));
+    act(() => getEditorAction().run(editor));
+    expect(registration.getSnapshot()).toEqual({ mode: 'session' });
+
+    act(() => registration.dismiss());
+    expect(registration.getSnapshot()).toEqual({ mode: 'selection-toolbar' });
+
+    notifyMouseDown();
+    notifySelectionChange();
+    expect(registration.getSnapshot()).toEqual({ mode: 'hidden' });
+
+    notifyMouseUp();
+    expect(registration.getSnapshot()).toEqual({ mode: 'selection-toolbar' });
+    dispose();
+  });
+
+  it('anchors the toolbar at the midpoint of the union of all non-empty selections', () => {
+    const { dispose, editor, getContentWidget, notifySelectionChange } = setup();
+    const firstSelection = createSelection(2, 6);
+    const secondSelection = createSelection(20, 30);
+    jest.mocked(editor.getSelection).mockReturnValue(firstSelection);
+    jest.mocked(editor.getSelections).mockReturnValue([firstSelection, secondSelection]);
+    jest.mocked(editor.getModel).mockReturnValue({
+      getOffsetAt: (position: { column: number }) => position.column - 1,
+      getPositionAt: (offset: number) => ({ lineNumber: 1, column: offset + 1 }),
+    } as unknown as monacoTypes.editor.ITextModel);
+
+    notifySelectionChange();
+
+    expect(getContentWidget().getPosition()).toEqual({
+      position: { lineNumber: 1, column: 16 },
+      preference: [1],
+    });
     dispose();
   });
 
@@ -375,14 +522,18 @@ describe('registerPrometheusQueryCoauthoring', () => {
     }
   });
 
-  it('preserves multiple selected fragments for the Core Copy control', () => {
+  it('preserves multiple selected fragments for the Core coauthoring action', () => {
     const { dispose, editor, notifySelectionChange, registration } = setup();
     const firstSelection = createSelection(4, 12);
     const secondSelection = createSelection(16, 24);
     jest.mocked(editor.getSelection).mockReturnValue(secondSelection);
     jest.mocked(editor.getSelections).mockReturnValue([firstSelection, secondSelection]);
     const getValueInRange = jest.fn().mockReturnValueOnce('http_requests_total').mockReturnValueOnce('handler="api"');
-    jest.mocked(editor.getModel).mockReturnValue({ getValueInRange } as unknown as monacoTypes.editor.ITextModel);
+    jest.mocked(editor.getModel).mockReturnValue({
+      getOffsetAt: ({ column }: monacoTypes.Position) => column - 1,
+      getPositionAt: (offset: number) => ({ lineNumber: 1, column: offset + 1 }),
+      getValueInRange,
+    } as unknown as monacoTypes.editor.ITextModel);
 
     notifySelectionChange();
     expect(registration.getSelectedText()).toBe('http_requests_total\nhandler="api"');

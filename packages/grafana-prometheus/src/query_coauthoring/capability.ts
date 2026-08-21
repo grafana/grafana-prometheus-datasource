@@ -77,6 +77,7 @@ export interface PrometheusCoauthoringCapability<
 }
 
 interface CodeEditor {
+  deltaDecorations: CodeEditorModel['deltaDecorations'];
   getValue: () => string;
   getSelections: () => CodeEditorSelection[] | null;
   getModel: () => CodeEditorModel | null;
@@ -195,8 +196,7 @@ export function createPrometheusCoauthoringCapability<TQuery extends DataQuery>(
 
     const state = previewState;
     previewState = undefined;
-    const model = editor.getModel();
-    model?.deltaDecorations(state.decorations, []);
+    editor.deltaDecorations(state.decorations, []);
     editor.updateOptions({ readOnly: state.readOnly });
   };
 
@@ -276,32 +276,33 @@ export function createPrometheusCoauthoringCapability<TQuery extends DataQuery>(
 
       const readOnly = Boolean(editor.getRawOptions().readOnly);
       const model = editor.getModel();
-      const decorations =
-        model?.deltaDecorations(
-          [],
-          diff.changes.map((change) => {
-            const start = model.getPositionAt(change.originalRange.from);
-            const end = model.getPositionAt(change.originalRange.to);
-            const proposed = value.slice(change.proposedRange.from, change.proposedRange.to).replace(/\r?\n/g, ' ');
-            const replacesText = change.originalRange.from !== change.originalRange.to;
-            return {
-              range: {
-                startLineNumber: start.lineNumber,
-                startColumn: start.column,
-                endLineNumber: end.lineNumber,
-                endColumn: end.column,
-              },
-              options: {
-                ...(replacesText ? { inlineClassName: getPreviewOriginalClassName() } : {}),
-                ...(proposed
-                  ? replacesText
-                    ? { before: { content: proposed, inlineClassName: getPreviewChangeClassName() } }
-                    : { after: { content: proposed, inlineClassName: getPreviewChangeClassName() } }
-                  : {}),
-              },
-            };
-          })
-        ) ?? [];
+      const decorations = model
+        ? editor.deltaDecorations(
+            [],
+            diff.changes.map((change) => {
+              const start = model.getPositionAt(change.originalRange.from);
+              const end = model.getPositionAt(change.originalRange.to);
+              const proposed = value.slice(change.proposedRange.from, change.proposedRange.to).replace(/\r?\n/g, ' ');
+              const replacesText = change.originalRange.from !== change.originalRange.to;
+              return {
+                range: {
+                  startLineNumber: start.lineNumber,
+                  startColumn: start.column,
+                  endLineNumber: end.lineNumber,
+                  endColumn: end.column,
+                },
+                options: {
+                  ...(replacesText ? { inlineClassName: getPreviewOriginalClassName() } : {}),
+                  ...(proposed
+                    ? replacesText
+                      ? { before: { content: proposed, inlineClassName: getPreviewChangeClassName() } }
+                      : { after: { content: proposed, inlineClassName: getPreviewChangeClassName() } }
+                    : {}),
+                },
+              };
+            })
+          )
+        : [];
       editor.updateOptions({ readOnly: true });
       previewState = { readOnly, decorations };
 

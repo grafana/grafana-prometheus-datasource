@@ -3,6 +3,7 @@ import { type Monaco, type MonacoEditor, type monacoTypes } from '@grafana/ui';
 
 const INITIAL_HEIGHT = 320;
 const INITIAL_WIDTH = 403;
+const SELECTION_TOOLBAR_GAP = 4;
 const VIEWPORT_MARGIN = 8;
 
 export type QueryCoauthoringWidgetMode = 'hidden' | 'selection-toolbar' | 'session';
@@ -42,6 +43,8 @@ export function createMonacoQueryCoauthoringHost({
   const listeners = new Set<VoidFunction>();
   let hasMeasuredSurface = false;
   let disposed = false;
+  let keyboardSelecting = false;
+  let mouseSelecting = false;
   let pendingRelayoutFrame: number | undefined;
   let renderedHeight = INITIAL_HEIGHT;
   let renderedWidth = INITIAL_WIDTH;
@@ -68,11 +71,17 @@ export function createMonacoQueryCoauthoringHost({
     }
 
     // Monaco anchors content widgets at the selected column but does not keep overflowing widgets inside the viewport.
+    const targetLeft = snapshot.mode === 'selection-toolbar' ? widgetRect.left - widgetRect.width / 2 : widgetRect.left;
     const maximumLeft = Math.max(leftBoundary, rightBoundary - widgetRect.width);
-    const alignedLeft = Math.min(Math.max(widgetRect.left, leftBoundary), maximumLeft);
+    const alignedLeft = Math.min(Math.max(targetLeft, leftBoundary), maximumLeft);
     const horizontalOffset = alignedLeft - widgetRect.left;
-    if (horizontalOffset !== 0) {
+    const verticalOffset = snapshot.mode === 'selection-toolbar' ? -SELECTION_TOOLBAR_GAP : 0;
+    if (horizontalOffset !== 0 && verticalOffset !== 0) {
+      widgetNode.style.transform = `translate(${horizontalOffset}px, ${verticalOffset}px)`;
+    } else if (horizontalOffset !== 0) {
       widgetNode.style.transform = `translateX(${horizontalOffset}px)`;
+    } else if (verticalOffset !== 0) {
+      widgetNode.style.transform = `translateY(${verticalOffset}px)`;
     }
   };
 
@@ -99,10 +108,10 @@ export function createMonacoQueryCoauthoringHost({
     getDomNode: () => widgetNode,
     getPosition: () => ({
       position: widgetPosition,
-      preference: [
-        monaco.editor.ContentWidgetPositionPreference.BELOW,
-        monaco.editor.ContentWidgetPositionPreference.ABOVE,
-      ],
+      preference:
+        snapshot.mode === 'selection-toolbar'
+          ? [monaco.editor.ContentWidgetPositionPreference.ABOVE]
+          : [monaco.editor.ContentWidgetPositionPreference.BELOW, monaco.editor.ContentWidgetPositionPreference.ABOVE],
     }),
   };
 
@@ -152,18 +161,34 @@ export function createMonacoQueryCoauthoringHost({
   };
 
   const hasSelection = () => editor.getSelections()?.some((selection) => !selection.isEmpty()) ?? false;
-  const updateWidgetPosition = (edge: 'start' | 'end') => {
+  const updateWidgetPosition = (edge: 'start' | 'center') => {
     const selection = editor.getSelection();
-    widgetPosition =
-      (edge === 'start' ? selection?.getStartPosition() : selection?.getEndPosition()) ??
-      editor.getPosition() ??
-      widgetPosition;
+    if (edge === 'center') {
+      const model = editor.getModel();
+      const selections = editor.getSelections()?.filter((candidate) => !candidate.isEmpty());
+      if (model && selections?.length) {
+        const offsets = selections.flatMap((candidate) => [
+          model.getOffsetAt(candidate.getStartPosition()),
+          model.getOffsetAt(candidate.getEndPosition()),
+        ]);
+        widgetPosition = model.getPositionAt(Math.floor((Math.min(...offsets) + Math.max(...offsets)) / 2));
+        return;
+      }
+    }
+    widgetPosition = selection?.getStartPosition() ?? editor.getPosition() ?? widgetPosition;
+  };
+  const hideSelectionToolbar = () => {
+    if (snapshot.mode === 'session') {
+      return;
+    }
+    publish({ mode: 'hidden' });
+    editor.layoutContentWidget(widget);
   };
   const showSelectionToolbar = () => {
     if (disposed) {
       return;
     }
-    updateWidgetPosition('end');
+    updateWidgetPosition('center');
     hasMeasuredSurface = false;
     widgetNode.style.visibility = '';
     const mode = hasSelection() ? 'selection-toolbar' : 'hidden';
@@ -180,6 +205,8 @@ export function createMonacoQueryCoauthoringHost({
     if (disposed || snapshot.mode === 'session' || editor.getValue().trim().length === 0) {
       return;
     }
+    keyboardSelecting = false;
+    mouseSelecting = false;
     hasMeasuredSurface = false;
     // Monaco first positions with a conservative fallback size. Hide that speculative placement until Core measures it.
     widgetNode.style.visibility = 'hidden';
@@ -226,22 +253,64 @@ export function createMonacoQueryCoauthoringHost({
 
   editor.addContentWidget(widget);
   const selectionDisposable = editor.onDidChangeCursorSelection(() => {
-    if (snapshot.mode !== 'session') {
-      showSelectionToolbar();
-    } else {
+    if (snapshot.mode === 'session') {
       publish(snapshot);
+    } else if (mouseSelecting || keyboardSelecting) {
+      hideSelectionToolbar();
+    } else {
+      showSelectionToolbar();
     }
   });
+  const mouseDownDisposable = editor.onMouseDown(() => {
+    if (snapshot.mode !== 'session') {
+      mouseSelecting = true;
+      hideSelectionToolbar();
+    }
+  });
+  const mouseUpDisposable = editor.onMouseUp(() => {
+    if (snapshot.mode !== 'session') {
+      mouseSelecting = false;
+      if (!keyboardSelecting) {
+        showSelectionToolbar();
+      }
+    }
+  });
+  const onDocumentKeyDown = (event: KeyboardEvent) => {
+    if (snapshot.mode !== 'session' && (event.shiftKey || event.metaKey || event.ctrlKey || event.altKey)) {
+      keyboardSelecting = true;
+      hideSelectionToolbar();
+    }
+  };
+  const onDocumentKeyUp = (event: KeyboardEvent) => {
+    if (
+      snapshot.mode !== 'session' &&
+      keyboardSelecting &&
+      !event.shiftKey &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey
+    ) {
+      keyboardSelecting = false;
+      if (!mouseSelecting) {
+        showSelectionToolbar();
+      }
+    }
+  };
+  document.addEventListener('keydown', onDocumentKeyDown, true);
+  document.addEventListener('keyup', onDocumentKeyUp, true);
   const contentDisposable = editor.onDidChangeModelContent(() => publish(snapshot));
   const layoutDisposable = editor.onDidLayoutChange(schedulePositionRelayout);
   const actionDisposable = editor.addAction({
     id: `${widgetId}.invoke`,
     label: t('grafana-prometheus.components.monaco-query-field.coauthor-promql-query', 'Coauthor PromQL query'),
+    keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.Period],
     run: startCoauthoring,
   });
 
   return {
     dismiss: () => {
+      keyboardSelecting = false;
+      mouseSelecting = false;
       clearEditorDiff();
       showSelectionToolbar();
     },
@@ -265,7 +334,11 @@ export function createMonacoQueryCoauthoringHost({
       actionDisposable.dispose();
       contentDisposable.dispose();
       layoutDisposable.dispose();
+      mouseDownDisposable.dispose();
+      mouseUpDisposable.dispose();
       selectionDisposable.dispose();
+      document.removeEventListener('keydown', onDocumentKeyDown, true);
+      document.removeEventListener('keyup', onDocumentKeyUp, true);
       editor.removeContentWidget(widget);
       listeners.clear();
     },
