@@ -1,5 +1,5 @@
 ---
-'grafana-prometheus-datasource': minor
+'grafana-prometheus-datasource': patch
 ---
 
-Send resource requests through `DataSourceWithBackend`. `metadataRequest` now uses `getResource`/`postResource` instead of building the legacy `/api/datasources/uid/<uid>/resources` URL by hand, so resource calls follow whichever resource API the Grafana instance is configured to use.
+Send resource requests through `DataSourceWithBackend`, so they follow whichever resource API the Grafana instance is configured to use.

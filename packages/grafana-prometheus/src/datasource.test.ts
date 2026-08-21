@@ -182,6 +182,17 @@ describe('PrometheusDatasource', () => {
       expect(fetchMock.mock.calls[0][0].data).toEqual({ queries: [{ expr: 'up' }], limit: 100 });
       expect(fetchMock.mock.calls[0][0].params).toBeUndefined();
     });
+    it('should resolve with the response body wrapped in `data`', async () => {
+      // Consumers (including Grafana core's alerting triage) read `res.data.data`, so the
+      // resource API's bare body must stay wrapped. Unwrapping it here reads as `undefined`
+      // on their side rather than failing loudly.
+      fetchMock.mockReturnValueOnce(of({ data: { status: 'success', data: ['up'] } }));
+
+      const res = await ds.metadataRequest('/api/v1/label/__name__/values');
+
+      expect(res).toEqual({ data: { status: 'success', data: ['up'] } });
+      expect(res.data.data).toEqual(['up']);
+    });
     it('should send a form encoded body when the caller does not set a Content-Type', () => {
       const postSettings = cloneDeep(instanceSettings);
       postSettings.jsonData.httpMethod = 'POST';

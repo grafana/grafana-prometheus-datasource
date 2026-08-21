@@ -95,17 +95,17 @@ export class PrometheusMetricFindQuery {
       time: getPrometheusTime(range.to, true).toString(),
     };
     return this.datasource.metadataRequest(url, params).then((result) => {
-      switch (result.data.resultType) {
+      switch (result.data.data.resultType) {
         case 'scalar': // [ <unix_time>, "<scalar_value>" ]
         case 'string': // [ <unix_time>, "<string_value>" ]
           return [
             {
-              text: result.data.result[1] || '',
+              text: result.data.data.result[1] || '',
               expandable: false,
             },
           ];
         case 'vector':
-          return _map(result.data.result, (metricData) => {
+          return _map(result.data.data.result, (metricData) => {
             let text = metricData.metric.__name__ || '';
             delete metricData.metric.__name__;
             text +=
@@ -122,7 +122,7 @@ export class PrometheusMetricFindQuery {
             };
           });
         default:
-          throw Error(`Unknown/Unhandled result type: [${result.data.resultType}]`);
+          throw Error(`Unknown/Unhandled result type: [${result.data.data.resultType}]`);
       }
     });
   }
@@ -137,7 +137,7 @@ export class PrometheusMetricFindQuery {
     };
 
     const result = await this.datasource.metadataRequest(`/api/v1/series`, params);
-    return result.data.map((metric: Record<string, string>) => ({
+    return result.data.data.map((metric: Record<string, string>) => ({
       text: getOriginalMetricName(metric),
       expandable: true,
     }));

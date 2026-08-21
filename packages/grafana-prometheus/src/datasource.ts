@@ -164,7 +164,7 @@ export class PrometheusDatasource
       const params = {};
       const options = { showErrorAlert: false };
       const res = await this.metadataRequest('/api/v1/rules', params, options);
-      const ruleGroups = res.data?.groups;
+      const ruleGroups = res.data?.data?.groups;
 
       if (ruleGroups) {
         this.ruleMappings = extractRuleMappingFromGroups(ruleGroups);
@@ -194,7 +194,7 @@ export class PrometheusDatasource
       const options = { showErrorAlert: false };
       const res = await this.metadataRequest('/api/v1/query_exemplars', params, options);
 
-      return res.status === 'success';
+      return res.data.status === 'success';
     } catch (err) {
       return false;
     }
@@ -314,8 +314,25 @@ export class PrometheusDatasource
     return queries.map((query) => exportToAbstractQuery(query));
   }
 
-  // Use this for tab completion features, wont publish response to other components
-  async metadataRequest<T = any>(url: string, params = {}, options?: Partial<BackendSrvRequest>): Promise<T> {
+  /**
+   * Use this for tab completion features, wont publish response to other components.
+   *
+   * The response body is wrapped in `{ data }` to preserve the shape this method has always
+   * returned. `getResource`/`postResource` resolve with the body directly, but callers both here
+   * and outside this repo (Grafana core's alerting triage among them) read `res.data.data`, and
+   * unwrapping would leave them silently reading `undefined`. Only `data` is available — the rest
+   * of the old `FetchResponse` (`status`, `headers`, ...) is not exposed by the resource API.
+   */
+  async metadataRequest<T = any>(url: string, params = {}, options?: Partial<BackendSrvRequest>): Promise<{ data: T }> {
+    return { data: await this.requestMetadata<T>(url, params, options) };
+  }
+
+  /** Resolves with the raw resource response body. See {@link metadataRequest}. */
+  private async requestMetadata<T>(
+    url: string,
+    params: Record<string, unknown>,
+    options?: Partial<BackendSrvRequest>
+  ): Promise<T> {
     if (this.access === 'direct') {
       return lastValueFrom(this.directAccessError());
     }
