@@ -77,7 +77,22 @@ export interface PrometheusCoauthoringCapability<
 }
 
 interface CodeEditor {
-  deltaDecorations: CodeEditorModel['deltaDecorations'];
+  deltaDecorations: (
+    oldDecorations: string[],
+    newDecorations: Array<{
+      range: {
+        startLineNumber: number;
+        startColumn: number;
+        endLineNumber: number;
+        endColumn: number;
+      };
+      options: {
+        inlineClassName?: string;
+        before?: { content: string; inlineClassName: string };
+        after?: { content: string; inlineClassName: string };
+      };
+    }>
+  ) => string[];
   getValue: () => string;
   getSelections: () => CodeEditorSelection[] | null;
   getModel: () => CodeEditorModel | null;
@@ -101,22 +116,6 @@ interface CodeEditorSelection {
 interface CodeEditorModel {
   getOffsetAt: (position: CodeEditorPosition) => number;
   getPositionAt: (offset: number) => CodeEditorPosition;
-  deltaDecorations: (
-    oldDecorations: string[],
-    newDecorations: Array<{
-      range: {
-        startLineNumber: number;
-        startColumn: number;
-        endLineNumber: number;
-        endColumn: number;
-      };
-      options: {
-        inlineClassName?: string;
-        before?: { content: string; inlineClassName: string };
-        after?: { content: string; inlineClassName: string };
-      };
-    }>
-  ) => string[];
 }
 
 interface CreateCapabilityOptions<TQuery extends DataQuery> {
