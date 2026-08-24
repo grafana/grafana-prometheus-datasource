@@ -48,6 +48,7 @@ export function createMonacoQueryCoauthoringHost({
   let pendingRelayoutFrame: number | undefined;
   let renderedHeight = INITIAL_HEIGHT;
   let renderedWidth = INITIAL_WIDTH;
+  let sessionPlacement: monacoTypes.editor.ContentWidgetPositionPreference | undefined;
   let snapshot: QueryCoauthoringWidgetSnapshot = { mode: 'hidden' };
   let widgetPosition = editor.getPosition() ?? { lineNumber: 1, column: 1 };
 
@@ -99,6 +100,9 @@ export function createMonacoQueryCoauthoringHost({
         widgetNode.style.transform = '';
         return;
       }
+      if (snapshot.mode === 'session' && sessionPlacement === undefined) {
+        sessionPlacement = position;
+      }
       alignWithinViewport();
       if (snapshot.mode !== 'session' || hasMeasuredSurface) {
         widgetNode.style.visibility = '';
@@ -111,7 +115,9 @@ export function createMonacoQueryCoauthoringHost({
       preference:
         snapshot.mode === 'selection-toolbar'
           ? [monaco.editor.ContentWidgetPositionPreference.ABOVE]
-          : [monaco.editor.ContentWidgetPositionPreference.BELOW, monaco.editor.ContentWidgetPositionPreference.ABOVE],
+          : sessionPlacement === undefined
+            ? [monaco.editor.ContentWidgetPositionPreference.BELOW, monaco.editor.ContentWidgetPositionPreference.ABOVE]
+            : [sessionPlacement],
     }),
   };
 
@@ -134,9 +140,33 @@ export function createMonacoQueryCoauthoringHost({
   };
   const visualViewport = window.visualViewport;
   let trackingPositionChanges = false;
-  const schedulePositionRelayout = () => {
+  const schedulePositionRelayout = (shouldReevaluateSessionPlacement = true) => {
+    if (snapshot.mode === 'session' && shouldReevaluateSessionPlacement) {
+      sessionPlacement = undefined;
+    }
     if (snapshot.mode !== 'hidden') {
       scheduleRelayout();
+    }
+  };
+  const scheduleExternalPositionRelayout = () => schedulePositionRelayout();
+  const scheduleScrollRelayout = (event: Event) => {
+    if (snapshot.mode !== 'session') {
+      schedulePositionRelayout(false);
+      return;
+    }
+    if (event.target instanceof Node && widgetNode.contains(event.target)) {
+      return;
+    }
+    if (event.target === window || event.target === document) {
+      schedulePositionRelayout();
+      return;
+    }
+    if (!(event.target instanceof Node)) {
+      return;
+    }
+    const editorNode = editor.getDomNode();
+    if (editorNode && (event.target.contains(editorNode) || editorNode.contains(event.target))) {
+      schedulePositionRelayout();
     }
   };
   const startPositionTracking = () => {
@@ -144,20 +174,20 @@ export function createMonacoQueryCoauthoringHost({
       return;
     }
     trackingPositionChanges = true;
-    window.addEventListener('resize', schedulePositionRelayout);
-    window.addEventListener('scroll', schedulePositionRelayout, true);
-    visualViewport?.addEventListener('resize', schedulePositionRelayout);
-    visualViewport?.addEventListener('scroll', schedulePositionRelayout);
+    window.addEventListener('resize', scheduleExternalPositionRelayout);
+    window.addEventListener('scroll', scheduleScrollRelayout, true);
+    visualViewport?.addEventListener('resize', scheduleExternalPositionRelayout);
+    visualViewport?.addEventListener('scroll', scheduleExternalPositionRelayout);
   };
   const stopPositionTracking = () => {
     if (!trackingPositionChanges) {
       return;
     }
     trackingPositionChanges = false;
-    window.removeEventListener('resize', schedulePositionRelayout);
-    window.removeEventListener('scroll', schedulePositionRelayout, true);
-    visualViewport?.removeEventListener('resize', schedulePositionRelayout);
-    visualViewport?.removeEventListener('scroll', schedulePositionRelayout);
+    window.removeEventListener('resize', scheduleExternalPositionRelayout);
+    window.removeEventListener('scroll', scheduleScrollRelayout, true);
+    visualViewport?.removeEventListener('resize', scheduleExternalPositionRelayout);
+    visualViewport?.removeEventListener('scroll', scheduleExternalPositionRelayout);
   };
 
   const hasSelection = () => editor.getSelections()?.some((selection) => !selection.isEmpty()) ?? false;
@@ -208,6 +238,7 @@ export function createMonacoQueryCoauthoringHost({
     keyboardSelecting = false;
     mouseSelecting = false;
     hasMeasuredSurface = false;
+    sessionPlacement = undefined;
     // Monaco first positions with a conservative fallback size. Hide that speculative placement until Core measures it.
     widgetNode.style.visibility = 'hidden';
     updateWidgetPosition('start');
@@ -305,7 +336,7 @@ export function createMonacoQueryCoauthoringHost({
   document.addEventListener('keydown', onDocumentKeyDown, true);
   document.addEventListener('keyup', onDocumentKeyUp, true);
   const contentDisposable = editor.onDidChangeModelContent(() => publish(snapshot));
-  const layoutDisposable = editor.onDidLayoutChange(schedulePositionRelayout);
+  const layoutDisposable = editor.onDidLayoutChange(scheduleExternalPositionRelayout);
   const actionDisposable = editor.addAction({
     id: `${widgetId}.invoke`,
     label: t('grafana-prometheus.components.monaco-query-field.coauthor-promql-query', 'Coauthor PromQL query'),
@@ -317,6 +348,7 @@ export function createMonacoQueryCoauthoringHost({
     dismiss: () => {
       keyboardSelecting = false;
       mouseSelecting = false;
+      sessionPlacement = undefined;
       clearEditorDiff();
       showSelectionToolbar();
     },
@@ -336,6 +368,7 @@ export function createMonacoQueryCoauthoringHost({
       disposed = true;
       stopPositionTracking();
       cancelPendingRelayout();
+      sessionPlacement = undefined;
       clearEditorDiff();
       actionDisposable.dispose();
       contentDisposable.dispose();

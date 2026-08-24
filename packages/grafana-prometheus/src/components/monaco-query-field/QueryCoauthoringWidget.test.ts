@@ -39,6 +39,7 @@ function createEditorHarness() {
   const selectionDisposable = { dispose: jest.fn(() => (selectionListener = undefined)) };
   const mouseDownDisposable = { dispose: jest.fn(() => (mouseDownListener = undefined)) };
   const mouseUpDisposable = { dispose: jest.fn(() => (mouseUpListener = undefined)) };
+  const editorDomNode = document.createElement('div');
   const editor = {
     addAction: jest.fn((action: monacoTypes.editor.IActionDescriptor) => {
       editorAction = action;
@@ -49,6 +50,7 @@ function createEditorHarness() {
       document.body.append(widget.getDomNode());
     }),
     getModel: jest.fn(),
+    getDomNode: jest.fn(() => editorDomNode),
     getPosition: jest.fn(() => ({ lineNumber: 1, column: 1 })),
     getSelection: jest.fn(),
     getSelections: jest.fn(() => []),
@@ -86,6 +88,7 @@ function createEditorHarness() {
     actionDisposable,
     contentDisposable,
     editor,
+    editorDomNode,
     getContentWidget: () => {
       if (!contentWidget) {
         throw new Error('Expected the query coauthoring content widget to be registered.');
@@ -495,6 +498,12 @@ describe('registerPrometheusQueryCoauthoring', () => {
       configurable: true,
       value: jest.fn((frame: number) => frameCallbacks.delete(frame)),
     });
+    const runNextAnimationFrame = () => {
+      expect(frameCallbacks.size).toBe(1);
+      const [[frame, callback]] = frameCallbacks;
+      frameCallbacks.delete(frame);
+      act(() => callback(0));
+    };
     const { dispose, editor, getContentWidget, registration } = setup();
     const controller = createPrometheusQueryCoauthoringController(registration);
 
@@ -510,7 +519,7 @@ describe('registerPrometheusQueryCoauthoring', () => {
       expect(widget.beforeRender?.()).toEqual({ height: 240, width: 300 });
       expect(editor.layoutContentWidget).toHaveBeenCalledTimes(1);
 
-      act(() => frameCallbacks.get(1)?.(0));
+      runNextAnimationFrame();
       widget.afterRender?.(widget.getPosition()?.preference?.[0] ?? null);
       expect(widget.getDomNode().style.visibility).toBe('');
     } finally {
@@ -520,6 +529,237 @@ describe('registerPrometheusQueryCoauthoring', () => {
       }
       if (cancelAnimationFrameDescriptor) {
         Object.defineProperty(window, 'cancelAnimationFrame', cancelAnimationFrameDescriptor);
+      }
+    }
+  });
+
+  it('retains the initial Monaco session side while Core reports surface growth', async () => {
+    const { dispose, getContentWidget, registration } = setup();
+    const controller = createPrometheusQueryCoauthoringController(registration);
+
+    try {
+      await controller.begin();
+      const widget = getContentWidget();
+      expect(widget.beforeRender?.()).toEqual({ height: 320, width: 403 });
+
+      widget.afterRender?.(null);
+      expect(widget.getPosition()?.preference).toEqual([2, 1]);
+      widget.afterRender?.(2);
+      expect(widget.getPosition()?.preference).toEqual([2]);
+
+      widget.getDomNode().append(document.createElement('div'));
+      controller.reportSurfaceSize({ height: 240, width: 300 });
+      widget.getDomNode().append(document.createElement('div'));
+      controller.reportSurfaceSize({ height: 480, width: 403 });
+
+      expect(widget.beforeRender?.()).toEqual({ height: 480, width: 403 });
+      expect(widget.getPosition()?.preference).toEqual([2]);
+
+      controller.dismiss();
+      await controller.begin();
+      expect(widget.beforeRender?.()).toEqual({ height: 320, width: 403 });
+      expect(widget.getPosition()?.preference).toEqual([2, 1]);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('re-evaluates the session side after external layouts in either direction', async () => {
+    const requestAnimationFrameDescriptor = Object.getOwnPropertyDescriptor(window, 'requestAnimationFrame');
+    const cancelAnimationFrameDescriptor = Object.getOwnPropertyDescriptor(window, 'cancelAnimationFrame');
+    const frameCallbacks = new Map<number, FrameRequestCallback>();
+    let nextFrame = 1;
+    Object.defineProperty(window, 'requestAnimationFrame', {
+      configurable: true,
+      value: jest.fn((callback: FrameRequestCallback) => {
+        const frame = nextFrame++;
+        frameCallbacks.set(frame, callback);
+        return frame;
+      }),
+    });
+    Object.defineProperty(window, 'cancelAnimationFrame', {
+      configurable: true,
+      value: jest.fn((frame: number) => frameCallbacks.delete(frame)),
+    });
+    const { dispose, editor, editorDomNode, getContentWidget, notifyLayoutChange, registration } = setup();
+    const controller = createPrometheusQueryCoauthoringController(registration);
+    let scrollAncestor: HTMLElement | undefined;
+    const runScheduledRelayout = () => {
+      expect(frameCallbacks.size).toBe(1);
+      const layoutCalls = jest.mocked(editor.layoutContentWidget).mock.calls.length;
+      const [[frame, callback]] = frameCallbacks;
+      frameCallbacks.delete(frame);
+      act(() => callback(0));
+      expect(editor.layoutContentWidget).toHaveBeenCalledTimes(layoutCalls + 1);
+    };
+
+    try {
+      await controller.begin();
+      const widget = getContentWidget();
+      widget.afterRender?.(2);
+      expect(widget.getPosition()?.preference).toEqual([2]);
+
+      notifyLayoutChange();
+      expect(widget.getPosition()?.preference).toEqual([2, 1]);
+      runScheduledRelayout();
+      widget.afterRender?.(1);
+      expect(widget.getPosition()?.preference).toEqual([1]);
+
+      act(() => window.dispatchEvent(new Event('resize')));
+      expect(widget.getPosition()?.preference).toEqual([2, 1]);
+      runScheduledRelayout();
+      widget.afterRender?.(2);
+      expect(widget.getPosition()?.preference).toEqual([2]);
+
+      act(() => document.dispatchEvent(new Event('scroll')));
+      expect(widget.getPosition()?.preference).toEqual([2, 1]);
+      runScheduledRelayout();
+      widget.afterRender?.(1);
+      expect(widget.getPosition()?.preference).toEqual([1]);
+
+      act(() => window.dispatchEvent(new Event('scroll')));
+      expect(widget.getPosition()?.preference).toEqual([2, 1]);
+      runScheduledRelayout();
+      widget.afterRender?.(2);
+      expect(widget.getPosition()?.preference).toEqual([2]);
+
+      const ancestor = document.createElement('div');
+      scrollAncestor = ancestor;
+      document.body.append(ancestor);
+      ancestor.append(editorDomNode);
+      act(() => ancestor.dispatchEvent(new Event('scroll')));
+      expect(widget.getPosition()?.preference).toEqual([2, 1]);
+      runScheduledRelayout();
+      widget.afterRender?.(2);
+      expect(widget.getPosition()?.preference).toEqual([2]);
+    } finally {
+      scrollAncestor?.remove();
+      dispose();
+      if (requestAnimationFrameDescriptor) {
+        Object.defineProperty(window, 'requestAnimationFrame', requestAnimationFrameDescriptor);
+      }
+      if (cancelAnimationFrameDescriptor) {
+        Object.defineProperty(window, 'cancelAnimationFrame', cancelAnimationFrameDescriptor);
+      }
+    }
+  });
+
+  it('retains the session side for portal and unrelated sibling scrolling', async () => {
+    const { dispose, editor, getContentWidget, registration } = setup();
+    const controller = createPrometheusQueryCoauthoringController(registration);
+    let unrelatedDropdown: HTMLElement | undefined;
+
+    try {
+      await controller.begin();
+      const widget = getContentWidget();
+      widget.afterRender?.(2);
+      const scrollingContent = document.createElement('div');
+      widget.getDomNode().append(scrollingContent);
+      const layoutCalls = jest.mocked(editor.layoutContentWidget).mock.calls.length;
+
+      act(() => scrollingContent.dispatchEvent(new Event('scroll')));
+
+      expect(widget.getPosition()?.preference).toEqual([2]);
+      expect(editor.layoutContentWidget).toHaveBeenCalledTimes(layoutCalls);
+
+      const dropdown = document.createElement('div');
+      unrelatedDropdown = dropdown;
+      document.body.append(dropdown);
+      act(() => dropdown.dispatchEvent(new Event('scroll')));
+
+      expect(widget.getPosition()?.preference).toEqual([2]);
+      expect(editor.layoutContentWidget).toHaveBeenCalledTimes(layoutCalls);
+    } finally {
+      unrelatedDropdown?.remove();
+      dispose();
+    }
+  });
+
+  it('re-evaluates and cleans up visual viewport placement listeners', async () => {
+    const visualViewportDescriptor = Object.getOwnPropertyDescriptor(window, 'visualViewport');
+    const visualViewportEvents = new EventTarget();
+    const addVisualViewportListener = jest.fn(
+      (type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions) =>
+        visualViewportEvents.addEventListener(type, listener, options)
+    );
+    const removeVisualViewportListener = jest.fn(
+      (type: string, listener: EventListenerOrEventListenerObject, options?: boolean | EventListenerOptions) =>
+        visualViewportEvents.removeEventListener(type, listener, options)
+    );
+    Object.defineProperty(window, 'visualViewport', {
+      configurable: true,
+      value: {
+        addEventListener: addVisualViewportListener,
+        removeEventListener: removeVisualViewportListener,
+      },
+    });
+    const requestAnimationFrameDescriptor = Object.getOwnPropertyDescriptor(window, 'requestAnimationFrame');
+    const cancelAnimationFrameDescriptor = Object.getOwnPropertyDescriptor(window, 'cancelAnimationFrame');
+    const frameCallbacks = new Map<number, FrameRequestCallback>();
+    let nextFrame = 1;
+    Object.defineProperty(window, 'requestAnimationFrame', {
+      configurable: true,
+      value: jest.fn((callback: FrameRequestCallback) => {
+        const frame = nextFrame++;
+        frameCallbacks.set(frame, callback);
+        return frame;
+      }),
+    });
+    Object.defineProperty(window, 'cancelAnimationFrame', {
+      configurable: true,
+      value: jest.fn((frame: number) => frameCallbacks.delete(frame)),
+    });
+    let dispose: VoidFunction | undefined;
+
+    try {
+      const harness = setup();
+      dispose = harness.dispose;
+      const controller = createPrometheusQueryCoauthoringController(harness.registration);
+      await controller.begin();
+      const widget = harness.getContentWidget();
+      widget.afterRender?.(2);
+      expect(widget.getPosition()?.preference).toEqual([2]);
+      const addedListeners = addVisualViewportListener.mock.calls.map(([type, listener]) => [type, listener]);
+      expect(addedListeners.map(([type]) => type)).toEqual(['resize', 'scroll']);
+
+      const runScheduledRelayout = () => {
+        expect(frameCallbacks.size).toBe(1);
+        const layoutCalls = jest.mocked(harness.editor.layoutContentWidget).mock.calls.length;
+        const [[frame, callback]] = frameCallbacks;
+        frameCallbacks.delete(frame);
+        act(() => callback(0));
+        expect(harness.editor.layoutContentWidget).toHaveBeenCalledTimes(layoutCalls + 1);
+      };
+
+      act(() => visualViewportEvents.dispatchEvent(new Event('resize')));
+      expect(widget.getPosition()?.preference).toEqual([2, 1]);
+      runScheduledRelayout();
+      widget.afterRender?.(1);
+      expect(widget.getPosition()?.preference).toEqual([1]);
+
+      act(() => visualViewportEvents.dispatchEvent(new Event('scroll')));
+      expect(widget.getPosition()?.preference).toEqual([2, 1]);
+      runScheduledRelayout();
+      widget.afterRender?.(2);
+      expect(widget.getPosition()?.preference).toEqual([2]);
+
+      dispose();
+      dispose = undefined;
+      expect(removeVisualViewportListener.mock.calls.map(([type, listener]) => [type, listener])).toEqual(
+        addedListeners
+      );
+    } finally {
+      dispose?.();
+      if (requestAnimationFrameDescriptor) {
+        Object.defineProperty(window, 'requestAnimationFrame', requestAnimationFrameDescriptor);
+      }
+      if (cancelAnimationFrameDescriptor) {
+        Object.defineProperty(window, 'cancelAnimationFrame', cancelAnimationFrameDescriptor);
+      }
+      if (visualViewportDescriptor) {
+        Object.defineProperty(window, 'visualViewport', visualViewportDescriptor);
+      } else {
+        Reflect.deleteProperty(window, 'visualViewport');
       }
     }
   });
@@ -546,11 +786,13 @@ describe('registerPrometheusQueryCoauthoring', () => {
   it('coalesces viewport and editor layout changes', () => {
     const requestAnimationFrameDescriptor = Object.getOwnPropertyDescriptor(window, 'requestAnimationFrame');
     const callbacks = new Map<number, FrameRequestCallback>();
+    let nextFrame = 1;
     Object.defineProperty(window, 'requestAnimationFrame', {
       configurable: true,
       value: jest.fn((callback: FrameRequestCallback) => {
-        callbacks.set(1, callback);
-        return 1;
+        const frame = nextFrame++;
+        callbacks.set(frame, callback);
+        return frame;
       }),
     });
     const { dispose, editor, notifyLayoutChange, notifySelectionChange } = setup();
@@ -566,7 +808,10 @@ describe('registerPrometheusQueryCoauthoring', () => {
       notifyLayoutChange();
       expect(window.requestAnimationFrame).toHaveBeenCalledTimes(1);
       expect(editor.layoutContentWidget).toHaveBeenCalledTimes(calls);
-      act(() => callbacks.get(1)?.(0));
+      expect(callbacks.size).toBe(1);
+      const [[frame, callback]] = callbacks;
+      callbacks.delete(frame);
+      act(() => callback(0));
       expect(editor.layoutContentWidget).toHaveBeenCalledTimes(calls + 1);
     } finally {
       dispose();
