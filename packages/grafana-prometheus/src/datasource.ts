@@ -1,4 +1,3 @@
-import { defaults } from 'lodash';
 import { lastValueFrom, type Observable, throwError } from 'rxjs';
 import { map, tap } from 'rxjs/operators';
 import { gte } from 'semver';
@@ -32,8 +31,6 @@ import {
   type BackendSrvRequest,
   config,
   DataSourceWithBackend,
-  type FetchResponse,
-  getBackendSrv,
   getTemplateSrv,
   isFetchError,
   type TemplateSrv,
@@ -270,63 +267,43 @@ export class PrometheusDatasource
   }
 
   /**
-   * Any request done from this data source should go through here as it contains some common processing for the
-   * request. Any processing done here needs to be also copied on the backend as this goes through data source proxy
-   * but not through the same code as alerting.
+   * Applies the configured custom query parameters to a set of request parameters.
+   * Explicitly provided parameters always win over the configured ones.
    */
-  _request<T = unknown>(
-    url: string,
-    data: Record<string, string> | null,
-    overrides: Partial<BackendSrvRequest> = {}
-  ): Observable<FetchResponse<T>> {
-    if (this.access === 'direct') {
-      return this.directAccessError();
-    }
-
-    data = data || {};
+  private withCustomQueryParameters(params: Record<string, unknown>): Record<string, unknown> {
+    const data: Record<string, unknown> = { ...params };
     for (const [key, value] of this.customQueryParameters) {
       if (data[key] == null) {
         data[key] = value;
       }
     }
+    return data;
+  }
 
-    let queryUrl = this.url + url;
-    if (url.startsWith(`/api/datasources/uid/${this.uid}`)) {
-      // This url is meant to be a replacement for the whole URL. Replace the entire URL
-      queryUrl = url;
+  /**
+   * Sends a single request to the data source resource API.
+   *
+   * `getResource`/`postResource` come from `DataSourceWithBackend`, which is what builds the
+   * resource URL. Going through them means the plugin automatically follows whichever resource
+   * API the Grafana instance is configured to use (legacy `/api/datasources/uid/<uid>/resources`
+   * or the app platform `/apis/...` endpoints).
+   */
+  private resourceRequest<T>(
+    method: string,
+    path: string,
+    data: Record<string, unknown>,
+    options: Partial<BackendSrvRequest>
+  ): Promise<T> {
+    if (method.toUpperCase() === 'GET') {
+      return this.getResource<T>(path, data, options);
     }
 
-    const options: BackendSrvRequest = defaults(overrides, {
-      url: queryUrl,
-      method: this.httpMethod,
-      headers: {},
+    return this.postResource<T>(path, data, {
+      ...options,
+      // Prometheus expects a form encoded body and the backend forwards it as-is. Callers that need
+      // a different encoding (`/suggestions` sends JSON) set their own Content-Type.
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...options.headers },
     });
-
-    if (options.method === 'GET') {
-      if (data && Object.keys(data).length) {
-        options.url =
-          options.url +
-          (options.url.search(/\?/) >= 0 ? '&' : '?') +
-          Object.entries(data)
-            .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
-            .join('&');
-      }
-    } else {
-      if (!options.headers!['Content-Type']) {
-        options.headers!['Content-Type'] = 'application/x-www-form-urlencoded';
-      }
-      options.data = data;
-    }
-
-    if (this.basicAuth || this.withCredentials) {
-      options.withCredentials = true;
-    }
-
-    if (this.basicAuth) {
-      options.headers!.Authorization = this.basicAuth;
-    }
-
-    return getBackendSrv().fetch<T>(options);
   }
 
   async importFromAbstractQueries(abstractQueries: AbstractQuery[]): Promise<PromQuery[]> {
@@ -337,36 +314,60 @@ export class PrometheusDatasource
     return queries.map((query) => exportToAbstractQuery(query));
   }
 
-  // Use this for tab completion features, wont publish response to other components
-  async metadataRequest<T = any>(url: string, params = {}, options?: Partial<BackendSrvRequest>) {
+  /**
+   * Use this for tab completion features, wont publish response to other components.
+   *
+   * The response body is wrapped in `{ data }` to preserve the shape this method has always
+   * returned. `getResource`/`postResource` resolve with the body directly, but callers both here
+   * and outside this repo (Grafana core's alerting triage among them) read `res.data.data`, and
+   * unwrapping would leave them silently reading `undefined`. Only `data` is available — the rest
+   * of the old `FetchResponse` (`status`, `headers`, ...) is not exposed by the resource API.
+   */
+  async metadataRequest<T = any>(url: string, params = {}, options?: Partial<BackendSrvRequest>): Promise<{ data: T }> {
+    return { data: await this.requestMetadata<T>(url, params, options) };
+  }
+
+  /** Resolves with the raw resource response body. See {@link metadataRequest}. */
+  private async requestMetadata<T>(
+    url: string,
+    params: Record<string, unknown>,
+    options?: Partial<BackendSrvRequest>
+  ): Promise<T> {
+    if (this.access === 'direct') {
+      return lastValueFrom(this.directAccessError());
+    }
+
+    // The resource path is appended to `.../resources/`, so a leading slash would create a double slash.
+    const path = url.replace(/^\/+/, '');
+    const data = this.withCustomQueryParameters(params);
+
     // If URL includes endpoint that supports POST and GET method, try to use configured method. This might fail as POST is supported only in v2.10+.
     if (GET_AND_POST_METADATA_ENDPOINTS.some((endpoint) => url.includes(endpoint))) {
       try {
-        return await lastValueFrom(
-          this._request<T>(`/api/datasources/uid/${this.uid}/resources${url}`, params, {
-            method: this.httpMethod,
-            hideFromInspector: true,
-            showErrorAlert: false,
-            ...options,
-          })
-        );
+        return await this.resourceRequest<T>(options?.method ?? this.httpMethod, path, data, {
+          hideFromInspector: true,
+          showErrorAlert: false,
+          ...options,
+        });
       } catch (err) {
         // If status code of error is Method Not Allowed (405) and HTTP method is POST, retry with GET
         if (this.httpMethod === 'POST' && isFetchError(err) && (err.status === 405 || err.status === 400)) {
           console.warn(`Couldn't use configured POST HTTP method for this request. Trying to use GET method instead.`);
-        } else {
-          throw err;
+          // A deliberate GET retry, so any caller supplied method is ignored here.
+          return await this.resourceRequest<T>('GET', path, data, {
+            hideFromInspector: true,
+            ...options,
+          });
         }
+
+        throw err;
       }
     }
 
-    return await lastValueFrom(
-      this._request<T>(`/api/datasources/uid/${this.uid}/resources${url}`, params, {
-        method: 'GET',
-        hideFromInspector: true,
-        ...options,
-      })
-    ); // toPromise until we change getTagValues, getLabelNames to Observable
+    return await this.resourceRequest<T>(options?.method ?? 'GET', path, data, {
+      hideFromInspector: true,
+      ...options,
+    });
   }
 
   interpolateQueryExpr(value: string | string[] = [], variable: QueryVariableModel | CustomVariableModel) {
