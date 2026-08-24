@@ -1,0 +1,14 @@
+services:
+  prometheus:
+    image: prom/prometheus:v3.13.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --enable-feature=search-api
+      - --web.listen-address=0.0.0.0:9090
+      - --storage.tsdb.path=/prometheus
+
+  grafana:
+    volumes:
+      # Different target from the base provisioning/ mount, so this file layers
+      # on top instead of replacing prometheus-direct / prometheus-gzip.
+      - ./devenv/prometheus/search-api-provisioning/search-api.yml:/etc/grafana/provisioning/datasources/search-api.yml:ro

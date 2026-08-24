@@ -1,0 +1,11 @@
+services:
+  prometheus:
+    volumes:
+      - ./provisioning/prometheus/prometheus.random-data.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      prometheus-random-data:
+        condition: service_started
+
+  prometheus-random-data:
+    build:
+      context: ./devenv/prometheus/random-data

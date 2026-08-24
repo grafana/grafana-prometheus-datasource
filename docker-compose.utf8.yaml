@@ -1,0 +1,11 @@
+services:
+  prometheus:
+    volumes:
+      - ./provisioning/prometheus/prometheus.utf8.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      prometheus-utf8:
+        condition: service_started
+
+  prometheus-utf8:
+    build:
+      context: ./devenv/prometheus/utf8
