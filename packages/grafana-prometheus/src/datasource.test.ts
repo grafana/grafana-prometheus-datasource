@@ -143,7 +143,8 @@ describe('PrometheusDatasource', () => {
       ds.metadataRequest('/foo', { bar: 'baz baz', foo: 'foo' });
       expect(fetchMock.mock.calls.length).toBe(1);
       expect(fetchMock.mock.calls[0][0].method).toBe('GET');
-      expect(fetchMock.mock.calls[0][0].url).toContain('bar=baz%20baz&foo=foo');
+      expect(fetchMock.mock.calls[0][0].url).toBe('/api/datasources/uid/ABCDEF/resources/foo');
+      expect(fetchMock.mock.calls[0][0].params).toEqual({ bar: 'baz baz', foo: 'foo' });
     });
     it('should still perform a GET request with the DS HTTP method set to POST and not POST-friendly endpoint', () => {
       const postSettings = cloneDeep(instanceSettings);
@@ -163,6 +164,43 @@ describe('PrometheusDatasource', () => {
       expect(fetchMock.mock.calls[0][0].url).not.toContain('bar=baz%20baz&foo=foo');
       expect(fetchMock.mock.calls[0][0].data).toEqual({ bar: 'baz baz', foo: 'foo' });
     });
+    it('should honor a caller supplied method even when the DS HTTP method is GET', () => {
+      // `/suggestions` is sent as a POST with a JSON body regardless of the configured
+      // HTTP method, so the caller supplied method and Content-Type must both survive.
+      const getSettings = cloneDeep(instanceSettings);
+      getSettings.jsonData.httpMethod = 'GET';
+      const promDs = new PrometheusDatasource(getSettings, templateSrvStub);
+      promDs.metadataRequest(
+        '/suggestions',
+        { queries: [{ expr: 'up' }], limit: 100 },
+        { method: 'POST', headers: { 'Content-Type': 'application/json' } }
+      );
+      expect(fetchMock.mock.calls.length).toBe(1);
+      expect(fetchMock.mock.calls[0][0].method).toBe('POST');
+      expect(fetchMock.mock.calls[0][0].url).toBe('/api/datasources/uid/ABCDEF/resources/suggestions');
+      expect(fetchMock.mock.calls[0][0].headers['Content-Type']).toBe('application/json');
+      expect(fetchMock.mock.calls[0][0].data).toEqual({ queries: [{ expr: 'up' }], limit: 100 });
+      expect(fetchMock.mock.calls[0][0].params).toBeUndefined();
+    });
+    it('should resolve with the response body wrapped in `data`', async () => {
+      // Consumers (including Grafana core's alerting triage) read `res.data.data`, so the
+      // resource API's bare body must stay wrapped. Unwrapping it here reads as `undefined`
+      // on their side rather than failing loudly.
+      fetchMock.mockReturnValueOnce(of({ data: { status: 'success', data: ['up'] } }));
+
+      const res = await ds.metadataRequest('/api/v1/label/__name__/values');
+
+      expect(res).toEqual({ data: { status: 'success', data: ['up'] } });
+      expect(res.data.data).toEqual(['up']);
+    });
+    it('should send a form encoded body when the caller does not set a Content-Type', () => {
+      const postSettings = cloneDeep(instanceSettings);
+      postSettings.jsonData.httpMethod = 'POST';
+      const promDs = new PrometheusDatasource(postSettings, templateSrvStub);
+      promDs.metadataRequest('api/v1/series', { 'match[]': 'up' });
+      expect(fetchMock.mock.calls.length).toBe(1);
+      expect(fetchMock.mock.calls[0][0].headers['Content-Type']).toBe('application/x-www-form-urlencoded');
+    });
   });
 
   describe('customQueryParams', () => {
@@ -175,7 +213,8 @@ describe('PrometheusDatasource', () => {
       it('added to metadata request', () => {
         promDs.metadataRequest('/foo');
         expect(fetchMock.mock.calls.length).toBe(1);
-        expect(fetchMock.mock.calls[0][0].url).toBe('/api/datasources/uid/ABCDEF/resources/foo?customQuery=123');
+        expect(fetchMock.mock.calls[0][0].url).toBe('/api/datasources/uid/ABCDEF/resources/foo');
+        expect(fetchMock.mock.calls[0][0].params).toEqual({ customQuery: '123' });
       });
     });
 
@@ -188,7 +227,8 @@ describe('PrometheusDatasource', () => {
       it('added to metadata request with non-POST endpoint', () => {
         promDs.metadataRequest('/foo');
         expect(fetchMock.mock.calls.length).toBe(1);
-        expect(fetchMock.mock.calls[0][0].url).toBe('/api/datasources/uid/ABCDEF/resources/foo?customQuery=123');
+        expect(fetchMock.mock.calls[0][0].url).toBe('/api/datasources/uid/ABCDEF/resources/foo');
+        expect(fetchMock.mock.calls[0][0].params).toEqual({ customQuery: '123' });
       });
 
       it('added to metadata request with POST endpoint', () => {
