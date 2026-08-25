@@ -127,6 +127,9 @@ export function registerPrometheusQueryCoauthoring<TQuery extends DataQuery>({
     publish();
   };
   const handleContentChange = (value: string) => {
+    // Core renders a proposal by pushing it through the ordinary query props, so Monaco content changes arrive
+    // for both proposals and manual typing. Matching the current query prop is what tells the two apart:
+    // anything else is the user editing by hand, which ends the invocation and takes the normal onChange path.
     if (!activeInvocation || value === getExternalQuery()) {
       return;
     }

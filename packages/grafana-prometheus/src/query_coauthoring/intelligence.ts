@@ -85,6 +85,9 @@ export function createPrometheusCoauthoringIntelligence<TQuery extends DataQuery
   queryMetricsMetadata,
   queryMetricLabels,
 }: CreateIntelligenceOptions<TQuery>): PrometheusCoauthoringIntelligence<TQuery> {
+  // Read the editor synchronously so the baseline includes edits the user has not blurred yet, and so the
+  // query and the selections that describe it cannot drift apart. Everything downstream — enrichment, diffing,
+  // staleness checks — is measured against this one snapshot.
   const captureInvocation = (revision: string): PrometheusCoauthoringCapturedInvocation<TQuery> => {
     const query = editor.getValue();
     const model = editor.getModel();

@@ -41,6 +41,8 @@ export function usePrometheusQueryCoauthoring({
   timeRange,
   widgetId,
 }: UsePrometheusQueryCoauthoringOptions) {
+  // Everything the adapter reads goes through a ref: the adapter outlives renders and is torn down only when
+  // the Monaco instance changes, so re-creating it on each new callback identity would drop a live invocation.
   const createQueryRef = useLatest(createQuery);
   const datasourceRef = useLatest(datasource);
   const externalQueryRef = useLatest(externalQuery);

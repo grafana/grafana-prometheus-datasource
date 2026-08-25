@@ -83,7 +83,14 @@ const anchorKinds: Record<string, QuerySyntaxAnchor['kind']> = {
   VectorSelector: 'selector',
 };
 
-/** @internal */
+/**
+ * Turns raw editor selections into the focus ranges sent as context. Selecting nothing means the whole query.
+ * A selection is widened to whole tokens, and a selection spanning more than one token is widened again to the
+ * smallest enclosing PromQL construct, so focus is always a coherent sub-expression rather than a half-caught
+ * matcher or function name.
+ *
+ * @internal
+ */
 export function normalizeFocusRanges(query: string, selections: EditorSelection[]): TextRange[] {
   if (query.length === 0) {
     return [];
@@ -204,6 +211,9 @@ export function buildStagedQueryDiff(
     }))
   );
   const rawChanges = computeRawChanges(originalQuery, proposedQuery);
+  // Changes are reported against the authored text, but syntax anchoring has to parse it. A query containing a
+  // template variable only parses once interpolated, and interpolation shifts every offset after it, so those
+  // queries get changes without a `kind` rather than a plausible-looking anchor pointing at the wrong node.
   const originalCanAnchor =
     validatePromQL(originalQuery, options.originalInterpolatedQuery).valid &&
     !templateVariablePattern.test(originalQuery);

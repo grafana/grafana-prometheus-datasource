@@ -45,6 +45,8 @@ export function createMonacoQueryCoauthoringHost({
   const listeners = new Set<VoidFunction>();
   let hasMeasuredSurface = false;
   let disposed = false;
+  // Selection settling: while a drag or a modifier-key gesture is still in progress the toolbar stays hidden,
+  // so it appears once at the final selection instead of flickering along with every intermediate one.
   let keyboardSelecting = false;
   let mouseSelecting = false;
   let pendingRelayoutFrame: number | undefined;
@@ -76,6 +78,7 @@ export function createMonacoQueryCoauthoringHost({
       return;
     }
 
+    // Monaco anchors content widgets at the selected column but does not keep overflowing widgets in view.
     const targetLeft = snapshot.mode === 'selection' ? widgetRect.left - widgetRect.width / 2 : widgetRect.left;
     const maximumLeft = Math.max(leftBoundary, rightBoundary - widgetRect.width);
     const alignedLeft = Math.min(Math.max(targetLeft, leftBoundary), maximumLeft);
@@ -104,6 +107,8 @@ export function createMonacoQueryCoauthoringHost({
         portalTarget.style.transform = '';
         return;
       }
+      // Latch the first above/below choice for the rest of the invocation; otherwise the surface hops sides as
+      // Core's prompt grows. It is cleared only when something moves the editor (scroll, resize, relayout).
       if (snapshot.mode === 'invoked' && sessionPlacement === undefined) {
         sessionPlacement = position;
       }
@@ -245,6 +250,8 @@ export function createMonacoQueryCoauthoringHost({
     mouseSelecting = false;
     hasMeasuredSurface = false;
     sessionPlacement = undefined;
+    // Monaco positions with the conservative fallback size first. Hide that speculative placement until the
+    // ResizeObserver has measured the surface Core rendered into the portal.
     portalTarget.style.visibility = 'hidden';
     updateWidgetPosition('start');
     renderedHeight = INITIAL_HEIGHT;
