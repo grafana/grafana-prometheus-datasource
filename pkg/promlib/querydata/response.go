@@ -136,31 +136,33 @@ func parseQueryStats(header http.Header, queryType models.TimeSeriesQueryType) [
 	var stats []data.QueryStat
 	prefix := queryStatPrefixes[queryType]
 
-	for entry := range strings.SplitSeq(header.Get("Server-Timing"), ",") {
-		name, param, found := strings.Cut(strings.TrimSpace(entry), ";")
-		if !found {
-			continue
-		}
+	for _, line := range header.Values("Server-Timing") {
+		for entry := range strings.SplitSeq(line, ",") {
+			name, param, found := strings.Cut(strings.TrimSpace(entry), ";")
+			if !found {
+				continue
+			}
 
-		known, ok := knownQueryStats[name]
-		if !ok {
-			continue
-		}
+			known, ok := knownQueryStats[name]
+			if !ok {
+				continue
+			}
 
-		key, rawValue, found := strings.Cut(param, "=")
-		if !found || (key != "dur" && key != "val") {
-			continue
-		}
+			key, rawValue, found := strings.Cut(param, "=")
+			if !found || (key != "dur" && key != "val") {
+				continue
+			}
 
-		value, err := strconv.ParseFloat(rawValue, 64)
-		if err != nil {
-			continue
-		}
+			value, err := strconv.ParseFloat(rawValue, 64)
+			if err != nil {
+				continue
+			}
 
-		stats = append(stats, data.QueryStat{
-			FieldConfig: data.FieldConfig{DisplayName: prefix + known.displayName, Unit: known.unit},
-			Value:       value,
-		})
+			stats = append(stats, data.QueryStat{
+				FieldConfig: data.FieldConfig{DisplayName: prefix + known.displayName, Unit: known.unit},
+				Value:       value,
+			})
+		}
 	}
 
 	return stats

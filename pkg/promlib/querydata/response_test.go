@@ -74,21 +74,21 @@ func TestAddMetadataToMultiFrame(t *testing.T) {
 
 func TestParseQueryStats(t *testing.T) {
 	tests := []struct {
-		name      string
-		header    string
-		queryType models.TimeSeriesQueryType
-		want      []data.QueryStat
+		name        string
+		headerLines []string
+		queryType   models.TimeSeriesQueryType
+		want        []data.QueryStat
 	}{
 		{
-			name:      "absent header",
-			header:    "",
-			queryType: models.RangeQueryType,
-			want:      nil,
+			name:        "absent header",
+			headerLines: nil,
+			queryType:   models.RangeQueryType,
+			want:        nil,
 		},
 		{
-			name:      "all known Mimir metrics",
-			header:    "bytes_processed;val=11188007, equivalent_samples_read;val=20000, querier_wall_time;dur=5215.074756, response_time;dur=1061.890603, samples_processed;val=17647",
-			queryType: models.RangeQueryType,
+			name:        "all known Mimir metrics",
+			headerLines: []string{"bytes_processed;val=11188007, equivalent_samples_read;val=20000, querier_wall_time;dur=5215.074756, response_time;dur=1061.890603, samples_processed;val=17647"},
+			queryType:   models.RangeQueryType,
 			want: []data.QueryStat{
 				{FieldConfig: data.FieldConfig{DisplayName: "Range: Bytes processed", Unit: "decbytes"}, Value: 11188007},
 				{FieldConfig: data.FieldConfig{DisplayName: "Range: Equivalent samples read", Unit: "short"}, Value: 20000},
@@ -98,35 +98,44 @@ func TestParseQueryStats(t *testing.T) {
 			},
 		},
 		{
-			name:      "unknown metrics are skipped",
-			header:    "future_metric;val=42, bytes_processed;val=11188007",
-			queryType: models.RangeQueryType,
+			name:        "unknown metrics are skipped",
+			headerLines: []string{"future_metric;val=42, bytes_processed;val=11188007"},
+			queryType:   models.RangeQueryType,
 			want: []data.QueryStat{
 				{FieldConfig: data.FieldConfig{DisplayName: "Range: Bytes processed", Unit: "decbytes"}, Value: 11188007},
 			},
 		},
 		{
-			name:      "malformed entries are skipped",
-			header:    "querier_wall_time, bytes_processed;val=notanumber, response_time;dur=10",
-			queryType: models.RangeQueryType,
+			name:        "malformed entries are skipped",
+			headerLines: []string{"querier_wall_time, bytes_processed;val=notanumber, response_time;dur=10"},
+			queryType:   models.RangeQueryType,
 			want: []data.QueryStat{
 				{FieldConfig: data.FieldConfig{DisplayName: "Range: Response time", Unit: "ms"}, Value: 10},
 			},
 		},
 		{
-			name:      "instant query stats are labeled Instant",
-			header:    "response_time;dur=10",
-			queryType: models.InstantQueryType,
+			name:        "instant query stats are labeled Instant",
+			headerLines: []string{"response_time;dur=10"},
+			queryType:   models.InstantQueryType,
 			want: []data.QueryStat{
 				{FieldConfig: data.FieldConfig{DisplayName: "Instant: Response time", Unit: "ms"}, Value: 10},
 			},
 		},
 		{
-			name:      "exemplar query stats are labeled Exemplar",
-			header:    "response_time;dur=10",
-			queryType: models.ExemplarQueryType,
+			name:        "exemplar query stats are labeled Exemplar",
+			headerLines: []string{"response_time;dur=10"},
+			queryType:   models.ExemplarQueryType,
 			want: []data.QueryStat{
 				{FieldConfig: data.FieldConfig{DisplayName: "Exemplar: Response time", Unit: "ms"}, Value: 10},
+			},
+		},
+		{
+			name:        "multiple Server-Timing header lines are all read",
+			headerLines: []string{"querier_wall_time;dur=5215.074756", "bytes_processed;val=11188007"},
+			queryType:   models.RangeQueryType,
+			want: []data.QueryStat{
+				{FieldConfig: data.FieldConfig{DisplayName: "Range: Querier wall time", Unit: "ms"}, Value: 5215.074756},
+				{FieldConfig: data.FieldConfig{DisplayName: "Range: Bytes processed", Unit: "decbytes"}, Value: 11188007},
 			},
 		},
 	}
@@ -134,8 +143,8 @@ func TestParseQueryStats(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			header := http.Header{}
-			if tt.header != "" {
-				header.Set("Server-Timing", tt.header)
+			for _, line := range tt.headerLines {
+				header.Add("Server-Timing", line)
 			}
 			assert.Equal(t, tt.want, parseQueryStats(header, tt.queryType))
 		})
