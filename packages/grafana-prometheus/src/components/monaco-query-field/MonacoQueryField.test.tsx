@@ -5,9 +5,13 @@ import { type Monaco, type MonacoEditor } from '@grafana/ui';
 
 import { type PrometheusDatasource } from '../../datasource';
 import { type PrometheusLanguageProviderInterface } from '../../language_provider';
+import {
+  type QueryEditorCoauthoringAdapterV1,
+  type QueryEditorCoauthoringRegistrationV1,
+} from '../../query_coauthoring/v1Compatibility';
 import { type PromQuery } from '../../types';
 import MonacoQueryField from './MonacoQueryField';
-import { registerPrometheusQueryCoauthoring } from './QueryCoauthoringWidget';
+import { registerPrometheusQueryCoauthoring } from './PrometheusQueryCoauthoringAdapter';
 
 let mockMonacoOnMount: ((editor: MonacoEditor, monaco: Monaco) => void) | undefined;
 let mockTheme: GrafanaTheme2;
@@ -21,12 +25,8 @@ jest.mock('@grafana/ui', () => ({
   useTheme2: () => mockTheme,
 }));
 
-jest.mock('./QueryCoauthoringWidget', () => ({
+jest.mock('./PrometheusQueryCoauthoringAdapter', () => ({
   registerPrometheusQueryCoauthoring: jest.fn(),
-}));
-
-jest.mock('./QueryCoauthoringExposedComponentBridge', () => ({
-  QueryCoauthoringExposedComponentBridge: () => null,
 }));
 
 const lightTheme = {
@@ -73,7 +73,10 @@ function createEditorHarness() {
   return { completionDispose, editor, monaco };
 }
 
-function createProps(enabled: boolean, createQueryForCoauthoring: ((value: string) => PromQuery) | undefined) {
+function createProps(
+  queryEditorCoauthoring: QueryEditorCoauthoringRegistrationV1<PromQuery> | undefined,
+  createQueryForCoauthoring: ((value: string) => PromQuery) | undefined
+) {
   const languageProvider = {
     queryLabelKeys: jest.fn(async () => []),
     queryLabelValues: jest.fn(async () => []),
@@ -90,7 +93,7 @@ function createProps(enabled: boolean, createQueryForCoauthoring: ((value: strin
     onBlur: jest.fn(),
     onRunQuery: jest.fn(),
     placeholder: '',
-    queryEditorCoauthoringEnabled: enabled,
+    queryEditorCoauthoring,
     timeRange: {} as TimeRange,
   };
 }
@@ -102,27 +105,33 @@ describe('MonacoQueryField query coauthoring lifecycle', () => {
     jest.mocked(registerPrometheusQueryCoauthoring).mockReset();
   });
 
-  it('creates one datasource-owned adapter while enabled and updates styles without restarting it', () => {
-    const registrations: Array<{ dispose: jest.Mock; updateStyles: jest.Mock }> = [];
+  it('creates one datasource adapter while registered and updates styles without restarting it', () => {
+    const registrations: Array<{
+      adapter: QueryEditorCoauthoringAdapterV1<PromQuery>;
+      dispose: jest.Mock;
+      updateStyles: jest.Mock;
+    }> = [];
     jest.mocked(registerPrometheusQueryCoauthoring).mockImplementation(() => {
       const registration = {
-        capability: {} as never,
-        dismiss: jest.fn(),
+        adapter: {
+          dismiss: jest.fn(),
+          getSnapshot: jest.fn(() => ({ mode: 'hidden' as const })),
+          invoke: jest.fn(),
+          prepareProposal: jest.fn(),
+          readInvocation: jest.fn(),
+          subscribe: jest.fn(() => jest.fn()),
+        },
         dispose: jest.fn(),
-        getSelectedText: jest.fn(() => ''),
-        getSnapshot: jest.fn(() => ({ mode: 'hidden' as const })),
-        invoke: jest.fn(),
-        portalElement: document.createElement('div'),
-        subscribe: jest.fn(() => jest.fn()),
         updateStyles: jest.fn(),
-        updateRenderedSize: jest.fn(),
       };
       registrations.push(registration);
       return registration;
     });
+    const unregister = jest.fn();
+    const queryEditorCoauthoring = { register: jest.fn(() => unregister) };
     const firstCreateQuery = (value: string): PromQuery => ({ expr: value, refId: 'A' });
     const secondCreateQuery = (value: string): PromQuery => ({ expr: value, refId: 'B' });
-    const props = createProps(false, firstCreateQuery);
+    const props = createProps(undefined, firstCreateQuery);
     const { rerender, unmount } = render(<MonacoQueryField {...props} />);
     const { completionDispose, editor, monaco } = createEditorHarness();
 
@@ -132,12 +141,17 @@ describe('MonacoQueryField query coauthoring lifecycle', () => {
     act(() => mockMonacoOnMount?.(editor, monaco));
     expect(registerPrometheusQueryCoauthoring).not.toHaveBeenCalled();
 
-    rerender(<MonacoQueryField {...props} queryEditorCoauthoringEnabled />);
+    rerender(<MonacoQueryField {...props} queryEditorCoauthoring={queryEditorCoauthoring} />);
     expect(registerPrometheusQueryCoauthoring).toHaveBeenCalledTimes(1);
+    expect(queryEditorCoauthoring.register).toHaveBeenCalledWith(registrations[0].adapter);
     const initialOptions = jest.mocked(registerPrometheusQueryCoauthoring).mock.calls[0][0];
 
     rerender(
-      <MonacoQueryField {...props} queryEditorCoauthoringEnabled createQueryForCoauthoring={secondCreateQuery} />
+      <MonacoQueryField
+        {...props}
+        queryEditorCoauthoring={queryEditorCoauthoring}
+        createQueryForCoauthoring={secondCreateQuery}
+      />
     );
     expect(registerPrometheusQueryCoauthoring).toHaveBeenCalledTimes(1);
     expect(initialOptions.createQuery('next')).toEqual({ expr: 'next', refId: 'B' });
@@ -145,14 +159,19 @@ describe('MonacoQueryField query coauthoring lifecycle', () => {
     const styleUpdatesBeforeThemeChange = registrations[0].updateStyles.mock.calls.length;
     mockTheme = { ...lightTheme };
     rerender(
-      <MonacoQueryField {...props} queryEditorCoauthoringEnabled createQueryForCoauthoring={secondCreateQuery} />
+      <MonacoQueryField
+        {...props}
+        queryEditorCoauthoring={queryEditorCoauthoring}
+        createQueryForCoauthoring={secondCreateQuery}
+      />
     );
     expect(registrations[0].updateStyles).toHaveBeenCalledTimes(styleUpdatesBeforeThemeChange + 1);
 
-    rerender(<MonacoQueryField {...props} queryEditorCoauthoringEnabled={false} />);
+    rerender(<MonacoQueryField {...props} queryEditorCoauthoring={undefined} />);
+    expect(unregister).toHaveBeenCalledTimes(1);
     expect(registrations[0].dispose).toHaveBeenCalledTimes(1);
 
-    rerender(<MonacoQueryField {...props} queryEditorCoauthoringEnabled />);
+    rerender(<MonacoQueryField {...props} queryEditorCoauthoring={queryEditorCoauthoring} />);
     expect(registerPrometheusQueryCoauthoring).toHaveBeenCalledTimes(2);
 
     unmount();

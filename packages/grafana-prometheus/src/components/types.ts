@@ -2,9 +2,10 @@
 import { type QueryEditorProps } from '@grafana/data';
 
 import { type PrometheusDatasource } from '../datasource';
+import { type QueryEditorCoauthoringRegistrationV1 } from '../query_coauthoring/v1Compatibility';
 import { type PromOptions, type PromQuery } from '../types';
 
 export type PromQueryEditorProps = QueryEditorProps<PrometheusDatasource, PromQuery, PromOptions> & {
   /** @internal */
-  queryEditorCoauthoringEnabled?: boolean;
+  queryEditorCoauthoring?: QueryEditorCoauthoringRegistrationV1<PromQuery>;
 };

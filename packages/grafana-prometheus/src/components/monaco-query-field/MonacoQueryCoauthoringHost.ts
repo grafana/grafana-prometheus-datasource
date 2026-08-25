@@ -6,40 +6,42 @@ const INITIAL_WIDTH = 403;
 const SELECTION_TOOLBAR_GAP = 4;
 const VIEWPORT_MARGIN = 8;
 
-export type QueryCoauthoringWidgetMode = 'hidden' | 'selection-toolbar' | 'session';
+export type MonacoQueryCoauthoringHostMode = 'hidden' | 'selection' | 'invoked';
 
-export interface QueryCoauthoringWidgetSnapshot {
-  mode: QueryCoauthoringWidgetMode;
+export interface MonacoQueryCoauthoringHostSnapshot {
+  mode: MonacoQueryCoauthoringHostMode;
 }
 
 export interface MonacoQueryCoauthoringHost {
-  dismiss: VoidFunction;
-  dispose: VoidFunction;
-  getSelectedText: () => string;
-  getSnapshot: () => QueryCoauthoringWidgetSnapshot;
-  invoke: VoidFunction;
-  portalElement: HTMLElement;
-  subscribe: (listener: VoidFunction) => VoidFunction;
-  updateRenderedSize: (size: { height: number; width: number }) => void;
+  dismiss(): void;
+  dispose(): void;
+  getSnapshot(): MonacoQueryCoauthoringHostSnapshot;
+  hide(): void;
+  portalTarget: HTMLElement;
+  showInvocation(): void;
+  subscribe(listener: VoidFunction): VoidFunction;
+  updatePortalClass(className: string): void;
 }
 
 interface Options {
-  clearEditorDiff: VoidFunction;
   editor: MonacoEditor;
   monaco: Monaco;
+  onContentChange(value: string): void;
+  onInvoke(): void;
   portalClassName: string;
   widgetId: string;
 }
 
 export function createMonacoQueryCoauthoringHost({
-  clearEditorDiff,
   editor,
   monaco,
+  onContentChange,
+  onInvoke,
   portalClassName,
   widgetId,
 }: Options): MonacoQueryCoauthoringHost {
-  const widgetNode = document.createElement('div');
-  widgetNode.classList.add(portalClassName);
+  const portalTarget = document.createElement('div');
+  portalTarget.classList.add(portalClassName);
   const listeners = new Set<VoidFunction>();
   let hasMeasuredSurface = false;
   let disposed = false;
@@ -49,21 +51,24 @@ export function createMonacoQueryCoauthoringHost({
   let renderedHeight = INITIAL_HEIGHT;
   let renderedWidth = INITIAL_WIDTH;
   let sessionPlacement: monacoTypes.editor.ContentWidgetPositionPreference | undefined;
-  let snapshot: QueryCoauthoringWidgetSnapshot = { mode: 'hidden' };
+  let snapshot: MonacoQueryCoauthoringHostSnapshot = { mode: 'hidden' };
   let widgetPosition = editor.getPosition() ?? { lineNumber: 1, column: 1 };
 
-  const publish = (nextSnapshot: QueryCoauthoringWidgetSnapshot) => {
-    snapshot = nextSnapshot;
+  const publish = (mode: MonacoQueryCoauthoringHostMode) => {
+    if (snapshot.mode === mode) {
+      return;
+    }
+    snapshot = { mode };
     listeners.forEach((listener) => listener());
   };
 
   const alignWithinViewport = () => {
-    widgetNode.style.transform = '';
+    portalTarget.style.transform = '';
     if (snapshot.mode === 'hidden') {
       return;
     }
 
-    const widgetRect = widgetNode.getBoundingClientRect();
+    const widgetRect = portalTarget.getBoundingClientRect();
     const viewport = window.visualViewport;
     const leftBoundary = (viewport?.offsetLeft ?? 0) + VIEWPORT_MARGIN;
     const rightBoundary = (viewport?.offsetLeft ?? 0) + (viewport?.width ?? window.innerWidth) - VIEWPORT_MARGIN;
@@ -71,25 +76,24 @@ export function createMonacoQueryCoauthoringHost({
       return;
     }
 
-    // Monaco anchors content widgets at the selected column but does not keep overflowing widgets inside the viewport.
-    const targetLeft = snapshot.mode === 'selection-toolbar' ? widgetRect.left - widgetRect.width / 2 : widgetRect.left;
+    const targetLeft = snapshot.mode === 'selection' ? widgetRect.left - widgetRect.width / 2 : widgetRect.left;
     const maximumLeft = Math.max(leftBoundary, rightBoundary - widgetRect.width);
     const alignedLeft = Math.min(Math.max(targetLeft, leftBoundary), maximumLeft);
     const horizontalOffset = alignedLeft - widgetRect.left;
-    const verticalOffset = snapshot.mode === 'selection-toolbar' ? -SELECTION_TOOLBAR_GAP : 0;
+    const verticalOffset = snapshot.mode === 'selection' ? -SELECTION_TOOLBAR_GAP : 0;
     if (horizontalOffset !== 0 && verticalOffset !== 0) {
-      widgetNode.style.transform = `translate(${horizontalOffset}px, ${verticalOffset}px)`;
+      portalTarget.style.transform = `translate(${horizontalOffset}px, ${verticalOffset}px)`;
     } else if (horizontalOffset !== 0) {
-      widgetNode.style.transform = `translateX(${horizontalOffset}px)`;
+      portalTarget.style.transform = `translateX(${horizontalOffset}px)`;
     } else if (verticalOffset !== 0) {
-      widgetNode.style.transform = `translateY(${verticalOffset}px)`;
+      portalTarget.style.transform = `translateY(${verticalOffset}px)`;
     }
   };
 
   const widget: monacoTypes.editor.IContentWidget = {
     allowEditorOverflow: true,
     beforeRender: () =>
-      snapshot.mode === 'session'
+      snapshot.mode === 'invoked'
         ? {
             height: renderedHeight,
             width: renderedWidth,
@@ -97,23 +101,23 @@ export function createMonacoQueryCoauthoringHost({
         : null,
     afterRender: (position) => {
       if (position === null) {
-        widgetNode.style.transform = '';
+        portalTarget.style.transform = '';
         return;
       }
-      if (snapshot.mode === 'session' && sessionPlacement === undefined) {
+      if (snapshot.mode === 'invoked' && sessionPlacement === undefined) {
         sessionPlacement = position;
       }
       alignWithinViewport();
-      if (snapshot.mode !== 'session' || hasMeasuredSurface) {
-        widgetNode.style.visibility = '';
+      if (snapshot.mode !== 'invoked' || hasMeasuredSurface) {
+        portalTarget.style.visibility = '';
       }
     },
     getId: () => widgetId,
-    getDomNode: () => widgetNode,
+    getDomNode: () => portalTarget,
     getPosition: () => ({
       position: widgetPosition,
       preference:
-        snapshot.mode === 'selection-toolbar'
+        snapshot.mode === 'selection'
           ? [monaco.editor.ContentWidgetPositionPreference.ABOVE]
           : sessionPlacement === undefined
             ? [monaco.editor.ContentWidgetPositionPreference.BELOW, monaco.editor.ContentWidgetPositionPreference.ABOVE]
@@ -141,7 +145,7 @@ export function createMonacoQueryCoauthoringHost({
   const visualViewport = window.visualViewport;
   let trackingPositionChanges = false;
   const schedulePositionRelayout = (shouldReevaluateSessionPlacement = true) => {
-    if (snapshot.mode === 'session' && shouldReevaluateSessionPlacement) {
+    if (snapshot.mode === 'invoked' && shouldReevaluateSessionPlacement) {
       sessionPlacement = undefined;
     }
     if (snapshot.mode !== 'hidden') {
@@ -150,11 +154,11 @@ export function createMonacoQueryCoauthoringHost({
   };
   const scheduleExternalPositionRelayout = () => schedulePositionRelayout();
   const scheduleScrollRelayout = (event: Event) => {
-    if (snapshot.mode !== 'session') {
+    if (snapshot.mode !== 'invoked') {
       schedulePositionRelayout(false);
       return;
     }
-    if (event.target instanceof Node && widgetNode.contains(event.target)) {
+    if (event.target instanceof Node && portalTarget.contains(event.target)) {
       return;
     }
     if (event.target === window || event.target === document) {
@@ -207,22 +211,24 @@ export function createMonacoQueryCoauthoringHost({
     }
     widgetPosition = selection?.getStartPosition() ?? editor.getPosition() ?? widgetPosition;
   };
-  const hideSelectionToolbar = () => {
-    if (snapshot.mode === 'session') {
+  const hide = () => {
+    if (snapshot.mode === 'hidden') {
       return;
     }
-    publish({ mode: 'hidden' });
+    publish('hidden');
+    stopPositionTracking();
+    cancelPendingRelayout();
     editor.layoutContentWidget(widget);
   };
   const showSelectionToolbar = () => {
-    if (disposed) {
+    if (disposed || snapshot.mode === 'invoked') {
       return;
     }
     updateWidgetPosition('center');
     hasMeasuredSurface = false;
-    widgetNode.style.visibility = '';
-    const mode = hasSelection() ? 'selection-toolbar' : 'hidden';
-    publish({ mode });
+    portalTarget.style.visibility = '';
+    const mode = hasSelection() ? 'selection' : 'hidden';
+    publish(mode);
     if (mode === 'hidden') {
       stopPositionTracking();
       cancelPendingRelayout();
@@ -231,35 +237,24 @@ export function createMonacoQueryCoauthoringHost({
     }
     editor.layoutContentWidget(widget);
   };
-  const startCoauthoring = () => {
-    if (disposed || snapshot.mode === 'session' || editor.getValue().trim().length === 0) {
+  const showInvocation = () => {
+    if (disposed || snapshot.mode === 'invoked') {
       return;
     }
     keyboardSelecting = false;
     mouseSelecting = false;
     hasMeasuredSurface = false;
     sessionPlacement = undefined;
-    // Monaco first positions with a conservative fallback size. Hide that speculative placement until Core measures it.
-    widgetNode.style.visibility = 'hidden';
+    portalTarget.style.visibility = 'hidden';
     updateWidgetPosition('start');
     renderedHeight = INITIAL_HEIGHT;
     renderedWidth = INITIAL_WIDTH;
-    publish({ mode: 'session' });
+    publish('invoked');
     startPositionTracking();
     editor.layoutContentWidget(widget);
   };
-  const getSelectedText = () => {
-    const model = editor.getModel();
-    const selections = editor.getSelections();
-    return model && selections
-      ? selections
-          .filter((selection) => !selection.isEmpty())
-          .map((selection) => model.getValueInRange(selection))
-          .join('\n')
-      : '';
-  };
   const updateRenderedSize = ({ height, width }: { height: number; width: number }) => {
-    if (disposed) {
+    if (disposed || snapshot.mode !== 'invoked') {
       return;
     }
 
@@ -272,7 +267,7 @@ export function createMonacoQueryCoauthoringHost({
       renderedWidth = width;
       changed = true;
     }
-    const measuredSurface = snapshot.mode === 'session' && Boolean(widgetNode.childElementCount) && height > 0;
+    const measuredSurface = Boolean(portalTarget.childElementCount) && height > 0;
     const firstSurfaceMeasurement = measuredSurface && !hasMeasuredSurface;
     if (firstSurfaceMeasurement) {
       hasMeasuredSurface = true;
@@ -283,29 +278,39 @@ export function createMonacoQueryCoauthoringHost({
   };
 
   editor.addContentWidget(widget);
+  const resizeObserver =
+    typeof ResizeObserver === 'undefined'
+      ? undefined
+      : new ResizeObserver(([entry]) => {
+          if (entry) {
+            updateRenderedSize(entry.contentRect);
+          }
+        });
+  resizeObserver?.observe(portalTarget);
   const selectionDisposable = editor.onDidChangeCursorSelection(() => {
-    if (snapshot.mode === 'session') {
-      publish(snapshot);
-    } else if (mouseSelecting || keyboardSelecting) {
-      hideSelectionToolbar();
+    if (snapshot.mode === 'invoked') {
+      return;
+    }
+    if (mouseSelecting || keyboardSelecting) {
+      hide();
     } else {
       showSelectionToolbar();
     }
   });
   const mouseDownDisposable = editor.onMouseDown((event) => {
-    if (event.target.element && widgetNode.contains(event.target.element)) {
+    if (event.target.element && portalTarget.contains(event.target.element)) {
       return;
     }
-    if (snapshot.mode !== 'session') {
+    if (snapshot.mode !== 'invoked') {
       mouseSelecting = true;
-      hideSelectionToolbar();
+      hide();
     }
   });
   const mouseUpDisposable = editor.onMouseUp((event) => {
-    if (event.target.element && widgetNode.contains(event.target.element)) {
+    if (event.target.element && portalTarget.contains(event.target.element)) {
       return;
     }
-    if (snapshot.mode !== 'session') {
+    if (snapshot.mode !== 'invoked') {
       mouseSelecting = false;
       if (!keyboardSelecting) {
         showSelectionToolbar();
@@ -313,14 +318,14 @@ export function createMonacoQueryCoauthoringHost({
     }
   });
   const onDocumentKeyDown = (event: KeyboardEvent) => {
-    if (snapshot.mode !== 'session' && (event.shiftKey || event.metaKey || event.ctrlKey || event.altKey)) {
+    if (snapshot.mode !== 'invoked' && (event.shiftKey || event.metaKey || event.ctrlKey || event.altKey)) {
       keyboardSelecting = true;
-      hideSelectionToolbar();
+      hide();
     }
   };
   const onDocumentKeyUp = (event: KeyboardEvent) => {
     if (
-      snapshot.mode !== 'session' &&
+      snapshot.mode !== 'invoked' &&
       keyboardSelecting &&
       !event.shiftKey &&
       !event.metaKey &&
@@ -335,13 +340,13 @@ export function createMonacoQueryCoauthoringHost({
   };
   document.addEventListener('keydown', onDocumentKeyDown, true);
   document.addEventListener('keyup', onDocumentKeyUp, true);
-  const contentDisposable = editor.onDidChangeModelContent(() => publish(snapshot));
+  const contentDisposable = editor.onDidChangeModelContent(() => onContentChange(editor.getValue()));
   const layoutDisposable = editor.onDidLayoutChange(scheduleExternalPositionRelayout);
   const actionDisposable = editor.addAction({
     id: `${widgetId}.invoke`,
     label: t('grafana-prometheus.components.monaco-query-field.coauthor-promql-query', 'Coauthor PromQL query'),
     keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.Period],
-    run: startCoauthoring,
+    run: onInvoke,
   });
 
   return {
@@ -349,18 +354,9 @@ export function createMonacoQueryCoauthoringHost({
       keyboardSelecting = false;
       mouseSelecting = false;
       sessionPlacement = undefined;
-      clearEditorDiff();
+      publish('hidden');
       showSelectionToolbar();
     },
-    portalElement: widgetNode,
-    getSelectedText,
-    getSnapshot: () => snapshot,
-    invoke: startCoauthoring,
-    subscribe: (listener) => {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    },
-    updateRenderedSize,
     dispose: () => {
       if (disposed) {
         return;
@@ -369,7 +365,7 @@ export function createMonacoQueryCoauthoringHost({
       stopPositionTracking();
       cancelPendingRelayout();
       sessionPlacement = undefined;
-      clearEditorDiff();
+      resizeObserver?.disconnect();
       actionDisposable.dispose();
       contentDisposable.dispose();
       layoutDisposable.dispose();
@@ -380,6 +376,17 @@ export function createMonacoQueryCoauthoringHost({
       document.removeEventListener('keyup', onDocumentKeyUp, true);
       editor.removeContentWidget(widget);
       listeners.clear();
+    },
+    getSnapshot: () => snapshot,
+    hide,
+    portalTarget,
+    showInvocation,
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    updatePortalClass: (className) => {
+      portalTarget.className = className;
     },
   };
 }

@@ -154,12 +154,13 @@ describe('PromQueryField', () => {
     expect(onRunQuery).not.toHaveBeenCalled();
   });
 
-  it('passes coauthoring enablement and the current query adapter to Monaco', () => {
+  it('passes the row registrar and current typed query factory to Monaco', () => {
     const query = { expr: 'rate(foo_total[5m])', refId: 'A', legendFormat: 'Requests' };
+    const queryEditorCoauthoring = { register: jest.fn() };
 
-    render(<PromQueryField {...defaultProps} query={query} queryEditorCoauthoringEnabled />);
+    render(<PromQueryField {...defaultProps} query={query} queryEditorCoauthoring={queryEditorCoauthoring} />);
 
-    expect(mockMonacoProps?.queryEditorCoauthoringEnabled).toBe(true);
+    expect(mockMonacoProps?.queryEditorCoauthoring).toBe(queryEditorCoauthoring);
     expect(mockMonacoProps?.createQueryForCoauthoring?.('increase(foo_total[5m])')).toEqual({
       ...query,
       expr: 'increase(foo_total[5m])',
