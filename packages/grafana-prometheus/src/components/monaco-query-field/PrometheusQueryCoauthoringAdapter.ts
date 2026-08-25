@@ -64,13 +64,16 @@ export function registerPrometheusQueryCoauthoring<TQuery extends DataQuery>({
     createQuery,
     interpolate: (value) => getDatasource().interpolateString(value, placeHolderScopedVars),
     retrieveMetricsMetadata: () => getLanguageProvider().retrieveMetricsMetadata(),
-    queryMetricsMetadata: () => getLanguageProvider().queryMetricsMetadata(),
+    queryMetricsMetadata: () =>
+      getDatasource().lookupsDisabled ? Promise.resolve({}) : getLanguageProvider().queryMetricsMetadata(),
     queryMetricLabels: (metricName) =>
-      getLanguageProvider().queryLabelKeys(
-        getTimeRange(),
-        `{__name__="${escapeLabelValueInExactSelector(metricName)}"}`,
-        QUERY_COAUTHORING_MAX_CONTEXT_LABELS
-      ),
+      getDatasource().lookupsDisabled
+        ? Promise.resolve([])
+        : getLanguageProvider().queryLabelKeys(
+            getTimeRange(),
+            `{__name__="${escapeLabelValueInExactSelector(metricName)}"}`,
+            QUERY_COAUTHORING_MAX_CONTEXT_LABELS
+          ),
   });
   const listeners = new Set<VoidFunction>();
   let activeInvocation: ActiveInvocation<TQuery> | undefined;

@@ -71,6 +71,37 @@ describe('usePrometheusQueryCoauthoring', () => {
     expect(registerPrometheusQueryCoauthoring).not.toHaveBeenCalled();
   });
 
+  it('fails closed when a drifted registrar throws or returns an invalid cleanup', () => {
+    const registrations = [createRegistration(), createRegistration()];
+    jest.mocked(registerPrometheusQueryCoauthoring).mockImplementation(() => {
+      const registration = registrations.shift();
+      if (!registration) {
+        throw new Error('Unexpected coauthoring registration');
+      }
+      return registration;
+    });
+    const createQuery = (value: string): PromQuery => ({ expr: value, refId: 'A' });
+    const throwingRegistrar = {
+      register: jest.fn(() => {
+        throw new Error('Drifted registrar');
+      }),
+    };
+    let options = createOptions(throwingRegistrar, createQuery);
+    const { result, rerender, unmount } = renderHook(() => usePrometheusQueryCoauthoring(options));
+
+    expect(() => act(() => result.current({} as MonacoEditor, {} as Monaco))).not.toThrow();
+    expect(throwingRegistrar.register).toHaveBeenCalledTimes(1);
+
+    const invalidCleanupRegistrar = {
+      // @ts-expect-error Simulate a mismatched Core cleanup contract at runtime.
+      register: jest.fn(() => 'not-a-cleanup'),
+    } satisfies QueryEditorCoauthoringRegistrationV1<PromQuery>;
+    options = createOptions(invalidCleanupRegistrar, createQuery);
+    expect(() => rerender()).not.toThrow();
+    expect(invalidCleanupRegistrar.register).toHaveBeenCalledTimes(1);
+    expect(() => unmount()).not.toThrow();
+  });
+
   it('owns adapter registration, current inputs, style updates, and cleanup', () => {
     const registrations = [createRegistration(), createRegistration()];
     jest.mocked(registerPrometheusQueryCoauthoring).mockImplementation(() => {

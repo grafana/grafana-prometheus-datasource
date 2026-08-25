@@ -41,15 +41,20 @@ function createEditorHarness(initialValue = 'rate(http_requests_total[5m])') {
   let layoutListener: VoidFunction | undefined;
   let mouseDownListener: ((event: monacoTypes.editor.IEditorMouseEvent) => void) | undefined;
   let mouseUpListener: ((event: monacoTypes.editor.IEditorMouseEvent) => void) | undefined;
+  let blurListener: VoidFunction | undefined;
+  let focusListener: VoidFunction | undefined;
   let selectionListener: VoidFunction | undefined;
   let value = initialValue;
   let externalValue = initialValue;
   let selections: monacoTypes.Selection[] = [];
+  let textFocused = true;
   const actionDisposable = { dispose: jest.fn() };
+  const blurDisposable = { dispose: jest.fn(() => (blurListener = undefined)) };
   const contentDisposable = { dispose: jest.fn(() => (contentListener = undefined)) };
   const layoutDisposable = { dispose: jest.fn(() => (layoutListener = undefined)) };
   const mouseDownDisposable = { dispose: jest.fn(() => (mouseDownListener = undefined)) };
   const mouseUpDisposable = { dispose: jest.fn(() => (mouseUpListener = undefined)) };
+  const focusDisposable = { dispose: jest.fn(() => (focusListener = undefined)) };
   const selectionDisposable = { dispose: jest.fn(() => (selectionListener = undefined)) };
   const editorDomNode = document.createElement('div');
   const deltaDecorations = jest.fn();
@@ -65,6 +70,7 @@ function createEditorHarness(initialValue = 'rate(http_requests_total[5m])') {
     }),
     deltaDecorations,
     getDomNode: jest.fn(() => editorDomNode),
+    hasTextFocus: jest.fn(() => textFocused),
     getModel: jest.fn(() => ({
       getOffsetAt: ({ column }: monacoTypes.Position) => column - 1,
       getPositionAt: (offset: number) => ({ lineNumber: 1, column: offset + 1 }),
@@ -81,6 +87,14 @@ function createEditorHarness(initialValue = 'rate(http_requests_total[5m])') {
     onDidChangeModelContent: jest.fn((listener: VoidFunction) => {
       contentListener = listener;
       return contentDisposable;
+    }),
+    onDidBlurEditorText: jest.fn((listener: VoidFunction) => {
+      blurListener = listener;
+      return blurDisposable;
+    }),
+    onDidFocusEditorText: jest.fn((listener: VoidFunction) => {
+      focusListener = listener;
+      return focusDisposable;
     }),
     onDidLayoutChange: jest.fn((listener: VoidFunction) => {
       layoutListener = listener;
@@ -105,6 +119,7 @@ function createEditorHarness(initialValue = 'rate(http_requests_total[5m])') {
 
   return {
     actionDisposable,
+    blurDisposable,
     contentDisposable,
     deltaDecorations,
     editor,
@@ -121,11 +136,14 @@ function createEditorHarness(initialValue = 'rate(http_requests_total[5m])') {
       return editorAction;
     },
     getExternalValue: () => externalValue,
+    focusDisposable,
     layoutDisposable,
     monaco,
     mouseDownDisposable,
     mouseUpDisposable,
     notifyContentChange: () => act(() => contentListener?.()),
+    notifyBlur: () => act(() => blurListener?.()),
+    notifyFocus: () => act(() => focusListener?.()),
     notifyLayoutChange: () => act(() => layoutListener?.()),
     notifyMouseDown: (element?: HTMLElement) =>
       act(() => mouseDownListener?.({ target: { element } } as unknown as monacoTypes.editor.IEditorMouseEvent)),
@@ -138,6 +156,9 @@ function createEditorHarness(initialValue = 'rate(http_requests_total[5m])') {
     },
     setSelections: (nextSelections: monacoTypes.Selection[]) => {
       selections = nextSelections;
+    },
+    setTextFocused: (focused: boolean) => {
+      textFocused = focused;
     },
     setValue: (nextValue: string) => {
       value = nextValue;
@@ -177,12 +198,14 @@ describe('registerPrometheusQueryCoauthoring', () => {
     const {
       actionDisposable,
       adapter,
+      blurDisposable,
       contentDisposable,
       editor,
       getContentWidget,
       layoutDisposable,
       mouseDownDisposable,
       mouseUpDisposable,
+      focusDisposable,
       registration,
       selectionDisposable,
     } = setup();
@@ -194,10 +217,12 @@ describe('registerPrometheusQueryCoauthoring', () => {
     registration.dispose();
 
     expect(actionDisposable.dispose).toHaveBeenCalledTimes(1);
+    expect(blurDisposable.dispose).toHaveBeenCalledTimes(1);
     expect(contentDisposable.dispose).toHaveBeenCalledTimes(1);
     expect(layoutDisposable.dispose).toHaveBeenCalledTimes(1);
     expect(mouseDownDisposable.dispose).toHaveBeenCalledTimes(1);
     expect(mouseUpDisposable.dispose).toHaveBeenCalledTimes(1);
+    expect(focusDisposable.dispose).toHaveBeenCalledTimes(1);
     expect(selectionDisposable.dispose).toHaveBeenCalledTimes(1);
     expect(editor.removeContentWidget).toHaveBeenCalledTimes(1);
   });
@@ -226,6 +251,67 @@ describe('registerPrometheusQueryCoauthoring', () => {
       position: { lineNumber: 1, column: 8 },
       preference: [1],
     });
+    registration.dispose();
+  });
+
+  it('hides the selection toolbar when Monaco loses text focus', () => {
+    const {
+      adapter,
+      getContentWidget,
+      notifyBlur,
+      notifyFocus,
+      notifySelectionChange,
+      registration,
+      setSelections,
+      setTextFocused,
+    } = setup();
+    setSelections([createSelection()]);
+    notifySelectionChange();
+    expect(adapter.getSnapshot()).toEqual({ mode: 'selection', portalTarget: getContentWidget().getDomNode() });
+
+    setTextFocused(false);
+    notifyBlur();
+    expect(adapter.getSnapshot()).toEqual({ mode: 'hidden' });
+
+    notifySelectionChange();
+    expect(adapter.getSnapshot()).toEqual({ mode: 'hidden' });
+
+    setTextFocused(true);
+    notifyFocus();
+    expect(adapter.getSnapshot()).toEqual({ mode: 'selection', portalTarget: getContentWidget().getDomNode() });
+
+    adapter.invoke();
+    const invokedSnapshot = adapter.getSnapshot();
+    setTextFocused(false);
+    notifyBlur();
+    expect(adapter.getSnapshot()).toBe(invokedSnapshot);
+    registration.dispose();
+  });
+
+  it('resets an in-progress modifier selection when the window loses focus', () => {
+    const {
+      adapter,
+      getContentWidget,
+      notifyFocus,
+      notifySelectionChange,
+      registration,
+      setSelections,
+      setTextFocused,
+    } = setup();
+    setSelections([createSelection()]);
+    notifySelectionChange();
+
+    act(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Shift', shiftKey: true })));
+    expect(adapter.getSnapshot()).toEqual({ mode: 'hidden' });
+
+    setTextFocused(false);
+    act(() => window.dispatchEvent(new Event('blur')));
+    act(() => document.dispatchEvent(new KeyboardEvent('keyup', { key: 'Shift' })));
+    expect(adapter.getSnapshot()).toEqual({ mode: 'hidden' });
+
+    setTextFocused(true);
+    notifyFocus();
+    expect(adapter.getSnapshot()).toEqual({ mode: 'selection', portalTarget: getContentWidget().getDomNode() });
     registration.dispose();
   });
 
@@ -345,6 +431,38 @@ describe('registerPrometheusQueryCoauthoring', () => {
     resolveMetadata?.({});
 
     await expect(invocation).rejects.toThrow('no longer active');
+    registration.dispose();
+  });
+
+  it('does not perform optional metric lookups when datasource lookups are disabled', async () => {
+    const harness = createEditorHarness();
+    const queryMetricsMetadata = jest.fn(async () => ({}));
+    const queryLabelKeys = jest.fn(async () => []);
+    const registration = registerPrometheusQueryCoauthoring({
+      createQuery: (value) => ({ expr: value, refId: 'A' }),
+      editor: harness.editor,
+      getDatasource: () =>
+        ({ interpolateString: (value: string) => value, lookupsDisabled: true }) as unknown as PrometheusDatasource,
+      getExternalQuery: harness.getExternalValue,
+      getLanguageProvider: () =>
+        ({
+          retrieveMetricsMetadata: () => ({}),
+          queryMetricsMetadata,
+          queryLabelKeys,
+        }) as unknown as PrometheusLanguageProviderInterface,
+      getTimeRange: () => ({}) as TimeRange,
+      monaco: harness.monaco,
+      onManualQueryChange: jest.fn(),
+      styles: { portal: 'portal-class' },
+      widgetId: 'test-query-coauthoring',
+    });
+
+    registration.adapter.invoke();
+    await expect(registration.adapter.readInvocation('test-query-coauthoring:1')).resolves.toMatchObject({
+      context: { metadata: [{ kind: 'metric', name: 'http_requests_total', attributes: {} }] },
+    });
+    expect(queryMetricsMetadata).not.toHaveBeenCalled();
+    expect(queryLabelKeys).not.toHaveBeenCalled();
     registration.dispose();
   });
 

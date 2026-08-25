@@ -175,7 +175,7 @@ export function extractMetricNames(query: string): string[] {
 
 /** @internal */
 export function validatePromQL(query: string, interpolatedQuery = query): PromQLValidation {
-  if (query.trim().length === 0) {
+  if (query.trim().length === 0 || interpolatedQuery.trim().length === 0) {
     return { valid: false };
   }
 

@@ -99,7 +99,12 @@ export function usePrometheusQueryCoauthoring({
     if (!registration || typeof registrar?.register !== 'function') {
       return;
     }
-    return registrar.register(registration.adapter);
+    try {
+      const unregister = registrar.register(registration.adapter);
+      return typeof unregister === 'function' ? unregister : undefined;
+    } catch {
+      return;
+    }
   }, [registrar, registration]);
 
   return useCallback((editor: MonacoEditor, monaco: Monaco) => {

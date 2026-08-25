@@ -232,7 +232,7 @@ export function createMonacoQueryCoauthoringHost({
     updateWidgetPosition('center');
     hasMeasuredSurface = false;
     portalTarget.style.visibility = '';
-    const mode = hasSelection() ? 'selection' : 'hidden';
+    const mode = editor.hasTextFocus() && hasSelection() ? 'selection' : 'hidden';
     publish(mode);
     if (mode === 'hidden') {
       stopPositionTracking();
@@ -304,6 +304,18 @@ export function createMonacoQueryCoauthoringHost({
       showSelectionToolbar();
     }
   });
+  const blurDisposable = editor.onDidBlurEditorText(() => {
+    if (snapshot.mode !== 'invoked') {
+      keyboardSelecting = false;
+      mouseSelecting = false;
+      hide();
+    }
+  });
+  const focusDisposable = editor.onDidFocusEditorText(() => {
+    if (snapshot.mode !== 'invoked' && !keyboardSelecting && !mouseSelecting) {
+      showSelectionToolbar();
+    }
+  });
   const mouseDownDisposable = editor.onMouseDown((event) => {
     if (event.target.element && portalTarget.contains(event.target.element)) {
       return;
@@ -345,8 +357,16 @@ export function createMonacoQueryCoauthoringHost({
       }
     }
   };
+  const onWindowBlur = () => {
+    keyboardSelecting = false;
+    mouseSelecting = false;
+    if (snapshot.mode !== 'invoked') {
+      hide();
+    }
+  };
   document.addEventListener('keydown', onDocumentKeyDown, true);
   document.addEventListener('keyup', onDocumentKeyUp, true);
+  window.addEventListener('blur', onWindowBlur);
   const contentDisposable = editor.onDidChangeModelContent(() => onContentChange(editor.getValue()));
   const layoutDisposable = editor.onDidLayoutChange(scheduleExternalPositionRelayout);
   const actionDisposable = editor.addAction({
@@ -374,13 +394,16 @@ export function createMonacoQueryCoauthoringHost({
       sessionPlacement = undefined;
       resizeObserver?.disconnect();
       actionDisposable.dispose();
+      blurDisposable.dispose();
       contentDisposable.dispose();
+      focusDisposable.dispose();
       layoutDisposable.dispose();
       mouseDownDisposable.dispose();
       mouseUpDisposable.dispose();
       selectionDisposable.dispose();
       document.removeEventListener('keydown', onDocumentKeyDown, true);
       document.removeEventListener('keyup', onDocumentKeyUp, true);
+      window.removeEventListener('blur', onWindowBlur);
       editor.removeContentWidget(widget);
       listeners.clear();
     },

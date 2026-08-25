@@ -45,6 +45,14 @@ describe('normalizeFocusRanges', () => {
     ]);
   });
 
+  it('preserves selection offsets after $__range', () => {
+    const query = 'rate(http_requests_total[$__range]) + node_cpu_seconds_total';
+
+    expect(normalizeFocusRanges(query, [selection(query, 'node_cpu_seconds_total', 5, 14)])).toEqual([
+      range(query, 'node_cpu_seconds_total'),
+    ]);
+  });
+
   it('expands a selection across query parts to their enclosing syntax boundary', () => {
     const query = 'rate(fakedata_highcard_http_requests_total[$__rate_interval])';
 
@@ -150,6 +158,10 @@ describe('validatePromQL', () => {
 
   it('validates Grafana template variables through a separately interpolated query', () => {
     expect(validatePromQL('rate($metric[$__rate_interval])', 'rate(foo_total[5m])')).toEqual({ valid: true });
+  });
+
+  it('rejects a non-empty authored query that interpolates to an empty query', () => {
+    expect(validatePromQL('$metric', '')).toEqual({ valid: false });
   });
 });
 
