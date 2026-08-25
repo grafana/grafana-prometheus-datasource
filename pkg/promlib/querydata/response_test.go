@@ -146,6 +146,22 @@ func TestParseResponse_QueryStats(t *testing.T) {
 		require.Len(t, result.Frames, 1)
 		assert.Nil(t, result.Frames[0].Meta.Stats)
 	})
+
+	t.Run("keeps Prometheus's own stats alongside Server-Timing stats", func(t *testing.T) {
+		bodyWithStats := `{"data":{"resultType":"vector","result":[{"metric":{"__name__":"up"},"value":[1.1,"2"]}],"stats":{"samples":{"totalQueryableSamples":30}}},"status":"success"}`
+		res := &http.Response{
+			Body:       io.NopCloser(bytes.NewBufferString(bodyWithStats)),
+			StatusCode: 200,
+			Header:     http.Header{"Server-Timing": []string{"equivalent_samples_read;val=20000"}},
+		}
+		result := qd.parseResponse(context.Background(), &models.Query{}, res)
+		require.Nil(t, result.Error)
+		require.Len(t, result.Frames, 1)
+		assert.Equal(t, []data.QueryStat{
+			{FieldConfig: data.FieldConfig{DisplayName: "Total queryable samples"}, Value: 30},
+			{FieldConfig: data.FieldConfig{DisplayName: "Equivalent samples read", Unit: "short"}, Value: 20000},
+		}, result.Frames[0].Meta.Stats)
+	})
 }
 
 // Helper function to create mock HTTP response.
