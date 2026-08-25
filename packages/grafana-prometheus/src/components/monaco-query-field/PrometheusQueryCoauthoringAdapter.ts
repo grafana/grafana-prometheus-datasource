@@ -14,7 +14,7 @@ import {
   type QueryEditorCoauthoringAdapterV1,
   type QueryEditorCoauthoringInvocationV1,
   type QueryEditorCoauthoringSnapshotV1,
-} from '../../query_coauthoring/v1Compatibility';
+} from '../../query_coauthoring/internalCoauthoringContract';
 import { createMonacoQueryCoauthoringHost } from './MonacoQueryCoauthoringHost';
 import { placeHolderScopedVars } from './monaco-completion-provider/validation';
 

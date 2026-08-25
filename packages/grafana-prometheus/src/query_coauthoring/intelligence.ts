@@ -5,7 +5,7 @@ import { type PromMetricsMetadata } from '../types';
 import {
   type QueryEditorCoauthoringInvocationV1,
   type QueryEditorCoauthoringProposalResultV1,
-} from './v1Compatibility';
+} from './internalCoauthoringContract';
 import {
   buildStagedQueryDiff,
   extractMetricNames,

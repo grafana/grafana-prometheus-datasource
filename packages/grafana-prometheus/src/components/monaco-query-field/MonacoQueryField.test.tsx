@@ -8,7 +8,7 @@ import { type PrometheusLanguageProviderInterface } from '../../language_provide
 import {
   type QueryEditorCoauthoringAdapterV1,
   type QueryEditorCoauthoringRegistrationV1,
-} from '../../query_coauthoring/v1Compatibility';
+} from '../../query_coauthoring/internalCoauthoringContract';
 import { type PromQuery } from '../../types';
 import MonacoQueryField from './MonacoQueryField';
 import { registerPrometheusQueryCoauthoring } from './PrometheusQueryCoauthoringAdapter';
@@ -74,7 +74,7 @@ function createEditorHarness() {
 }
 
 function createProps(
-  queryEditorCoauthoring: QueryEditorCoauthoringRegistrationV1<PromQuery> | undefined,
+  unstable_queryEditorCoauthoringV1: QueryEditorCoauthoringRegistrationV1<PromQuery> | undefined,
   createQueryForCoauthoring: ((value: string) => PromQuery) | undefined
 ) {
   const languageProvider = {
@@ -93,7 +93,7 @@ function createProps(
     onBlur: jest.fn(),
     onRunQuery: jest.fn(),
     placeholder: '',
-    queryEditorCoauthoring,
+    unstable_queryEditorCoauthoringV1,
     timeRange: {} as TimeRange,
   };
 }
@@ -103,6 +103,21 @@ describe('MonacoQueryField query coauthoring lifecycle', () => {
     mockMonacoOnMount = undefined;
     mockTheme = lightTheme;
     jest.mocked(registerPrometheusQueryCoauthoring).mockReset();
+  });
+
+  it('ignores a drifted private registrar without a register function', () => {
+    // @ts-expect-error Simulate mismatched Core and datasource contract copies at runtime.
+    const driftedRegistration: QueryEditorCoauthoringRegistrationV1<PromQuery> = {};
+    const props = createProps(driftedRegistration, (value) => ({ expr: value, refId: 'A' }));
+    render(<MonacoQueryField {...props} />);
+    const { editor, monaco } = createEditorHarness();
+
+    if (!mockMonacoOnMount) {
+      throw new Error('Expected ReactMonacoEditor to provide onMount');
+    }
+    act(() => mockMonacoOnMount?.(editor, monaco));
+
+    expect(registerPrometheusQueryCoauthoring).not.toHaveBeenCalled();
   });
 
   it('creates one datasource adapter while registered and updates styles without restarting it', () => {
@@ -128,7 +143,7 @@ describe('MonacoQueryField query coauthoring lifecycle', () => {
       return registration;
     });
     const unregister = jest.fn();
-    const queryEditorCoauthoring = { register: jest.fn(() => unregister) };
+    const unstable_queryEditorCoauthoringV1 = { register: jest.fn(() => unregister) };
     const firstCreateQuery = (value: string): PromQuery => ({ expr: value, refId: 'A' });
     const secondCreateQuery = (value: string): PromQuery => ({ expr: value, refId: 'B' });
     const props = createProps(undefined, firstCreateQuery);
@@ -141,15 +156,15 @@ describe('MonacoQueryField query coauthoring lifecycle', () => {
     act(() => mockMonacoOnMount?.(editor, monaco));
     expect(registerPrometheusQueryCoauthoring).not.toHaveBeenCalled();
 
-    rerender(<MonacoQueryField {...props} queryEditorCoauthoring={queryEditorCoauthoring} />);
+    rerender(<MonacoQueryField {...props} unstable_queryEditorCoauthoringV1={unstable_queryEditorCoauthoringV1} />);
     expect(registerPrometheusQueryCoauthoring).toHaveBeenCalledTimes(1);
-    expect(queryEditorCoauthoring.register).toHaveBeenCalledWith(registrations[0].adapter);
+    expect(unstable_queryEditorCoauthoringV1.register).toHaveBeenCalledWith(registrations[0].adapter);
     const initialOptions = jest.mocked(registerPrometheusQueryCoauthoring).mock.calls[0][0];
 
     rerender(
       <MonacoQueryField
         {...props}
-        queryEditorCoauthoring={queryEditorCoauthoring}
+        unstable_queryEditorCoauthoringV1={unstable_queryEditorCoauthoringV1}
         createQueryForCoauthoring={secondCreateQuery}
       />
     );
@@ -161,17 +176,17 @@ describe('MonacoQueryField query coauthoring lifecycle', () => {
     rerender(
       <MonacoQueryField
         {...props}
-        queryEditorCoauthoring={queryEditorCoauthoring}
+        unstable_queryEditorCoauthoringV1={unstable_queryEditorCoauthoringV1}
         createQueryForCoauthoring={secondCreateQuery}
       />
     );
     expect(registrations[0].updateStyles).toHaveBeenCalledTimes(styleUpdatesBeforeThemeChange + 1);
 
-    rerender(<MonacoQueryField {...props} queryEditorCoauthoring={undefined} />);
+    rerender(<MonacoQueryField {...props} unstable_queryEditorCoauthoringV1={undefined} />);
     expect(unregister).toHaveBeenCalledTimes(1);
     expect(registrations[0].dispose).toHaveBeenCalledTimes(1);
 
-    rerender(<MonacoQueryField {...props} queryEditorCoauthoring={queryEditorCoauthoring} />);
+    rerender(<MonacoQueryField {...props} unstable_queryEditorCoauthoringV1={unstable_queryEditorCoauthoringV1} />);
     expect(registerPrometheusQueryCoauthoring).toHaveBeenCalledTimes(2);
 
     unmount();

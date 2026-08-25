@@ -1,6 +1,7 @@
 import { type DataQuery } from '@grafana/schema';
 
-// This temporary internal type-only compatibility surface is removed when released @grafana/data packages include Core's alpha API.
+// Private to the paired PanelEditNext and Prometheus experiment.
+// Promote a generalized interface before adding another datasource adapter.
 
 export interface QueryEditorCoauthoringRangeV1 {
   from: number;
@@ -64,4 +65,8 @@ export interface QueryEditorCoauthoringAdapterV1<TQuery extends DataQuery = Data
 
 export interface QueryEditorCoauthoringRegistrationV1<TQuery extends DataQuery = DataQuery> {
   register(adapter: QueryEditorCoauthoringAdapterV1<TQuery>): VoidFunction;
+}
+
+export interface InternalQueryEditorCoauthoringPropsV1 {
+  unstable_queryEditorCoauthoringV1?: QueryEditorCoauthoringRegistrationV1;
 }

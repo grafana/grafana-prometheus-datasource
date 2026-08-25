@@ -129,7 +129,7 @@ const MonacoQueryField = (props: Props) => {
     datasource,
     timeRange,
     createQueryForCoauthoring,
-    queryEditorCoauthoring,
+    unstable_queryEditorCoauthoringV1,
   } = props;
 
   const lpRef = useLatest(languageProvider);
@@ -148,7 +148,9 @@ const MonacoQueryField = (props: Props) => {
   const styles = useMemo(() => getStyles(theme, placeholder), [placeholder, theme]);
   const coauthoringStyles = useMemo(() => ({ portal: styles.coauthoringPortal }), [styles]);
   const coauthoringStylesRef = useLatest(coauthoringStyles);
-  const coauthoringAvailable = Boolean(queryEditorCoauthoring && createQueryForCoauthoring);
+  const coauthoringAvailable = Boolean(
+    typeof unstable_queryEditorCoauthoringV1?.register === 'function' && createQueryForCoauthoring
+  );
 
   useEffect(() => {
     const createQuery = createQueryForCoauthoringRef.current;
@@ -181,11 +183,11 @@ const MonacoQueryField = (props: Props) => {
   }, [coauthoringRegistration, coauthoringStyles]);
 
   useEffect(() => {
-    if (!coauthoringRegistration || !queryEditorCoauthoring) {
+    if (!coauthoringRegistration || typeof unstable_queryEditorCoauthoringV1?.register !== 'function') {
       return;
     }
-    return queryEditorCoauthoring.register(coauthoringRegistration.adapter);
-  }, [coauthoringRegistration, queryEditorCoauthoring]);
+    return unstable_queryEditorCoauthoringV1.register(coauthoringRegistration.adapter);
+  }, [coauthoringRegistration, unstable_queryEditorCoauthoringV1]);
 
   useEffect(() => {
     // when we unmount, we unregister the autocomplete-function, if it was registered
