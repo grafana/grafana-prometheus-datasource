@@ -92,13 +92,13 @@ describe('usePrometheusQueryCoauthoring', () => {
     expect(() => act(() => result.current({} as MonacoEditor, {} as Monaco))).not.toThrow();
     expect(throwingRegistrar.register).toHaveBeenCalledTimes(1);
 
+    const invalidRegister = jest.fn(() => 'not-a-cleanup');
     const invalidCleanupRegistrar = {
-      // @ts-expect-error Simulate a mismatched Core cleanup contract at runtime.
-      register: jest.fn(() => 'not-a-cleanup'),
-    } satisfies QueryEditorCoauthoringRegistrationV1<PromQuery>;
+      register: invalidRegister,
+    } as unknown as QueryEditorCoauthoringRegistrationV1<PromQuery>;
     options = createOptions(invalidCleanupRegistrar, createQuery);
     expect(() => rerender()).not.toThrow();
-    expect(invalidCleanupRegistrar.register).toHaveBeenCalledTimes(1);
+    expect(invalidRegister).toHaveBeenCalledTimes(1);
     expect(() => unmount()).not.toThrow();
   });
 
