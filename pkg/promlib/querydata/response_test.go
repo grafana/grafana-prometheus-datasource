@@ -6,7 +6,9 @@ import (
 	"io"
 	"net/http"
 	"testing"
+	"time"
 
+	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 	"github.com/grafana/grafana-plugin-sdk-go/data"
 	"github.com/stretchr/testify/assert"
@@ -229,4 +231,36 @@ func TestParseResponse_ErrorCases(t *testing.T) {
 			assert.NoError(t, res.Body.Close())
 		})
 	}
+}
+
+func newExemplarFrame(meta *data.FrameMeta) *data.Frame {
+	timeField := data.NewField("Time", nil, []time.Time{time.Unix(1, 0)})
+	timeField.Config = &data.FieldConfig{Interval: 15000}
+	valueField := data.NewField("Value", data.Labels{"__name__": "up"}, []float64{1})
+	frame := data.NewFrame("", timeField, valueField)
+	frame.RefID = "A"
+	frame.Meta = meta
+	return frame
+}
+
+func TestProcessExemplars(t *testing.T) {
+	t.Run("preserves the first exemplar frame's Meta when merging multiple series", func(t *testing.T) {
+		qd := QueryData{exemplarSampler: exemplar.NewStandardDeviationSampler}
+
+		frame1 := newExemplarFrame(&data.FrameMeta{
+			ExecutedQueryString: "Expr: up\nStep: 15s",
+			Custom:              map[string]any{"resultType": "exemplar"},
+		})
+		frame2 := newExemplarFrame(&data.FrameMeta{
+			Custom: map[string]any{"resultType": "exemplar"},
+		})
+
+		result := qd.processExemplars(context.Background(), &models.Query{}, backend.DataResponse{
+			Frames: data.Frames{frame1, frame2},
+		})
+
+		require.NoError(t, result.Error)
+		require.Len(t, result.Frames, 1)
+		assert.Equal(t, "Expr: up\nStep: 15s", result.Frames[0].Meta.ExecutedQueryString)
+	})
 }

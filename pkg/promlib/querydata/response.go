@@ -180,6 +180,7 @@ func (s *QueryData) processExemplars(ctx context.Context, q *models.Query, dr ba
 	// old exemplar frames filtered out
 	framer := exemplar.NewFramer(sampler, labelTracker)
 
+	metaSet := false
 	for _, frame := range dr.Frames {
 		// we don't need to process non-exemplar frames
 		// so they can be added to the response
@@ -188,9 +189,14 @@ func (s *QueryData) processExemplars(ctx context.Context, q *models.Query, dr ba
 			continue
 		}
 
-		// copy the current exemplar frame metadata
-		framer.SetMeta(frame.Meta)
-		framer.SetRefID(frame.RefID)
+		// only the first exemplar frame carries ExecutedQueryString/Stats/
+		// calculatedMinStep (set in parseResponse), and all exemplar frames
+		// are merged into one output frame, so take its Meta and ignore the rest.
+		if !metaSet {
+			framer.SetMeta(frame.Meta)
+			framer.SetRefID(frame.RefID)
+			metaSet = true
+		}
 
 		step := time.Duration(frame.Fields[0].Config.Interval) * time.Millisecond
 		sampler.SetStep(step)
