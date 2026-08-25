@@ -8,6 +8,7 @@ The datasource does not render coauthoring UI, mutate the editor for proposals, 
 
 ## Modules
 
+- `usePrometheusQueryCoauthoring.ts` contains the experiment's React lifecycle: Monaco attachment, current-value refs, adapter creation and disposal, Core registration, and style updates.
 - `MonacoQueryCoauthoringHost.ts` owns selection settling, shortcut registration, portal anchoring, viewport positioning, and internal surface measurement. It contains no PromQL logic.
 - `PrometheusQueryCoauthoringAdapter.ts` composes editor events and PromQL intelligence into the private row adapter.
 - `intelligence.ts` captures an atomic typed baseline, expands focus ranges, enriches PromQL context, validates proposed PromQL, and constructs typed proposals and change summaries.
