@@ -20,7 +20,7 @@ import (
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/utils"
 )
 
-func (s *QueryData) parseResponse(ctx context.Context, q *models.Query, res *http.Response) backend.DataResponse {
+func (s *QueryData) parseResponse(ctx context.Context, q *models.Query, res *http.Response, queryType models.TimeSeriesQueryType) backend.DataResponse {
 	defer func() {
 		if err := res.Body.Close(); err != nil {
 			s.log.FromContext(ctx).Error("Failed to close response body", "err", err)
@@ -72,7 +72,7 @@ func (s *QueryData) parseResponse(ctx context.Context, q *models.Query, res *htt
 					// Knowing the calculated minStep is required for merging and caching the frames on frontend side
 					custom["calculatedMinStep"] = q.Step.Milliseconds()
 				}
-				frame.Meta.Stats = append(frame.Meta.Stats, parseQueryStats(res.Header)...)
+				frame.Meta.Stats = append(frame.Meta.Stats, parseQueryStats(res.Header, queryType)...)
 			}
 		}
 
@@ -117,14 +117,24 @@ var knownQueryStats = map[string]struct {
 	"equivalent_samples_read": {"Equivalent samples read", "short"},
 }
 
+// queryStatPrefixes labels each stat by the request that produced it, since
+// a combined Range+Instant query can attach two Server-Timing headers to the
+// same panel and otherwise their stats would be indistinguishable.
+var queryStatPrefixes = map[models.TimeSeriesQueryType]string{
+	models.RangeQueryType:    "Range: ",
+	models.InstantQueryType:  "Instant: ",
+	models.ExemplarQueryType: "Exemplar: ",
+}
+
 // parseQueryStats parses Mimir's Server-Timing response header into frame
 // meta stats. The header has the form:
 //
 //	Server-Timing: querier_wall_time;dur=5215.074756, bytes_processed;val=11188007
 //
 // where `dur` values are milliseconds and `val` values are raw counts.
-func parseQueryStats(header http.Header) []data.QueryStat {
+func parseQueryStats(header http.Header, queryType models.TimeSeriesQueryType) []data.QueryStat {
 	var stats []data.QueryStat
+	prefix := queryStatPrefixes[queryType]
 
 	for entry := range strings.SplitSeq(header.Get("Server-Timing"), ",") {
 		name, param, found := strings.Cut(strings.TrimSpace(entry), ";")
@@ -148,7 +158,7 @@ func parseQueryStats(header http.Header) []data.QueryStat {
 		}
 
 		stats = append(stats, data.QueryStat{
-			FieldConfig: data.FieldConfig{DisplayName: known.displayName, Unit: known.unit},
+			FieldConfig: data.FieldConfig{DisplayName: prefix + known.displayName, Unit: known.unit},
 			Value:       value,
 		})
 	}

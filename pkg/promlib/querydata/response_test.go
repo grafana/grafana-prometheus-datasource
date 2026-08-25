@@ -22,7 +22,7 @@ func TestQueryData_parseResponse(t *testing.T) {
 	t.Run("resultType is before result the field must parsed normally", func(t *testing.T) {
 		resBody := `{"data":{"resultType":"vector", "result":[{"metric":{"__name__":"some_name","environment":"some_env","id":"some_id","instance":"some_instance:1234","job":"some_job","name":"another_name","region":"some_region"},"value":[1.1,"2"]}]},"status":"success"}`
 		res := &http.Response{Body: io.NopCloser(bytes.NewBufferString(resBody)), StatusCode: 200}
-		result := qd.parseResponse(context.Background(), &models.Query{}, res)
+		result := qd.parseResponse(context.Background(), &models.Query{}, res, models.RangeQueryType)
 		assert.Nil(t, result.Error)
 		assert.Len(t, result.Frames, 1)
 	})
@@ -30,7 +30,7 @@ func TestQueryData_parseResponse(t *testing.T) {
 	t.Run("resultType is after the result field must parsed normally", func(t *testing.T) {
 		resBody := `{"data":{"result":[{"metric":{"__name__":"some_name","environment":"some_env","id":"some_id","instance":"some_instance:1234","job":"some_job","name":"another_name","region":"some_region"},"value":[1.1,"2"]}],"resultType":"vector"},"status":"success"}`
 		res := &http.Response{Body: io.NopCloser(bytes.NewBufferString(resBody)), StatusCode: 200}
-		result := qd.parseResponse(context.Background(), &models.Query{}, res)
+		result := qd.parseResponse(context.Background(), &models.Query{}, res, models.RangeQueryType)
 		assert.Nil(t, result.Error)
 		assert.Len(t, result.Frames, 1)
 	})
@@ -38,7 +38,7 @@ func TestQueryData_parseResponse(t *testing.T) {
 	t.Run("no resultType is existed in the data", func(t *testing.T) {
 		resBody := `{"data":{"result":[{"metric":{"__name__":"some_name","environment":"some_env","id":"some_id","instance":"some_instance:1234","job":"some_job","name":"another_name","region":"some_region"},"value":[1.1,"2"]}]},"status":"success"}`
 		res := &http.Response{Body: io.NopCloser(bytes.NewBufferString(resBody)), StatusCode: 200}
-		result := qd.parseResponse(context.Background(), &models.Query{}, res)
+		result := qd.parseResponse(context.Background(), &models.Query{}, res, models.RangeQueryType)
 		assert.Error(t, result.Error)
 		assert.Equal(t, result.Error.Error(), "no resultType found")
 	})
@@ -46,7 +46,7 @@ func TestQueryData_parseResponse(t *testing.T) {
 	t.Run("resultType is set as empty string before result", func(t *testing.T) {
 		resBody := `{"data":{"resultType":"", "result":[{"metric":{"__name__":"some_name","environment":"some_env","id":"some_id","instance":"some_instance:1234","job":"some_job","name":"another_name","region":"some_region"},"value":[1.1,"2"]}]},"status":"success"}`
 		res := &http.Response{Body: io.NopCloser(bytes.NewBufferString(resBody)), StatusCode: 200}
-		result := qd.parseResponse(context.Background(), &models.Query{}, res)
+		result := qd.parseResponse(context.Background(), &models.Query{}, res, models.RangeQueryType)
 		assert.Error(t, result.Error)
 		assert.Equal(t, result.Error.Error(), "unknown result type: ")
 	})
@@ -54,7 +54,7 @@ func TestQueryData_parseResponse(t *testing.T) {
 	t.Run("resultType is set as empty string after result", func(t *testing.T) {
 		resBody := `{"data":{"result":[{"metric":{"__name__":"some_name","environment":"some_env","id":"some_id","instance":"some_instance:1234","job":"some_job","name":"another_name","region":"some_region"},"value":[1.1,"2"]}],"resultType":""},"status":"success"}`
 		res := &http.Response{Body: io.NopCloser(bytes.NewBufferString(resBody)), StatusCode: 200}
-		result := qd.parseResponse(context.Background(), &models.Query{}, res)
+		result := qd.parseResponse(context.Background(), &models.Query{}, res, models.RangeQueryType)
 		assert.Error(t, result.Error)
 		assert.Equal(t, result.Error.Error(), "unknown result type: ")
 	})
@@ -65,7 +65,7 @@ func TestAddMetadataToMultiFrame(t *testing.T) {
 		qd := QueryData{exemplarSampler: exemplar.NewStandardDeviationSampler}
 		resBody := `{"status":"success","data":{"resultType":"matrix","result":[{"metric":{"__name__":"rpc_durations_native_histogram_seconds","instance":"nativehisto:8080","job":"prometheus"},"histograms":[[1729529685,{"count":"7243102","sum":"72460202.93145595","buckets":[[0,"1.8340080864093422","2","10"],[0,"2","2.1810154653305154","68"]]}],[1729529700,{"count":"7243490","sum":"72464056.03309634","buckets":[[0,"1.8340080864093422","2","10"],[0,"2","2.1810154653305154","68"]]}],[1729529715,{"count":"7243880","sum":"72467935.35871512","buckets":[[0,"1.8340080864093422","2","10"],[0,"2","2.1810154653305154","68"]]}]]}]}}`
 		res := &http.Response{Body: io.NopCloser(bytes.NewBufferString(resBody)), StatusCode: 200}
-		result := qd.parseResponse(context.Background(), &models.Query{}, res)
+		result := qd.parseResponse(context.Background(), &models.Query{}, res, models.RangeQueryType)
 		assert.Nil(t, result.Error)
 		assert.Len(t, result.Frames, 1)
 		assert.Equal(t, "yMin", result.Frames[0].Fields[1].Name)
@@ -74,38 +74,59 @@ func TestAddMetadataToMultiFrame(t *testing.T) {
 
 func TestParseQueryStats(t *testing.T) {
 	tests := []struct {
-		name   string
-		header string
-		want   []data.QueryStat
+		name      string
+		header    string
+		queryType models.TimeSeriesQueryType
+		want      []data.QueryStat
 	}{
 		{
-			name:   "absent header",
-			header: "",
-			want:   nil,
+			name:      "absent header",
+			header:    "",
+			queryType: models.RangeQueryType,
+			want:      nil,
 		},
 		{
-			name:   "all known Mimir metrics",
-			header: "bytes_processed;val=11188007, equivalent_samples_read;val=20000, querier_wall_time;dur=5215.074756, response_time;dur=1061.890603, samples_processed;val=17647",
+			name:      "all known Mimir metrics",
+			header:    "bytes_processed;val=11188007, equivalent_samples_read;val=20000, querier_wall_time;dur=5215.074756, response_time;dur=1061.890603, samples_processed;val=17647",
+			queryType: models.RangeQueryType,
 			want: []data.QueryStat{
-				{FieldConfig: data.FieldConfig{DisplayName: "Bytes processed", Unit: "decbytes"}, Value: 11188007},
-				{FieldConfig: data.FieldConfig{DisplayName: "Equivalent samples read", Unit: "short"}, Value: 20000},
-				{FieldConfig: data.FieldConfig{DisplayName: "Querier wall time", Unit: "ms"}, Value: 5215.074756},
-				{FieldConfig: data.FieldConfig{DisplayName: "Response time", Unit: "ms"}, Value: 1061.890603},
-				{FieldConfig: data.FieldConfig{DisplayName: "Samples processed", Unit: "short"}, Value: 17647},
+				{FieldConfig: data.FieldConfig{DisplayName: "Range: Bytes processed", Unit: "decbytes"}, Value: 11188007},
+				{FieldConfig: data.FieldConfig{DisplayName: "Range: Equivalent samples read", Unit: "short"}, Value: 20000},
+				{FieldConfig: data.FieldConfig{DisplayName: "Range: Querier wall time", Unit: "ms"}, Value: 5215.074756},
+				{FieldConfig: data.FieldConfig{DisplayName: "Range: Response time", Unit: "ms"}, Value: 1061.890603},
+				{FieldConfig: data.FieldConfig{DisplayName: "Range: Samples processed", Unit: "short"}, Value: 17647},
 			},
 		},
 		{
-			name:   "unknown metrics are skipped",
-			header: "future_metric;val=42, bytes_processed;val=11188007",
+			name:      "unknown metrics are skipped",
+			header:    "future_metric;val=42, bytes_processed;val=11188007",
+			queryType: models.RangeQueryType,
 			want: []data.QueryStat{
-				{FieldConfig: data.FieldConfig{DisplayName: "Bytes processed", Unit: "decbytes"}, Value: 11188007},
+				{FieldConfig: data.FieldConfig{DisplayName: "Range: Bytes processed", Unit: "decbytes"}, Value: 11188007},
 			},
 		},
 		{
-			name:   "malformed entries are skipped",
-			header: "querier_wall_time, bytes_processed;val=notanumber, response_time;dur=10",
+			name:      "malformed entries are skipped",
+			header:    "querier_wall_time, bytes_processed;val=notanumber, response_time;dur=10",
+			queryType: models.RangeQueryType,
 			want: []data.QueryStat{
-				{FieldConfig: data.FieldConfig{DisplayName: "Response time", Unit: "ms"}, Value: 10},
+				{FieldConfig: data.FieldConfig{DisplayName: "Range: Response time", Unit: "ms"}, Value: 10},
+			},
+		},
+		{
+			name:      "instant query stats are labeled Instant",
+			header:    "response_time;dur=10",
+			queryType: models.InstantQueryType,
+			want: []data.QueryStat{
+				{FieldConfig: data.FieldConfig{DisplayName: "Instant: Response time", Unit: "ms"}, Value: 10},
+			},
+		},
+		{
+			name:      "exemplar query stats are labeled Exemplar",
+			header:    "response_time;dur=10",
+			queryType: models.ExemplarQueryType,
+			want: []data.QueryStat{
+				{FieldConfig: data.FieldConfig{DisplayName: "Exemplar: Response time", Unit: "ms"}, Value: 10},
 			},
 		},
 	}
@@ -116,7 +137,7 @@ func TestParseQueryStats(t *testing.T) {
 			if tt.header != "" {
 				header.Set("Server-Timing", tt.header)
 			}
-			assert.Equal(t, tt.want, parseQueryStats(header))
+			assert.Equal(t, tt.want, parseQueryStats(header, tt.queryType))
 		})
 	}
 }
@@ -131,17 +152,17 @@ func TestParseResponse_QueryStats(t *testing.T) {
 			StatusCode: 200,
 			Header:     http.Header{"Server-Timing": []string{"equivalent_samples_read;val=20000"}},
 		}
-		result := qd.parseResponse(context.Background(), &models.Query{}, res)
+		result := qd.parseResponse(context.Background(), &models.Query{}, res, models.RangeQueryType)
 		require.Nil(t, result.Error)
 		require.Len(t, result.Frames, 1)
 		assert.Equal(t, []data.QueryStat{
-			{FieldConfig: data.FieldConfig{DisplayName: "Equivalent samples read", Unit: "short"}, Value: 20000},
+			{FieldConfig: data.FieldConfig{DisplayName: "Range: Equivalent samples read", Unit: "short"}, Value: 20000},
 		}, result.Frames[0].Meta.Stats)
 	})
 
 	t.Run("leaves stats nil when header absent", func(t *testing.T) {
 		res := &http.Response{Body: io.NopCloser(bytes.NewBufferString(resBody)), StatusCode: 200}
-		result := qd.parseResponse(context.Background(), &models.Query{}, res)
+		result := qd.parseResponse(context.Background(), &models.Query{}, res, models.RangeQueryType)
 		require.Nil(t, result.Error)
 		require.Len(t, result.Frames, 1)
 		assert.Nil(t, result.Frames[0].Meta.Stats)
@@ -154,12 +175,12 @@ func TestParseResponse_QueryStats(t *testing.T) {
 			StatusCode: 200,
 			Header:     http.Header{"Server-Timing": []string{"equivalent_samples_read;val=20000"}},
 		}
-		result := qd.parseResponse(context.Background(), &models.Query{}, res)
+		result := qd.parseResponse(context.Background(), &models.Query{}, res, models.RangeQueryType)
 		require.Nil(t, result.Error)
 		require.Len(t, result.Frames, 1)
 		assert.Equal(t, []data.QueryStat{
 			{FieldConfig: data.FieldConfig{DisplayName: "Total queryable samples"}, Value: 30},
-			{FieldConfig: data.FieldConfig{DisplayName: "Equivalent samples read", Unit: "short"}, Value: 20000},
+			{FieldConfig: data.FieldConfig{DisplayName: "Range: Equivalent samples read", Unit: "short"}, Value: 20000},
 		}, result.Frames[0].Meta.Stats)
 	})
 }
@@ -191,7 +212,7 @@ func TestParseResponse_ErrorCases(t *testing.T) {
 			q := &models.Query{}
 			qd := QueryData{exemplarSampler: exemplar.NewStandardDeviationSampler}
 			qd.log = log.New()
-			resp := qd.parseResponse(ctx, q, res)
+			resp := qd.parseResponse(ctx, q, res, models.RangeQueryType)
 
 			require.Error(t, resp.Error)
 			assert.Contains(t, resp.Error.Error(), "unexpected response")
