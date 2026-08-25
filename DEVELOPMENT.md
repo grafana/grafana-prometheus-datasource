@@ -126,13 +126,15 @@ the plugin from `workspace/plugins/grafana-prometheus-datasource`, and you can i
 
 ### 4. Build the plugin
 
-**Backend** — build the Go binary for your platform. On Apple Silicon:
+**Backend** — build the Go binary. There's no target for just your desktop
+platform (only the exotic `LinuxS390X`/`WindowsARM64` targets exist
+standalone), so this builds all of them:
 
 ```bash
-mage build:darwinARM64
+mage
 ```
 
-Run `mage -v` with no target to build for all supported platforms. You must re-run this command after every backend change. After rebuilding, tell Grafana to reload the plugin:
+You must re-run this command after every backend change. After rebuilding, tell Grafana to reload the plugin:
 
 ```bash
 mage reloadPlugin
