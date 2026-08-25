@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
+	"github.com/grafana/grafana-plugin-sdk-go/data"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -68,6 +69,82 @@ func TestAddMetadataToMultiFrame(t *testing.T) {
 		assert.Nil(t, result.Error)
 		assert.Len(t, result.Frames, 1)
 		assert.Equal(t, "yMin", result.Frames[0].Fields[1].Name)
+	})
+}
+
+func TestParseQueryStats(t *testing.T) {
+	tests := []struct {
+		name   string
+		header string
+		want   []data.QueryStat
+	}{
+		{
+			name:   "absent header",
+			header: "",
+			want:   nil,
+		},
+		{
+			name:   "all known Mimir metrics",
+			header: "bytes_processed;val=11188007, equivalent_samples_read;val=20000, querier_wall_time;dur=5215.074756, response_time;dur=1061.890603, samples_processed;val=17647",
+			want: []data.QueryStat{
+				{FieldConfig: data.FieldConfig{DisplayName: "Bytes processed", Unit: "decbytes"}, Value: 11188007},
+				{FieldConfig: data.FieldConfig{DisplayName: "Equivalent samples read", Unit: "short"}, Value: 20000},
+				{FieldConfig: data.FieldConfig{DisplayName: "Querier wall time", Unit: "ms"}, Value: 5215.074756},
+				{FieldConfig: data.FieldConfig{DisplayName: "Response time", Unit: "ms"}, Value: 1061.890603},
+				{FieldConfig: data.FieldConfig{DisplayName: "Samples processed", Unit: "short"}, Value: 17647},
+			},
+		},
+		{
+			name:   "unknown metrics are skipped",
+			header: "future_metric;val=42, bytes_processed;val=11188007",
+			want: []data.QueryStat{
+				{FieldConfig: data.FieldConfig{DisplayName: "Bytes processed", Unit: "decbytes"}, Value: 11188007},
+			},
+		},
+		{
+			name:   "malformed entries are skipped",
+			header: "querier_wall_time, bytes_processed;val=notanumber, response_time;dur=10",
+			want: []data.QueryStat{
+				{FieldConfig: data.FieldConfig{DisplayName: "Response time", Unit: "ms"}, Value: 10},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			header := http.Header{}
+			if tt.header != "" {
+				header.Set("Server-Timing", tt.header)
+			}
+			assert.Equal(t, tt.want, parseQueryStats(header))
+		})
+	}
+}
+
+func TestParseResponse_QueryStats(t *testing.T) {
+	qd := QueryData{exemplarSampler: exemplar.NewStandardDeviationSampler}
+	resBody := `{"data":{"resultType":"vector","result":[{"metric":{"__name__":"up"},"value":[1.1,"2"]}]},"status":"success"}`
+
+	t.Run("populates frame meta stats from Server-Timing header", func(t *testing.T) {
+		res := &http.Response{
+			Body:       io.NopCloser(bytes.NewBufferString(resBody)),
+			StatusCode: 200,
+			Header:     http.Header{"Server-Timing": []string{"equivalent_samples_read;val=20000"}},
+		}
+		result := qd.parseResponse(context.Background(), &models.Query{}, res)
+		require.Nil(t, result.Error)
+		require.Len(t, result.Frames, 1)
+		assert.Equal(t, []data.QueryStat{
+			{FieldConfig: data.FieldConfig{DisplayName: "Equivalent samples read", Unit: "short"}, Value: 20000},
+		}, result.Frames[0].Meta.Stats)
+	})
+
+	t.Run("leaves stats nil when header absent", func(t *testing.T) {
+		res := &http.Response{Body: io.NopCloser(bytes.NewBufferString(resBody)), StatusCode: 200}
+		result := qd.parseResponse(context.Background(), &models.Query{}, res)
+		require.Nil(t, result.Error)
+		require.Len(t, result.Frames, 1)
+		assert.Nil(t, result.Frames[0].Meta.Stats)
 	})
 }
 

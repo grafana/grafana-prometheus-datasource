@@ -101,6 +101,10 @@ func (s *QueryData) parseResponse(ctx context.Context, q *models.Query, res *htt
 	}
 }
 
+func parseQueryStats(header http.Header) []data.QueryStat {
+	return nil
+}
+
 func (s *QueryData) processExemplars(ctx context.Context, q *models.Query, dr backend.DataResponse) backend.DataResponse {
 	_, endSpan := utils.StartTrace(ctx, s.tracer, "datasource.prometheus.processExemplars")
 	defer endSpan()
