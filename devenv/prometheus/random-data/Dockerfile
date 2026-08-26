@@ -1,4 +1,4 @@
-FROM golang:1.17 AS builder
+FROM golang:1.26.7 AS builder
 
 RUN CGO_ENABLED=0 GOOS=linux go install -tags netgo -ldflags '-w' github.com/prometheus/client_golang/examples/random@v1.12.2
 
