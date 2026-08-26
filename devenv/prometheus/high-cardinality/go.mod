@@ -1,6 +1,6 @@
 module high-cardinality
 
-go 1.26.5
+go 1.26.7
 
 require github.com/prometheus/client_golang v1.24.1
 

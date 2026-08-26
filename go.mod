@@ -1,6 +1,6 @@
 module github.com/grafana/grafana-prometheus-datasource
 
-go 1.26.5
+go 1.26.7
 
 require (
 	github.com/grafana/grafana-plugin-sdk-go v0.296.3
