@@ -159,7 +159,7 @@ const BUILT_IN_VARIABLES = [
   { variable: '$__rate_interval', replacement: '7999799979997999' },
   { variable: '$__range_ms', replacement: '722_999_999' },
   { variable: '$__range_s', replacement: '79_299_999' },
-  { variable: '$__range', replacement: '799_999' },
+  { variable: '$__range', replacement: '7999_999' },
 ];
 
 // Derived maps for efficient lookups
