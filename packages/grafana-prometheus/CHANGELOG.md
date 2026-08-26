@@ -1,5 +1,15 @@
 # Changelog
 
+## 13.1.13
+
+🐛 fix(QueryCache): cache relative-offset queries, not just 'now' ([#285](https://github.com/grafana/grafana-prometheus-datasource/pull/285))
+
+🐛 fix(QueryBuilder): prevent sum by second label from reverting on add ([#300](https://github.com/grafana/grafana-prometheus-datasource/pull/300))
+
+🐛 Send resource requests through `DataSourceWithBackend`. `metadataRequest` now uses `getResource`/`postResource` instead of building the legacy `/api/datasources/uid/<uid>/resources` URL by hand, so resource calls follow whichever resource API the Grafana instance is configured to use. Its response shape is unchanged. The unused `_request` method has been removed.
+
+🐛 Fix: Convert 'one of' ad hoc filters for label lookups. Multi-value `=|` / `!=|` ad hoc filters previously broke `getTagKeys` / `getTagValues` with a Prometheus parse error and silently dropped all but the first selected value. ([#297](https://github.com/grafana/grafana-prometheus-datasource/pull/297))
+
 ## 13.1.12
 
 🐛 Revert bundling of Assistant ([#269](https://github.com/grafana/grafana-prometheus-datasource/pull/269))
