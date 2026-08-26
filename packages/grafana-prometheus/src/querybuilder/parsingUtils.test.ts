@@ -89,7 +89,7 @@ describe('builtInTimeVariables', () => {
     },
     {
       expr: 'avg_over_time(cpu_usage{env="prod"}[$__range])',
-      expected: 'avg_over_time(cpu_usage{env="prod"}[799_999])',
+      expected: 'avg_over_time(cpu_usage{env="prod"}[7999_999])',
     },
     {
       expr: 'rate(requests[$__interval]) / rate(requests[$__interval] offset $__interval)',
@@ -111,7 +111,7 @@ describe('builtInTimeVariables', () => {
     {
       expr: 'rate(cpu[$__interval]) + rate(memory[$__interval_ms]) + rate(disk[$__rate_interval]) + rate(network[$__range]) + rate(io[$__range_s]) + rate(gpu[$__range_ms])',
       expected:
-        'rate(cpu[711_999_999]) + rate(memory[79_999_999_999]) + rate(disk[7999799979997999]) + rate(network[799_999]) + rate(io[79_299_999]) + rate(gpu[722_999_999])',
+        'rate(cpu[711_999_999]) + rate(memory[79_999_999_999]) + rate(disk[7999799979997999]) + rate(network[7999_999]) + rate(io[79_299_999]) + rate(gpu[722_999_999])',
     },
   ];
 
@@ -119,6 +119,7 @@ describe('builtInTimeVariables', () => {
     it(testCase.expr, () => {
       const actual1 = replaceBuiltInVariable(testCase.expr);
       expect(actual1).toBe(testCase.expected);
+      expect(actual1).toHaveLength(testCase.expr.length);
 
       const actual2 = returnBuiltInVariable(actual1);
       expect(actual2).toBe(testCase.expr);

@@ -10,6 +10,8 @@ import * as queryHints from '../query_hints';
 import { PromQueryField } from './PromQueryField';
 import { type Props } from './monaco-query-field/MonacoQueryFieldProps';
 
+let mockMonacoProps: Props | undefined;
+
 jest.mock('../query_hints', () => ({
   ...jest.requireActual('../query_hints'),
   getInitHints: jest.fn().mockReturnValue([]),
@@ -20,6 +22,7 @@ jest.mock('../query_hints', () => ({
 // functionality in this test anyway, so we mock it out.
 jest.mock('./monaco-query-field/MonacoQueryFieldLazy', () => {
   const fakeQueryField = (props: Props) => {
+    mockMonacoProps = props;
     return <input onBlur={(e) => props.onBlur(e.currentTarget.value)} data-testid={'dummy-code-input'} type={'text'} />;
   };
   return {
@@ -61,6 +64,7 @@ describe('PromQueryField', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockMonacoProps = undefined;
   });
 
   it('renders metrics chooser regularly if lookups are not disabled in the datasource settings', async () => {
@@ -148,5 +152,24 @@ describe('PromQueryField', () => {
     // blur element
     await userEvent.click(document.body);
     expect(onRunQuery).not.toHaveBeenCalled();
+  });
+
+  it('passes the row registrar and current typed query factory to Monaco', () => {
+    const query = { expr: 'rate(foo_total[5m])', refId: 'A', legendFormat: 'Requests' };
+    const unstable_queryEditorCoauthoringV1 = { register: jest.fn() };
+
+    render(
+      <PromQueryField
+        {...defaultProps}
+        query={query}
+        unstable_queryEditorCoauthoringV1={unstable_queryEditorCoauthoringV1}
+      />
+    );
+
+    expect(mockMonacoProps?.unstable_queryEditorCoauthoringV1).toBe(unstable_queryEditorCoauthoringV1);
+    expect(mockMonacoProps?.createQueryForCoauthoring?.('increase(foo_total[5m])')).toEqual({
+      ...query,
+      expr: 'increase(foo_total[5m])',
+    });
   });
 });
