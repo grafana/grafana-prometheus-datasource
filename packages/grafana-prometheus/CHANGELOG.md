@@ -1,5 +1,11 @@
 # Changelog
 
+## 13.1.14
+
+🐛 Add an internal, experimental PromQL coauthoring capability for the Monaco code editor, including its Grafana Core exposed-surface integration. ([#308](https://github.com/grafana/grafana-prometheus-datasource/pull/308))
+
+🐛 Update broken dependency tree ([#328](https://github.com/grafana/grafana-prometheus-datasource/pull/328))
+
 ## 13.1.13
 
 🐛 fix(QueryCache): cache relative-offset queries, not just 'now' ([#285](https://github.com/grafana/grafana-prometheus-datasource/pull/285))
