@@ -1,5 +1,6 @@
 import { expect, test } from '@grafana/plugin-e2e';
 import { type Locator, type Page } from '@playwright/test';
+import { isCloudRun, resolveDataSourceUid } from './env';
 
 const PLUGIN_TYPE = 'prometheus';
 
@@ -35,4 +36,17 @@ test.describe('Config editor', () => {
       await expect(getDataSourceConnectionUrlInput(page)).toBeVisible();
     }
   );
+});
+
+test.describe('Cloud data source', () => {
+  test.beforeEach(() => {
+    test.skip(!isCloudRun, 'Targets the Prometheus data source provisioned on the shared Cloud instance.');
+  });
+
+  test('passes its health check', async ({ gotoDataSourceConfigPage, page }) => {
+    const configPage = await gotoDataSourceConfigPage(await resolveDataSourceUid(page));
+
+    await expect(configPage.saveAndTest()).toBeOK();
+    await expect(configPage).toHaveAlert('success');
+  });
 });
