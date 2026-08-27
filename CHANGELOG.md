@@ -1,5 +1,35 @@
 # grafana-prometheus-datasource
 
+## 13.1.8
+
+⚙️ Bump grafana-plugin-sdk-go to v0.295.0, which sets a user agent on all outgoing HTTP requests ([#302](https://github.com/grafana/grafana-prometheus-datasource/pull/302))
+
+⚙️ Bump grafana-plugin-sdk-go v0.296.1 ([#289](https://github.com/grafana/grafana-prometheus-datasource/pull/289))
+
+🐛 fix(QueryCache): cache relative-offset queries, not just 'now' ([#285](https://github.com/grafana/grafana-prometheus-datasource/pull/285))
+
+🐛 fix(QueryBuilder): prevent sum by second label from reverting on add ([#300](https://github.com/grafana/grafana-prometheus-datasource/pull/300))
+
+🐛 Introduce more devenv options for easier and more comprehensive development ([#301](https://github.com/grafana/grafana-prometheus-datasource/pull/301))
+
+⚙️ Chore: Bump vulnerable frontend dependencies (js-cookie, serialize-javascript, ws, uuid, form-data, brace-expansion, fast-uri, ip-address) ([#307](https://github.com/grafana/grafana-prometheus-datasource/pull/307))
+
+🐛 Removing abstraction related logic. Abstraction PoC has concluded, cleaning up relevant code. ([#318](https://github.com/grafana/grafana-prometheus-datasource/pull/318))
+
+🐛 Send resource requests through `DataSourceWithBackend`. `metadataRequest` now uses `getResource`/`postResource` instead of building the legacy `/api/datasources/uid/<uid>/resources` URL by hand, so resource calls follow whichever resource API the Grafana instance is configured to use. Its response shape is unchanged. The unused `_request` method has been removed.
+
+🐛 Improve numeric value parsing performance ([#289](https://github.com/grafana/grafana-prometheus-datasource/pull/289))
+
+🐛 Bump go v1.26.7 ([#289](https://github.com/grafana/grafana-prometheus-datasource/pull/289))
+
+🐛 Improve histogram parsing performance ([#289](https://github.com/grafana/grafana-prometheus-datasource/pull/289))
+
+🐛 Add search api support ([#289](https://github.com/grafana/grafana-prometheus-datasource/pull/289))
+
+🐛 Improve changeset creation ([#289](https://github.com/grafana/grafana-prometheus-datasource/pull/289))
+
+🐛 Fix: Convert 'one of' ad hoc filters for label lookups. Multi-value `=|` / `!=|` ad hoc filters previously broke `getTagKeys` / `getTagValues` with a Prometheus parse error and silently dropped all but the first selected value. ([#297](https://github.com/grafana/grafana-prometheus-datasource/pull/297))
+
 ## 13.1.7
 
 🐛 Use npm as package manager ([#272](https://github.com/grafana/grafana-prometheus-datasource/pull/272))

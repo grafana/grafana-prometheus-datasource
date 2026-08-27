@@ -2,4 +2,4 @@
 'grafana-prometheus-datasource': patch
 ---
 
-Improve histogram parsing performance
+Update broken dependency tree
