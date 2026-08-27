@@ -1,6 +1,6 @@
 {
   "name": "prometheus",
-  "version": "13.1.8",
+  "version": "13.1.9",
   "workspaces": [
     "packages/*"
   ],
