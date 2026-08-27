@@ -123,7 +123,7 @@ func TestParsePromOptions_QueryStatsEnabled(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			opts, err := models.ParsePromOptions(settingsWithJSON(t, tc.json))
 			require.NoError(t, err)
-			require.Equal(t, tc.want, opts.QueryStatsEnabled)
+			require.Equal(t, tc.want, bool(opts.QueryStatsEnabled))
 		})
 	}
 }
@@ -175,7 +175,7 @@ func TestPromOptions_ApplyDefaults(t *testing.T) {
 }
 
 func TestPromOptions_ApplyDefaults_DoesNotMutateUnrelatedFields(t *testing.T) {
-	seriesLimit := int64(42)
+	seriesLimit := models.LenientFloat64(42)
 	opts := models.PromOptions{
 		TimeInterval:   "30s",
 		QueryTimeout:   "60s",
@@ -186,9 +186,9 @@ func TestPromOptions_ApplyDefaults_DoesNotMutateUnrelatedFields(t *testing.T) {
 
 	require.Equal(t, "30s", opts.TimeInterval)
 	require.Equal(t, "60s", opts.QueryTimeout)
-	require.Equal(t, "Prometheus", opts.PrometheusType)
+	require.Equal(t, "Prometheus", string(opts.PrometheusType))
 	require.NotNil(t, opts.SeriesLimit)
-	require.Equal(t, int64(42), *opts.SeriesLimit)
+	require.Equal(t, 42.0, float64(*opts.SeriesLimit))
 }
 
 func TestPromOptions_Validate(t *testing.T) {
