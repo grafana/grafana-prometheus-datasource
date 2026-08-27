@@ -2,7 +2,7 @@
 import { css } from '@emotion/css';
 import { parser } from '@prometheus-io/lezer-promql';
 import { promLanguageDefinition } from 'monaco-promql';
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLatest } from 'react-use';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -16,6 +16,7 @@ import { DataProvider } from './monaco-completion-provider/data_provider';
 import { getCompletionProvider, getSuggestOptions } from './monaco-completion-provider/monaco-completion-provider';
 import { placeHolderScopedVars, validateQuery } from './monaco-completion-provider/validation';
 import { language, languageConfiguration } from './promql';
+import { usePrometheusQueryCoauthoring } from './usePrometheusQueryCoauthoring';
 
 // How long (ms) the manual-trigger flag stays set after a Ctrl/Cmd+Space, so the
 // completion provider can distinguish an explicit request from typing-driven triggers.
@@ -101,26 +102,50 @@ const getStyles = (theme: GrafanaTheme2, placeholder: string) => {
         opacity: 0.6,
       },
     }),
+    coauthoringPortal: css({
+      zIndex: theme.zIndex.portal,
+    }),
   };
 };
 
 const MonacoQueryField = (props: Props) => {
-  const id = uuidv4();
+  const [id] = useState(() => uuidv4());
 
   // we need only one instance of `overrideServices` during the lifetime of the react component
   const overrideServicesRef = useRef(getOverrideServices());
   const containerRef = useRef<HTMLDivElement>(null);
-  const { languageProvider, history, onBlur, onRunQuery, initialValue, placeholder, datasource, timeRange } = props;
+  const {
+    languageProvider,
+    history,
+    onBlur,
+    onRunQuery,
+    initialValue,
+    placeholder,
+    datasource,
+    timeRange,
+    createQueryForCoauthoring,
+    unstable_queryEditorCoauthoringV1,
+  } = props;
 
   const lpRef = useLatest(languageProvider);
   const historyRef = useLatest(history);
   const onRunQueryRef = useLatest(onRunQuery);
   const onBlurRef = useLatest(onBlur);
-
   const autocompleteDisposeFun = useRef<(() => void) | null>(null);
 
   const theme = useTheme2();
-  const styles = getStyles(theme, placeholder);
+  const styles = useMemo(() => getStyles(theme, placeholder), [placeholder, theme]);
+  const attachCoauthoring = usePrometheusQueryCoauthoring({
+    createQuery: createQueryForCoauthoring,
+    datasource,
+    externalQuery: initialValue,
+    languageProvider,
+    onManualQueryChange: onBlur,
+    portalClassName: styles.coauthoringPortal,
+    registrar: unstable_queryEditorCoauthoringV1,
+    timeRange,
+    widgetId: `prometheus-query-coauthoring-${id}`,
+  });
 
   useEffect(() => {
     // when we unmount, we unregister the autocomplete-function, if it was registered
@@ -147,6 +172,8 @@ const MonacoQueryField = (props: Props) => {
           ensurePromQL(monaco);
         }}
         onMount={(editor, monaco) => {
+          attachCoauthoring(editor, monaco);
+
           const isEditorFocused = editor.createContextKey<boolean>('isEditorFocused' + id, false);
           // we setup on-blur
           editor.onDidBlurEditorWidget(() => {
