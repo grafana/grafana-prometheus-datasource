@@ -6,8 +6,11 @@ import (
 	"io"
 	"net/http"
 	"testing"
+	"time"
 
+	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
+	"github.com/grafana/grafana-plugin-sdk-go/data"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -21,7 +24,7 @@ func TestQueryData_parseResponse(t *testing.T) {
 	t.Run("resultType is before result the field must parsed normally", func(t *testing.T) {
 		resBody := `{"data":{"resultType":"vector", "result":[{"metric":{"__name__":"some_name","environment":"some_env","id":"some_id","instance":"some_instance:1234","job":"some_job","name":"another_name","region":"some_region"},"value":[1.1,"2"]}]},"status":"success"}`
 		res := &http.Response{Body: io.NopCloser(bytes.NewBufferString(resBody)), StatusCode: 200}
-		result := qd.parseResponse(context.Background(), &models.Query{}, res)
+		result := qd.parseResponse(context.Background(), &models.Query{}, res, models.RangeQueryType)
 		assert.Nil(t, result.Error)
 		assert.Len(t, result.Frames, 1)
 	})
@@ -29,7 +32,7 @@ func TestQueryData_parseResponse(t *testing.T) {
 	t.Run("resultType is after the result field must parsed normally", func(t *testing.T) {
 		resBody := `{"data":{"result":[{"metric":{"__name__":"some_name","environment":"some_env","id":"some_id","instance":"some_instance:1234","job":"some_job","name":"another_name","region":"some_region"},"value":[1.1,"2"]}],"resultType":"vector"},"status":"success"}`
 		res := &http.Response{Body: io.NopCloser(bytes.NewBufferString(resBody)), StatusCode: 200}
-		result := qd.parseResponse(context.Background(), &models.Query{}, res)
+		result := qd.parseResponse(context.Background(), &models.Query{}, res, models.RangeQueryType)
 		assert.Nil(t, result.Error)
 		assert.Len(t, result.Frames, 1)
 	})
@@ -37,7 +40,7 @@ func TestQueryData_parseResponse(t *testing.T) {
 	t.Run("no resultType is existed in the data", func(t *testing.T) {
 		resBody := `{"data":{"result":[{"metric":{"__name__":"some_name","environment":"some_env","id":"some_id","instance":"some_instance:1234","job":"some_job","name":"another_name","region":"some_region"},"value":[1.1,"2"]}]},"status":"success"}`
 		res := &http.Response{Body: io.NopCloser(bytes.NewBufferString(resBody)), StatusCode: 200}
-		result := qd.parseResponse(context.Background(), &models.Query{}, res)
+		result := qd.parseResponse(context.Background(), &models.Query{}, res, models.RangeQueryType)
 		assert.Error(t, result.Error)
 		assert.Equal(t, result.Error.Error(), "no resultType found")
 	})
@@ -45,7 +48,7 @@ func TestQueryData_parseResponse(t *testing.T) {
 	t.Run("resultType is set as empty string before result", func(t *testing.T) {
 		resBody := `{"data":{"resultType":"", "result":[{"metric":{"__name__":"some_name","environment":"some_env","id":"some_id","instance":"some_instance:1234","job":"some_job","name":"another_name","region":"some_region"},"value":[1.1,"2"]}]},"status":"success"}`
 		res := &http.Response{Body: io.NopCloser(bytes.NewBufferString(resBody)), StatusCode: 200}
-		result := qd.parseResponse(context.Background(), &models.Query{}, res)
+		result := qd.parseResponse(context.Background(), &models.Query{}, res, models.RangeQueryType)
 		assert.Error(t, result.Error)
 		assert.Equal(t, result.Error.Error(), "unknown result type: ")
 	})
@@ -53,7 +56,7 @@ func TestQueryData_parseResponse(t *testing.T) {
 	t.Run("resultType is set as empty string after result", func(t *testing.T) {
 		resBody := `{"data":{"result":[{"metric":{"__name__":"some_name","environment":"some_env","id":"some_id","instance":"some_instance:1234","job":"some_job","name":"another_name","region":"some_region"},"value":[1.1,"2"]}],"resultType":""},"status":"success"}`
 		res := &http.Response{Body: io.NopCloser(bytes.NewBufferString(resBody)), StatusCode: 200}
-		result := qd.parseResponse(context.Background(), &models.Query{}, res)
+		result := qd.parseResponse(context.Background(), &models.Query{}, res, models.RangeQueryType)
 		assert.Error(t, result.Error)
 		assert.Equal(t, result.Error.Error(), "unknown result type: ")
 	})
@@ -64,10 +67,132 @@ func TestAddMetadataToMultiFrame(t *testing.T) {
 		qd := QueryData{exemplarSampler: exemplar.NewStandardDeviationSampler}
 		resBody := `{"status":"success","data":{"resultType":"matrix","result":[{"metric":{"__name__":"rpc_durations_native_histogram_seconds","instance":"nativehisto:8080","job":"prometheus"},"histograms":[[1729529685,{"count":"7243102","sum":"72460202.93145595","buckets":[[0,"1.8340080864093422","2","10"],[0,"2","2.1810154653305154","68"]]}],[1729529700,{"count":"7243490","sum":"72464056.03309634","buckets":[[0,"1.8340080864093422","2","10"],[0,"2","2.1810154653305154","68"]]}],[1729529715,{"count":"7243880","sum":"72467935.35871512","buckets":[[0,"1.8340080864093422","2","10"],[0,"2","2.1810154653305154","68"]]}]]}]}}`
 		res := &http.Response{Body: io.NopCloser(bytes.NewBufferString(resBody)), StatusCode: 200}
-		result := qd.parseResponse(context.Background(), &models.Query{}, res)
+		result := qd.parseResponse(context.Background(), &models.Query{}, res, models.RangeQueryType)
 		assert.Nil(t, result.Error)
 		assert.Len(t, result.Frames, 1)
 		assert.Equal(t, "yMin", result.Frames[0].Fields[1].Name)
+	})
+}
+
+func TestParseQueryStats(t *testing.T) {
+	tests := []struct {
+		name        string
+		headerLines []string
+		queryType   models.TimeSeriesQueryType
+		want        []data.QueryStat
+	}{
+		{
+			name:        "absent header",
+			headerLines: nil,
+			queryType:   models.RangeQueryType,
+			want:        nil,
+		},
+		{
+			name:        "all known Mimir metrics",
+			headerLines: []string{"bytes_processed;val=11188007, equivalent_samples_read;val=20000, querier_wall_time;dur=5215.074756, response_time;dur=1061.890603, samples_processed;val=17647"},
+			queryType:   models.RangeQueryType,
+			want: []data.QueryStat{
+				{FieldConfig: data.FieldConfig{DisplayName: "Range: Bytes processed", Unit: "decbytes"}, Value: 11188007},
+				{FieldConfig: data.FieldConfig{DisplayName: "Range: Equivalent samples read", Unit: "short"}, Value: 20000},
+				{FieldConfig: data.FieldConfig{DisplayName: "Range: Querier wall time", Unit: "ms"}, Value: 5215.074756},
+				{FieldConfig: data.FieldConfig{DisplayName: "Range: Response time", Unit: "ms"}, Value: 1061.890603},
+				{FieldConfig: data.FieldConfig{DisplayName: "Range: Samples processed", Unit: "short"}, Value: 17647},
+			},
+		},
+		{
+			name:        "unknown metrics are skipped",
+			headerLines: []string{"future_metric;val=42, bytes_processed;val=11188007"},
+			queryType:   models.RangeQueryType,
+			want: []data.QueryStat{
+				{FieldConfig: data.FieldConfig{DisplayName: "Range: Bytes processed", Unit: "decbytes"}, Value: 11188007},
+			},
+		},
+		{
+			name:        "malformed entries are skipped",
+			headerLines: []string{"querier_wall_time, bytes_processed;val=notanumber, response_time;dur=10"},
+			queryType:   models.RangeQueryType,
+			want: []data.QueryStat{
+				{FieldConfig: data.FieldConfig{DisplayName: "Range: Response time", Unit: "ms"}, Value: 10},
+			},
+		},
+		{
+			name:        "instant query stats are labeled Instant",
+			headerLines: []string{"response_time;dur=10"},
+			queryType:   models.InstantQueryType,
+			want: []data.QueryStat{
+				{FieldConfig: data.FieldConfig{DisplayName: "Instant: Response time", Unit: "ms"}, Value: 10},
+			},
+		},
+		{
+			name:        "exemplar query stats are labeled Exemplar",
+			headerLines: []string{"response_time;dur=10"},
+			queryType:   models.ExemplarQueryType,
+			want: []data.QueryStat{
+				{FieldConfig: data.FieldConfig{DisplayName: "Exemplar: Response time", Unit: "ms"}, Value: 10},
+			},
+		},
+		{
+			name:        "multiple Server-Timing header lines are all read",
+			headerLines: []string{"querier_wall_time;dur=5215.074756", "bytes_processed;val=11188007"},
+			queryType:   models.RangeQueryType,
+			want: []data.QueryStat{
+				{FieldConfig: data.FieldConfig{DisplayName: "Range: Querier wall time", Unit: "ms"}, Value: 5215.074756},
+				{FieldConfig: data.FieldConfig{DisplayName: "Range: Bytes processed", Unit: "decbytes"}, Value: 11188007},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			header := http.Header{}
+			for _, line := range tt.headerLines {
+				header.Add("Server-Timing", line)
+			}
+			assert.Equal(t, tt.want, parseQueryStats(header, tt.queryType))
+		})
+	}
+}
+
+func TestParseResponse_QueryStats(t *testing.T) {
+	qd := QueryData{exemplarSampler: exemplar.NewStandardDeviationSampler}
+	resBody := `{"data":{"resultType":"vector","result":[{"metric":{"__name__":"up"},"value":[1.1,"2"]}]},"status":"success"}`
+
+	t.Run("populates frame meta stats from Server-Timing header", func(t *testing.T) {
+		res := &http.Response{
+			Body:       io.NopCloser(bytes.NewBufferString(resBody)),
+			StatusCode: 200,
+			Header:     http.Header{"Server-Timing": []string{"equivalent_samples_read;val=20000"}},
+		}
+		result := qd.parseResponse(context.Background(), &models.Query{}, res, models.RangeQueryType)
+		require.Nil(t, result.Error)
+		require.Len(t, result.Frames, 1)
+		assert.Equal(t, []data.QueryStat{
+			{FieldConfig: data.FieldConfig{DisplayName: "Range: Equivalent samples read", Unit: "short"}, Value: 20000},
+		}, result.Frames[0].Meta.Stats)
+	})
+
+	t.Run("leaves stats nil when header absent", func(t *testing.T) {
+		res := &http.Response{Body: io.NopCloser(bytes.NewBufferString(resBody)), StatusCode: 200}
+		result := qd.parseResponse(context.Background(), &models.Query{}, res, models.RangeQueryType)
+		require.Nil(t, result.Error)
+		require.Len(t, result.Frames, 1)
+		assert.Nil(t, result.Frames[0].Meta.Stats)
+	})
+
+	t.Run("keeps Prometheus's own stats alongside Server-Timing stats", func(t *testing.T) {
+		bodyWithStats := `{"data":{"resultType":"vector","result":[{"metric":{"__name__":"up"},"value":[1.1,"2"]}],"stats":{"samples":{"totalQueryableSamples":30}}},"status":"success"}`
+		res := &http.Response{
+			Body:       io.NopCloser(bytes.NewBufferString(bodyWithStats)),
+			StatusCode: 200,
+			Header:     http.Header{"Server-Timing": []string{"equivalent_samples_read;val=20000"}},
+		}
+		result := qd.parseResponse(context.Background(), &models.Query{}, res, models.RangeQueryType)
+		require.Nil(t, result.Error)
+		require.Len(t, result.Frames, 1)
+		assert.Equal(t, []data.QueryStat{
+			{FieldConfig: data.FieldConfig{DisplayName: "Total queryable samples"}, Value: 30},
+			{FieldConfig: data.FieldConfig{DisplayName: "Range: Equivalent samples read", Unit: "short"}, Value: 20000},
+		}, result.Frames[0].Meta.Stats)
 	})
 }
 
@@ -98,7 +223,7 @@ func TestParseResponse_ErrorCases(t *testing.T) {
 			q := &models.Query{}
 			qd := QueryData{exemplarSampler: exemplar.NewStandardDeviationSampler}
 			qd.log = log.New()
-			resp := qd.parseResponse(ctx, q, res)
+			resp := qd.parseResponse(ctx, q, res, models.RangeQueryType)
 
 			require.Error(t, resp.Error)
 			assert.Contains(t, resp.Error.Error(), "unexpected response")
@@ -106,4 +231,36 @@ func TestParseResponse_ErrorCases(t *testing.T) {
 			assert.NoError(t, res.Body.Close())
 		})
 	}
+}
+
+func newExemplarFrame(meta *data.FrameMeta) *data.Frame {
+	timeField := data.NewField("Time", nil, []time.Time{time.Unix(1, 0)})
+	timeField.Config = &data.FieldConfig{Interval: 15000}
+	valueField := data.NewField("Value", data.Labels{"__name__": "up"}, []float64{1})
+	frame := data.NewFrame("", timeField, valueField)
+	frame.RefID = "A"
+	frame.Meta = meta
+	return frame
+}
+
+func TestProcessExemplars(t *testing.T) {
+	t.Run("preserves the first exemplar frame's Meta when merging multiple series", func(t *testing.T) {
+		qd := QueryData{exemplarSampler: exemplar.NewStandardDeviationSampler}
+
+		frame1 := newExemplarFrame(&data.FrameMeta{
+			ExecutedQueryString: "Expr: up\nStep: 15s",
+			Custom:              map[string]any{"resultType": "exemplar"},
+		})
+		frame2 := newExemplarFrame(&data.FrameMeta{
+			Custom: map[string]any{"resultType": "exemplar"},
+		})
+
+		result := qd.processExemplars(context.Background(), &models.Query{}, backend.DataResponse{
+			Frames: data.Frames{frame1, frame2},
+		})
+
+		require.NoError(t, result.Error)
+		require.Len(t, result.Frames, 1)
+		assert.Equal(t, "Expr: up\nStep: 15s", result.Frames[0].Meta.ExecutedQueryString)
+	})
 }

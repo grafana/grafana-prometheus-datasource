@@ -58,7 +58,7 @@ func BenchmarkExemplarJson(b *testing.B) {
 			StatusCode: 200,
 			Body:       io.NopCloser(bytes.NewReader(responseBytes)),
 		}
-		tCtx.httpProvider.setResponse(&res, &res)
+		tCtx.httpProvider.setResponse(&res, nil, &res)
 		resp, err := tCtx.queryData.Execute(ctx, query)
 		require.NoError(b, err)
 		for _, r := range resp.Responses {
@@ -100,7 +100,7 @@ func BenchmarkRangeJson(b *testing.B) {
 			StatusCode: 200,
 			Body:       io.NopCloser(bytes.NewReader(body)),
 		}
-		tCtx.httpProvider.setResponse(&res, &res)
+		tCtx.httpProvider.setResponse(&res, nil, &res)
 		r, err = tCtx.queryData.Execute(ctx, q)
 		require.NoError(b, err)
 	}

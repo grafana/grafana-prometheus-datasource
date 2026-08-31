@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -19,7 +20,7 @@ import (
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/utils"
 )
 
-func (s *QueryData) parseResponse(ctx context.Context, q *models.Query, res *http.Response) backend.DataResponse {
+func (s *QueryData) parseResponse(ctx context.Context, q *models.Query, res *http.Response, queryType models.TimeSeriesQueryType) backend.DataResponse {
 	defer func() {
 		if err := res.Body.Close(); err != nil {
 			s.log.FromContext(ctx).Error("Failed to close response body", "err", err)
@@ -71,6 +72,7 @@ func (s *QueryData) parseResponse(ctx context.Context, q *models.Query, res *htt
 					// Knowing the calculated minStep is required for merging and caching the frames on frontend side
 					custom["calculatedMinStep"] = q.Step.Milliseconds()
 				}
+				frame.Meta.Stats = append(frame.Meta.Stats, parseQueryStats(res.Header, queryType)...)
 			}
 		}
 
@@ -101,6 +103,71 @@ func (s *QueryData) parseResponse(ctx context.Context, q *models.Query, res *htt
 	}
 }
 
+// knownQueryStats maps Mimir's Server-Timing metric names to the display
+// name and unit used in the Grafana Inspector's Stats tab. Metrics not in
+// this list are dropped rather than passed through with a raw name.
+var knownQueryStats = map[string]struct {
+	displayName string
+	unit        string
+}{
+	"querier_wall_time":       {"Querier wall time", "ms"},
+	"response_time":           {"Response time", "ms"},
+	"bytes_processed":         {"Bytes processed", "decbytes"},
+	"samples_processed":       {"Samples processed", "short"},
+	"equivalent_samples_read": {"Equivalent samples read", "short"},
+}
+
+// queryStatPrefixes labels each stat by the request that produced it, since
+// a combined Range+Instant query can attach two Server-Timing headers to the
+// same panel and otherwise their stats would be indistinguishable.
+var queryStatPrefixes = map[models.TimeSeriesQueryType]string{
+	models.RangeQueryType:    "Range: ",
+	models.InstantQueryType:  "Instant: ",
+	models.ExemplarQueryType: "Exemplar: ",
+}
+
+// parseQueryStats parses Mimir's Server-Timing response header into frame
+// meta stats. The header has the form:
+//
+//	Server-Timing: querier_wall_time;dur=5215.074756, bytes_processed;val=11188007
+//
+// where `dur` values are milliseconds and `val` values are raw counts.
+func parseQueryStats(header http.Header, queryType models.TimeSeriesQueryType) []data.QueryStat {
+	var stats []data.QueryStat
+	prefix := queryStatPrefixes[queryType]
+
+	for _, line := range header.Values("Server-Timing") {
+		for entry := range strings.SplitSeq(line, ",") {
+			name, param, found := strings.Cut(strings.TrimSpace(entry), ";")
+			if !found {
+				continue
+			}
+
+			known, ok := knownQueryStats[name]
+			if !ok {
+				continue
+			}
+
+			key, rawValue, found := strings.Cut(param, "=")
+			if !found || (key != "dur" && key != "val") {
+				continue
+			}
+
+			value, err := strconv.ParseFloat(rawValue, 64)
+			if err != nil {
+				continue
+			}
+
+			stats = append(stats, data.QueryStat{
+				FieldConfig: data.FieldConfig{DisplayName: prefix + known.displayName, Unit: known.unit},
+				Value:       value,
+			})
+		}
+	}
+
+	return stats
+}
+
 func (s *QueryData) processExemplars(ctx context.Context, q *models.Query, dr backend.DataResponse) backend.DataResponse {
 	_, endSpan := utils.StartTrace(ctx, s.tracer, "datasource.prometheus.processExemplars")
 	defer endSpan()
@@ -113,6 +180,7 @@ func (s *QueryData) processExemplars(ctx context.Context, q *models.Query, dr ba
 	// old exemplar frames filtered out
 	framer := exemplar.NewFramer(sampler, labelTracker)
 
+	metaSet := false
 	for _, frame := range dr.Frames {
 		// we don't need to process non-exemplar frames
 		// so they can be added to the response
@@ -121,9 +189,14 @@ func (s *QueryData) processExemplars(ctx context.Context, q *models.Query, dr ba
 			continue
 		}
 
-		// copy the current exemplar frame metadata
-		framer.SetMeta(frame.Meta)
-		framer.SetRefID(frame.RefID)
+		// only the first exemplar frame carries ExecutedQueryString/Stats/
+		// calculatedMinStep (set in parseResponse), and all exemplar frames
+		// are merged into one output frame, so take its Meta and ignore the rest.
+		if !metaSet {
+			framer.SetMeta(frame.Meta)
+			framer.SetRefID(frame.RefID)
+			metaSet = true
+		}
 
 		step := time.Duration(frame.Fields[0].Config.Interval) * time.Millisecond
 		sampler.SetStep(step)

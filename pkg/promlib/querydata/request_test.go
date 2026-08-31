@@ -91,7 +91,7 @@ func TestPrometheus_parseTimeSeriesResponse(t *testing.T) {
 			RefID: "A",
 			JSON:  b,
 		}
-		res, err := execute(tctx, query, exemplars, rangeResult)
+		res, err := execute(tctx, query, rangeResult, nil, exemplars)
 		require.NoError(t, err)
 
 		// Test fields
@@ -154,7 +154,7 @@ func TestPrometheus_parseTimeSeriesResponse(t *testing.T) {
 		}
 		tctx, err := setup()
 		require.NoError(t, err)
-		res, err := execute(tctx, query, result, nil)
+		res, err := execute(tctx, query, result, nil, nil)
 		require.NoError(t, err)
 
 		require.Len(t, res, 1)
@@ -203,7 +203,7 @@ func TestPrometheus_parseTimeSeriesResponse(t *testing.T) {
 		}
 		tctx, err := setup()
 		require.NoError(t, err)
-		res, err := execute(tctx, query, result, nil)
+		res, err := execute(tctx, query, result, nil, nil)
 
 		require.NoError(t, err)
 		require.Len(t, res, 1)
@@ -248,7 +248,7 @@ func TestPrometheus_parseTimeSeriesResponse(t *testing.T) {
 		}
 		tctx, err := setup()
 		require.NoError(t, err)
-		res, err := execute(tctx, query, result, nil)
+		res, err := execute(tctx, query, result, nil, nil)
 
 		require.NoError(t, err)
 		require.Len(t, res, 1)
@@ -292,7 +292,7 @@ func TestPrometheus_parseTimeSeriesResponse(t *testing.T) {
 
 		tctx, err := setup()
 		require.NoError(t, err)
-		res, err := execute(tctx, query, result, nil)
+		res, err := execute(tctx, query, result, nil, nil)
 		require.NoError(t, err)
 
 		require.Equal(t, `{app="Application"}`, res[0].Fields[1].Config.DisplayNameFromDS)
@@ -324,7 +324,7 @@ func TestPrometheus_parseTimeSeriesResponse(t *testing.T) {
 		}
 		tctx, err := setup()
 		require.NoError(t, err)
-		res, err := execute(tctx, query, qr, nil)
+		res, err := execute(tctx, query, nil, qr, nil)
 		require.NoError(t, err)
 
 		require.Len(t, res, 1)
@@ -364,7 +364,7 @@ func TestPrometheus_parseTimeSeriesResponse(t *testing.T) {
 		}
 		tctx, err := setup()
 		require.NoError(t, err)
-		res, err := execute(tctx, query, qr, nil)
+		res, err := execute(tctx, query, nil, qr, nil)
 		require.NoError(t, err)
 
 		require.Len(t, res, 1)
@@ -421,7 +421,7 @@ func TestPrometheus_executedQueryString(t *testing.T) {
 		}
 		tctx, err := setup()
 		require.NoError(t, err)
-		res, err := execute(tctx, query, result, nil)
+		res, err := execute(tctx, query, result, nil, nil)
 		require.NoError(t, err)
 
 		require.Len(t, res, 1)
@@ -468,7 +468,7 @@ func TestPrometheus_executedQueryString(t *testing.T) {
 		}
 		tctx, err := setup()
 		require.NoError(t, err)
-		res, err := execute(tctx, query, result, nil)
+		res, err := execute(tctx, query, result, nil, nil)
 		require.NoError(t, err)
 
 		require.Len(t, res, 1)
@@ -482,7 +482,7 @@ type queryResult struct {
 	Result any         `json:"result"`
 }
 
-func executeWithHeaders(tctx *testContext, query backend.DataQuery, rqr any, eqr any, headers map[string]string) (data.Frames, error) {
+func executeWithHeaders(tctx *testContext, query backend.DataQuery, rqr, iqr, eqr any, headers map[string]string) (data.Frames, error) {
 	req := backend.QueryDataRequest{
 		Queries: []backend.DataQuery{query},
 		Headers: headers,
@@ -497,6 +497,10 @@ func executeWithHeaders(tctx *testContext, query backend.DataQuery, rqr any, eqr
 	if err != nil {
 		return nil, err
 	}
+	instantRes, err := toAPIResponse(iqr)
+	if err != nil {
+		return nil, err
+	}
 	exemplarRes, err := toAPIResponse(eqr)
 	if err != nil {
 		return nil, err
@@ -505,11 +509,14 @@ func executeWithHeaders(tctx *testContext, query backend.DataQuery, rqr any, eqr
 		if err := rangeRes.Body.Close(); err != nil {
 			fmt.Println(fmt.Errorf("rangeRes body close error: %v", err))
 		}
+		if err := instantRes.Body.Close(); err != nil {
+			fmt.Println(fmt.Errorf("instantRes body close error: %v", err))
+		}
 		if err := exemplarRes.Body.Close(); err != nil {
 			fmt.Println(fmt.Errorf("exemplarRes body close error: %v", err))
 		}
 	}()
-	tctx.httpProvider.setResponse(rangeRes, exemplarRes)
+	tctx.httpProvider.setResponse(rangeRes, instantRes, exemplarRes)
 
 	// Create context with GrafanaConfig
 	ctx := backend.WithGrafanaConfig(context.Background(), backend.NewGrafanaCfg(map[string]string{
@@ -524,8 +531,8 @@ func executeWithHeaders(tctx *testContext, query backend.DataQuery, rqr any, eqr
 	return res.Responses[req.Queries[0].RefID].Frames, nil
 }
 
-func execute(tctx *testContext, query backend.DataQuery, rqr any, eqr any) (data.Frames, error) {
-	return executeWithHeaders(tctx, query, rqr, eqr, map[string]string{})
+func execute(tctx *testContext, query backend.DataQuery, rqr, iqr, eqr any) (data.Frames, error) {
+	return executeWithHeaders(tctx, query, rqr, iqr, eqr, map[string]string{})
 }
 
 type apiResponse struct {
@@ -569,6 +576,10 @@ func setup() (*testContext, error) {
 			StatusCode: 200,
 			Body:       io.NopCloser(bytes.NewReader([]byte(`{}`))),
 		},
+		instantRes: &http.Response{
+			StatusCode: 200,
+			Body:       io.NopCloser(bytes.NewReader([]byte(`{}`))),
+		},
 		exemplarRes: &http.Response{
 			StatusCode: 200,
 			Body:       io.NopCloser(bytes.NewReader([]byte(`{}`))),
@@ -601,6 +612,7 @@ type fakeHttpClientProvider struct {
 	httpclient.Provider
 	opts        httpclient.Options
 	rangeRes    *http.Response
+	instantRes  *http.Response
 	exemplarRes *http.Response
 }
 
@@ -619,8 +631,9 @@ func (p *fakeHttpClientProvider) GetTransport(opts ...httpclient.Options) (http.
 	return http.DefaultTransport, nil
 }
 
-func (p *fakeHttpClientProvider) setResponse(rangeRes *http.Response, exemplarRes *http.Response) {
+func (p *fakeHttpClientProvider) setResponse(rangeRes, instantRes, exemplarRes *http.Response) {
 	p.rangeRes = rangeRes
+	p.instantRes = instantRes
 
 	// Create a proper clone manually ensuring we have a fresh response
 	if exemplarRes != nil {
@@ -656,8 +669,10 @@ func (p *fakeHttpClientProvider) setResponse(rangeRes *http.Response, exemplarRe
 
 func (p *fakeHttpClientProvider) RoundTrip(req *http.Request) (*http.Response, error) {
 	switch req.URL.Path {
-	case "/api/v1/query_range", "/api/v1/query":
+	case "/api/v1/query_range":
 		return p.rangeRes, nil
+	case "/api/v1/query":
+		return p.instantRes, nil
 	case "/api/v1/query_exemplars":
 		return p.exemplarRes, nil
 	}
