@@ -42,7 +42,16 @@ func New(
 
 func (r *Resource) Execute(ctx context.Context, req *backend.CallResourceRequest) (*backend.CallResourceResponse, error) {
 	r.log.FromContext(ctx).Debug("Sending resource query", "URL", req.URL)
-	resp, err := r.promClient.QueryResource(ctx, req)
+
+	// The browser<->Grafana and plugin<->upstream hops negotiate compression
+	// independently, so the browser's Accept-Encoding must not leak upstream.
+	// Clone the request and pin the upstream encoding to gzip — the same policy
+	// ExecuteSearch uses.
+	resourceReq := *req
+	resourceReq.Headers = req.GetHTTPHeaders().Clone()
+	resourceReq.Headers["Accept-Encoding"] = []string{"gzip"}
+
+	resp, err := r.promClient.QueryResource(ctx, &resourceReq)
 	if err != nil {
 		return nil, fmt.Errorf("error querying resource: %v", err)
 	}

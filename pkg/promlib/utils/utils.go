@@ -11,6 +11,7 @@ import (
 
 	"github.com/andybalholm/brotli"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
+	"github.com/klauspost/compress/zstd"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -63,6 +64,13 @@ func Decode(encoding string, original io.ReadCloser) ([]byte, error) {
 		}()
 	case "br":
 		reader = brotli.NewReader(original)
+	case "zstd":
+		zr, err := zstd.NewReader(original, zstd.WithDecoderConcurrency(1))
+		if err != nil {
+			return nil, err
+		}
+		defer zr.Close()
+		reader = zr
 	case "":
 		reader = original
 	default:
