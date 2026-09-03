@@ -17,6 +17,7 @@ import (
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 	scope "github.com/grafana/grafana/apps/scope/pkg/apis/scope/v0alpha1"
+	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -131,6 +132,7 @@ func TestResource_ExecuteStripsFramingHeadersAcrossEncodings(t *testing.T) {
 		{name: "gzip", encoding: "gzip"},
 		{name: "deflate", encoding: "deflate"},
 		{name: "brotli", encoding: "br"},
+		{name: "zstd", encoding: "zstd"},
 		{name: "identity", encoding: ""},
 	}
 
@@ -176,6 +178,57 @@ func TestResource_ExecuteStripsFramingHeadersAcrossEncodings(t *testing.T) {
 			require.Equal(t, "application/json", h.Get("Content-Type"), "unrelated headers must be preserved")
 		})
 	}
+}
+
+// TestResource_ExecutePinsAcceptEncodingToGzip pins the encoding policy behind
+// the zstd regression fix: whatever Accept-Encoding the browser sent (Chrome
+// advertises "gzip, deflate, br, zstd" over HTTPS), Execute must request gzip
+// from the upstream — the two HTTP hops negotiate compression independently.
+// The upstream answers with gzip, and Execute decodes it and strips the framing
+// headers. The original request must not be mutated.
+func TestResource_ExecutePinsAcceptEncodingToGzip(t *testing.T) {
+	body := []byte(`{"status":"success","data":["job","instance","__name__"]}`)
+	payload := compress(t, "gzip", body)
+
+	mockClient := &http.Client{
+		Transport: &mockRoundTripper{
+			customRoundTrip: func(req *http.Request) (*http.Response, error) {
+				require.Equal(t, "gzip", req.Header.Get("Accept-Encoding"),
+					"upstream request must ask for gzip regardless of the browser's Accept-Encoding")
+				return &http.Response{
+					StatusCode: 200,
+					Body:       io.NopCloser(bytes.NewReader(payload)),
+					Header: http.Header{
+						"Content-Type":     []string{"application/json"},
+						"Content-Encoding": []string{"gzip"},
+						"Content-Length":   []string{strconv.Itoa(len(payload))},
+					},
+				}, nil
+			},
+		},
+	}
+	settings := backend.DataSourceInstanceSettings{
+		ID:       1,
+		URL:      "http://mock-server",
+		JSONData: []byte(`{}`),
+	}
+	res, err := resource.New(mockClient, settings, log.DefaultLogger)
+	require.NoError(t, err)
+
+	callReq := &backend.CallResourceRequest{
+		URL:     "/api/v1/labels",
+		Headers: map[string][]string{"Accept-Encoding": {"gzip, deflate, br, zstd"}},
+	}
+	resp, err := res.Execute(context.Background(), callReq)
+	require.NoError(t, err)
+	require.Equal(t, body, resp.Body, "gzip body must be decoded to plaintext")
+
+	h := http.Header(resp.Headers)
+	require.Empty(t, h.Get("Content-Encoding"))
+	require.Empty(t, h.Get("Content-Length"))
+
+	require.Equal(t, []string{"gzip, deflate, br, zstd"}, callReq.Headers["Accept-Encoding"],
+		"the caller's request must not be mutated")
 }
 
 // TestResource_ExecuteResponseSurvivesHTTPBoundary reproduces the production
@@ -410,12 +463,27 @@ func compress(t *testing.T, encoding string, body []byte) []byte {
 		return deflateBody(t, body)
 	case "br":
 		return brotliBody(t, body)
+	case "zstd":
+		return zstdBody(t, body)
 	case "":
 		return body
 	default:
 		t.Fatalf("unsupported encoding %q", encoding)
 		return nil
 	}
+}
+
+func zstdBody(t *testing.T, body []byte) []byte {
+	t.Helper()
+
+	var buf bytes.Buffer
+	writer, err := zstd.NewWriter(&buf)
+	require.NoError(t, err)
+	_, err = writer.Write(body)
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+
+	return buf.Bytes()
 }
 
 func gzipBody(t *testing.T, body []byte) []byte {

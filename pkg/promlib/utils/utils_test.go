@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/andybalholm/brotli"
+	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/require"
 )
 
@@ -57,10 +58,32 @@ func TestDecodeReturnsErrorForInvalidGzip(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestDecodeReturnsErrorUnknownEncoding(t *testing.T) {
-	_, err := Decode("zstd", io.NopCloser(bytes.NewReader([]byte("body"))))
+func TestDecodeZstd(t *testing.T) {
+	body := []byte(`{"status":"success","data":["a","b"]}`)
 
-	require.EqualError(t, err, `unexpected encoding type "zstd"`)
+	decoded, err := Decode("zstd", io.NopCloser(bytes.NewReader(zstdBody(t, body))))
+
+	require.NoError(t, err)
+	require.Equal(t, body, decoded)
+}
+
+func TestDecodeReturnsErrorUnknownEncoding(t *testing.T) {
+	_, err := Decode("lzma", io.NopCloser(bytes.NewReader([]byte("body"))))
+
+	require.EqualError(t, err, `unexpected encoding type "lzma"`)
+}
+
+func zstdBody(t *testing.T, body []byte) []byte {
+	t.Helper()
+
+	var buf bytes.Buffer
+	writer, err := zstd.NewWriter(&buf)
+	require.NoError(t, err)
+	_, err = writer.Write(body)
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+
+	return buf.Bytes()
 }
 
 func gzipBody(t *testing.T, body []byte) []byte {
