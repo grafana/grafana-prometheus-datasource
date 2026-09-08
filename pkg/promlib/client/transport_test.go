@@ -30,4 +30,24 @@ func TestCreateTransportOptions(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, opts.ForwardHTTPHeaders)
 	})
+
+	// The SDK's CustomHeadersMiddleware deletes and re-adds every configured
+	// header on the outgoing request, so a custom Accept-Encoding would replace
+	// the gzip that QueryResource pins and the response would arrive in an
+	// encoding the resource handlers cannot decode.
+	t.Run("drops a custom Accept-Encoding header so it cannot override the pinned gzip", func(t *testing.T) {
+		settings := backend.DataSourceInstanceSettings{
+			JSONData: []byte(`{"httpHeaderName1": "Accept-Encoding", "httpHeaderName2": "X-Custom"}`),
+			DecryptedSecureJSONData: map[string]string{
+				"httpHeaderValue1": "zstd",
+				"httpHeaderValue2": "keep-me",
+			},
+		}
+
+		opts, err := CreateTransportOptions(context.Background(), settings, backend.NewLoggerWith("logger", "test"))
+
+		require.NoError(t, err)
+		require.Empty(t, opts.Header.Get("Accept-Encoding"))
+		require.Equal(t, "keep-me", opts.Header.Get("X-Custom"), "other custom headers must still be applied")
+	})
 }
