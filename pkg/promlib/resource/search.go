@@ -59,15 +59,23 @@ func (r *Resource) ExecuteSearch(
 	// We requested gzip explicitly, so Go's transport does not auto-decompress.
 	// Decode it here with a streaming reader that yields plaintext without
 	// buffering the whole body. Error responses are gzipped too when the
-	// upstream honors Accept-Encoding. Any other encoding is forwarded as-is.
+	// upstream honors Accept-Encoding.
+	//
+	// The framing headers were stripped above, so what we forward advertises
+	// plaintext. An encoding we cannot decode therefore has to fail here: passing
+	// it through would hand the browser compressed bytes labelled as plaintext
+	// NDJSON, which is harder to diagnose than an error.
 	body := io.Reader(resp.Body)
-	if strings.EqualFold(resp.Header.Get("Content-Encoding"), "gzip") {
+	switch encoding := resp.Header.Get("Content-Encoding"); {
+	case strings.EqualFold(encoding, "gzip"):
 		gzReader, err := gzip.NewReader(resp.Body)
 		if err != nil {
 			return fmt.Errorf("error creating gzip reader for search response: %v", err)
 		}
 		defer gzReader.Close()
 		body = gzReader
+	case encoding != "" && !strings.EqualFold(encoding, "identity"):
+		return fmt.Errorf("unexpected encoding type %q", encoding)
 	}
 
 	if resp.StatusCode != http.StatusOK {
