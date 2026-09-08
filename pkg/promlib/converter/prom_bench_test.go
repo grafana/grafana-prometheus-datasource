@@ -16,7 +16,6 @@ import (
 )
 
 func readTestData(t *testing.B, filename string) []byte {
-	// Can ignore gosec G304 here, because this is a constant defined below benchmark test
 	// nolint:gosec
 	data, err := os.ReadFile("testdata/" + filename)
 	if err != nil {
@@ -25,39 +24,44 @@ func readTestData(t *testing.B, filename string) []byte {
 	return data
 }
 
-// go test -benchmem -run=^$ -bench=BenchmarkReadPrometheusStyleResult_FromFile$ github.com/grafana/grafana-prometheus-datasource/pkg/promlib/converter/ -memprofile pmem.out -count 6 | tee pmem.0.txt
+/*
+when memory-profiling this benchmark, these commands are recommended:
+
+	go test -benchmem -run=^$ \
+		-bench=BenchmarkReadPrometheusStyleResult_FromFile$ github.com/grafana/grafana-prometheus-datasource/pkg/promlib/converter/ \
+		-memprofile read-prometheus-style-result-from-file-mem.out -count 6 \
+		| tee read-prometheus-style-result-from-file-baseline.txt
+
+	go tool pprof -http=localhost:6061 read-prometheus-style-result-from-file-mem.out
+
+	benchstat read-prometheus-style-result-from-file-baseline.txt read-prometheus-style-result-from-file-candidate.txt
+*/
 func BenchmarkReadPrometheusStyleResult_FromFile(b *testing.B) {
-	workloads := map[string][]byte{
-		"matrix-small":      readTestData(b, "prom-query-range.json"),
-		"matrix-large":      readTestData(b, "prom-query-range-big.json"),
-		"matrix-nan-inf":    makeMatrixWorkload([]int{4096}, true),
-		"matrix-uniform":    makeMatrixWorkload(repeatedLengths(32, 256), false),
-		"matrix-increasing": makeMatrixWorkload(increasingLengths(32, 16), false),
-		"matrix-decreasing": makeMatrixWorkload(decreasingLengths(32, 16), false),
-		"matrix-ragged":     makeMatrixWorkload(raggedLengths(32, 8, 512), false),
-		"vector":            readTestData(b, "prom-vector.json"),
-		"exemplars":         readTestData(b, "prom-exemplars-a.json"),
-		"histogram-fixture": readTestData(b, "prom-matrix-histogram-partitioned.json"),
-		"histogram-uniform": makeHistogramWorkload(repeatedLengths(16, 32), 8),
-		"histogram-ragged":  makeHistogramWorkload(raggedLengths(16, 4, 64), 8),
+	workloads := []struct {
+		name  string
+		input []byte
+	}{
+		{"matrix-small", readTestData(b, "prom-query-range.json")},
+		{"matrix-large", readTestData(b, "prom-query-range-big.json")},
+		{"matrix-nan-inf", makeMatrixWorkload([]int{4096}, true)},
+		{"matrix-uniform", makeMatrixWorkload(repeatedLengths(32, 256), false)},
+		{"matrix-increasing", makeMatrixWorkload(increasingLengths(32, 16), false)},
+		{"matrix-decreasing", makeMatrixWorkload(decreasingLengths(32, 16), false)},
+		{"matrix-ragged", makeMatrixWorkload(raggedLengths(32, 8, 512), false)},
+		{"vector", readTestData(b, "prom-vector.json")},
+		{"exemplars", readTestData(b, "prom-exemplars-a.json")},
+		{"histogram-fixture", readTestData(b, "prom-matrix-histogram-partitioned.json")},
+		{"histogram-uniform", makeHistogramWorkload(repeatedLengths(16, 32), 8)},
+		{"histogram-ragged", makeHistogramWorkload(raggedLengths(16, 4, 64), 8)},
 	}
 
 	opt := Options{}
-	for name, input := range workloads {
-		b.Run(name+"/bytes", func(b *testing.B) {
-			iter := jsoniter.ParseBytes(jsoniter.ConfigDefault, input)
+	for _, workload := range workloads {
+		b.Run(workload.name+"/reader-1024", func(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for b.Loop() {
-				rsp := ReadPrometheusStyleResult(iter, opt)
-				require.NoError(b, rsp.Error)
-				iter.ResetBytes(input)
-			}
-		})
-		b.Run(name+"/reader-1024", func(b *testing.B) {
-			b.ReportAllocs()
-			for b.Loop() {
-				iter := jsoniter.Parse(jsoniter.ConfigDefault, bytes.NewReader(input), 1024)
+				iter := jsoniter.Parse(jsoniter.ConfigDefault, bytes.NewReader(workload.input), 1024)
 				rsp := ReadPrometheusStyleResult(iter, opt)
 				require.NoError(b, rsp.Error)
 			}
@@ -65,6 +69,18 @@ func BenchmarkReadPrometheusStyleResult_FromFile(b *testing.B) {
 	}
 }
 
+/*
+when memory-profiling this benchmark, these commands are recommended:
+
+	go test -benchmem -run=^$ \
+		-bench=BenchmarkReadTimeValuePair$ github.com/grafana/grafana-prometheus-datasource/pkg/promlib/converter/ \
+		-memprofile read-time-value-pair-mem.out -count 6 \
+		| tee read-time-value-pair-baseline.txt
+
+	go tool pprof -http=localhost:6061 read-time-value-pair-mem.out
+
+	benchstat read-time-value-pair-baseline.txt read-time-value-pair-candidate.txt
+*/
 func BenchmarkReadTimeValuePair(b *testing.B) {
 	for _, value := range []string{"1.25", "1.25e10", "NaN", "+Inf", "-Inf"} {
 		b.Run(value, func(b *testing.B) {
@@ -81,6 +97,18 @@ func BenchmarkReadTimeValuePair(b *testing.B) {
 	}
 }
 
+/*
+when memory-profiling this benchmark, these commands are recommended:
+
+	go test -benchmem -run=^$ \
+		-bench=BenchmarkMatrixFieldConstruction$ github.com/grafana/grafana-prometheus-datasource/pkg/promlib/converter/ \
+		-memprofile matrix-field-construction-mem.out -count 6 \
+		| tee matrix-field-construction-baseline.txt
+
+	go tool pprof -http=localhost:6061 matrix-field-construction-mem.out
+
+	benchstat matrix-field-construction-baseline.txt matrix-field-construction-candidate.txt
+*/
 func BenchmarkMatrixFieldConstruction(b *testing.B) {
 	workloads := map[string][]int{
 		"uniform":    repeatedLengths(32, 256),
@@ -110,6 +138,18 @@ func BenchmarkMatrixFieldConstruction(b *testing.B) {
 	}
 }
 
+/*
+when memory-profiling this benchmark, these commands are recommended:
+
+	go test -benchmem -run=^$ \
+		-bench=BenchmarkHistogramFieldConstruction$ github.com/grafana/grafana-prometheus-datasource/pkg/promlib/converter/ \
+		-memprofile histogram-field-construction-mem.out -count 6 \
+		| tee histogram-field-construction-baseline.txt
+
+	go tool pprof -http=localhost:6061 histogram-field-construction-mem.out
+
+	benchstat histogram-field-construction-baseline.txt histogram-field-construction-candidate.txt
+*/
 func BenchmarkHistogramFieldConstruction(b *testing.B) {
 	workloads := map[string][]int{
 		"uniform": repeatedLengths(16, 256),

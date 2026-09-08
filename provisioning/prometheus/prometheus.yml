@@ -1,9 +1,13 @@
 # Scrape config for the dev Prometheus. It scrapes itself and the Grafana dev
 # container so there are real metric names, label names and label values to
 # exercise the plugin against.
+# Short intervals so the dev/e2e Prometheus has scraped series within a few
+# seconds of startup. Tests must still not depend on scraped data existing
+# (that is a race regardless of interval), but this keeps manual exploration and
+# any data-bearing checks responsive.
 global:
-  scrape_interval: 60s
-  evaluation_interval: 60s
+  scrape_interval: 5s
+  evaluation_interval: 5s
 
 scrape_configs:
   - job_name: prometheus

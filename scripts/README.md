@@ -21,7 +21,11 @@ workspace glob.
 
 ### `add-changeset.js` — `npm run changeset`
 
-Creates one `.changeset/<id>.md` for one package.
+Creates one `.changeset/<id>.md` for the selected package. Selecting
+`@grafana/prometheus` or `promlib` also creates a separate
+`grafana-prometheus-datasource` mirror changeset with the same summary,
+because changes from both libraries are shipped in the datasource. The
+separate files allow each package to be released independently.
 
 ```bash
 npm run changeset                                            # fully interactive
@@ -34,7 +38,11 @@ npm run changeset -- --promlib        --patch "Fix promlib bug"
 Flags: `--datasource`, `--npm-package`,
 `--promlib`, plus `--patch` / `--minor` / `--major`. Anything left over is the
 summary. Missing inputs are prompted for; an empty package selection is an
-error (no default).
+error (no default). The selected package keeps the requested bump type. The
+`@grafana/prometheus` mirror uses that same bump type; `promlib` only supports
+patch changesets, so its mirror is always a patch too. An explicit datasource
+changeset (`--datasource`) can independently raise the eventual datasource
+release to minor or major.
 
 ### `version-changeset.js` — `npm run changeset:version`
 

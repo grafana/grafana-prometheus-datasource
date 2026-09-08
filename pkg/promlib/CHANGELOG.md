@@ -1,5 +1,25 @@
 # promlib
 
+## 0.0.19
+
+🐛 Improve histogram parsing performance ([#299](https://github.com/grafana/grafana-prometheus-datasource/pull/299))
+
+🐛 Improve numeric value parsing performance ([#289](https://github.com/grafana/grafana-prometheus-datasource/pull/289))
+
+🐛 Add search api backend support ([#304](https://github.com/grafana/grafana-prometheus-datasource/pull/304))
+
+🐛 Bump go v1.26.7 and grafana-plugin-sdk-go v0.296.4 ([#251](https://github.com/grafana/grafana-prometheus-datasource/pull/251))
+
+🐛 Removing abstraction related logic. Abstraction PoC has concluded, cleaning up relevant code. ([#318](https://github.com/grafana/grafana-prometheus-datasource/pull/318))
+
+🐛 Improve numeric value parsing performance ([#289](https://github.com/grafana/grafana-prometheus-datasource/pull/289))
+
+## 0.0.18
+
+⚙️ Bump grafana-plugin-sdk-go to v0.294.0, enabling diagnostic bundle HTTP capture ([#288](https://github.com/grafana/grafana-prometheus-datasource/pull/288))
+
+🐛 Fix: force GET method for /api/v1/status/buildinfo to prevent 405 errors on POST-configured datasources ([#293](https://github.com/grafana/grafana-prometheus-datasource/pull/293))
+
 ## 0.0.17
 
 🐛 Request and expose Prometheus query statistics ([#259](https://github.com/grafana/grafana-prometheus-datasource/pull/259))

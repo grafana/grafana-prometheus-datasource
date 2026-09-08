@@ -21,9 +21,18 @@ import (
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/models"
 )
 
-// when memory-profiling this benchmark, these commands are recommended:
-// - go test -benchmem -run=^$ -bench ^BenchmarkExemplarJson$ github.com/grafana/grafana-prometheus-datasource/pkg/promlib/querydata -memprofile memprofile.out -count 6 | tee old.txt
-// - go tool pprof -http=localhost:6061 memprofile.out
+/*
+when memory-profiling this benchmark, these commands are recommended:
+
+	go test -benchmem -run=^$ \
+		-bench ^BenchmarkExemplarJson$ github.com/grafana/grafana-prometheus-datasource/pkg/promlib/querydata \
+		-memprofile exemplar-json-mem.out -count 6 \
+		| tee exemplar-json-baseline.txt
+
+	go tool pprof -http=localhost:6061 exemplar-json-mem.out
+
+	benchstat exemplar-json-baseline.txt exemplar-json-candidate.txt
+*/
 func BenchmarkExemplarJson(b *testing.B) {
 	queryFileName := filepath.Join("../testdata", "exemplar.query.json")
 	query, err := loadStoredQuery(queryFileName)
@@ -38,14 +47,19 @@ func BenchmarkExemplarJson(b *testing.B) {
 
 	tCtx, err := setup()
 	require.NoError(b, err)
-	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
+	grafanaCfg := config.NewGrafanaCfg(map[string]string{
+		config.ConcurrentQueryCount: "10",
+	})
+	query.PluginContext.GrafanaConfig = grafanaCfg
+	ctx := config.WithGrafanaConfig(context.Background(), grafanaCfg)
+
+	for b.Loop() {
 		res := http.Response{
 			StatusCode: 200,
 			Body:       io.NopCloser(bytes.NewReader(responseBytes)),
 		}
 		tCtx.httpProvider.setResponse(&res, &res)
-		resp, err := tCtx.queryData.Execute(context.Background(), query)
+		resp, err := tCtx.queryData.Execute(ctx, query)
 		require.NoError(b, err)
 		for _, r := range resp.Responses {
 			require.NoError(b, r.Error)
@@ -55,10 +69,18 @@ func BenchmarkExemplarJson(b *testing.B) {
 
 var resp *backend.QueryDataResponse
 
-// when memory-profiling this benchmark, these commands are recommended:
-// - go test -benchmem -run=^$ -bench ^BenchmarkRangeJson$ github.com/grafana/grafana-prometheus-datasource/pkg/promlib/querydata -memprofile memprofile.out -count 6 | tee old.txt
-// - go tool pprof -http=localhost:6061 memprofile.out
-// - benchstat old.txt new.txt
+/*
+when memory-profiling this benchmark, these commands are recommended:
+
+	go test -benchmem -run=^$ \
+		-bench ^BenchmarkRangeJson$ github.com/grafana/grafana-prometheus-datasource/pkg/promlib/querydata \
+		-memprofile range-json-mem.out -count 6 \
+		| tee range-json-baseline.txt
+
+	go tool pprof -http=localhost:6061 range-json-mem.out
+
+	benchstat range-json-baseline.txt range-json-candidate.txt
+*/
 func BenchmarkRangeJson(b *testing.B) {
 	var (
 		r   *backend.QueryDataResponse
@@ -73,9 +95,7 @@ func BenchmarkRangeJson(b *testing.B) {
 	q.PluginContext.GrafanaConfig = grafanaCfg
 	ctx := config.WithGrafanaConfig(context.Background(), grafanaCfg)
 
-	b.ResetTimer()
-
-	for n := 0; n < b.N; n++ {
+	for b.Loop() {
 		res := http.Response{
 			StatusCode: 200,
 			Body:       io.NopCloser(bytes.NewReader(body)),
@@ -108,7 +128,7 @@ func makeJsonTestValue(r *rand.Rand) string {
 // create one time-series
 func makeJsonTestSeries(start int64, step int64, timestampCount int, r *rand.Rand, seriesIndex int) string {
 	var values []string
-	for i := 0; i < timestampCount; i++ {
+	for i := range timestampCount {
 		// create out of order timestamps to test sorting
 		if seriesIndex == 0 && i%2 == 0 {
 			continue
@@ -124,10 +144,10 @@ func createJsonTestData(start int64, step int64, timestampCount int, seriesCount
 	// every time we call this, so we create a random source.
 	r := rand.New(rand.NewSource(42))
 	var allSeries []string
-	for i := 0; i < seriesCount; i++ {
+	for i := range seriesCount {
 		allSeries = append(allSeries, makeJsonTestSeries(start, step, timestampCount, r, i))
 	}
-	bytes := []byte(fmt.Sprintf(`{"status":"success","data":{"resultType":"matrix","result":[%v]}}`, strings.Join(allSeries, ",")))
+	bytes := fmt.Appendf(nil, `{"status":"success","data":{"resultType":"matrix","result":[%v]}}`, strings.Join(allSeries, ","))
 
 	qm := models.QueryModel{
 		PrometheusQueryProperties: models.PrometheusQueryProperties{

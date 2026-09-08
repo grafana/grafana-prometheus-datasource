@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Creates a changeset for exactly one workspace package.
+// Creates changesets for a selected workspace package.
 //
 // The user MUST pick a package — either `grafana-prometheus-datasource` (the
 // stub package that mirrors the workspace root — see
@@ -7,6 +7,13 @@
 // that mirrors `pkg/promlib`'s CHANGELOG) — via `--datasource` /
 // `--npm-package` / `--promlib`, or interactively when no flag is passed. There
 // is no default.
+//
+// Changes to `@grafana/prometheus` and `promlib` are also shipped as part of
+// the datasource, so those selections create a second, independent datasource
+// changeset with the same summary. The npm package's mirror uses the same bump
+// type; promlib is patch-only, so its mirror is always a patch. Keeping the
+// changesets independent lets version-changeset.js release either package
+// without consuming the other package's changelog entry.
 //
 // Usage:
 //   npm run changeset                                     # fully interactive
@@ -93,11 +100,20 @@ async function createChangeset({ pkg, bump, summary, repoRoot }) {
   if (!BUMP_TYPES.includes(bump)) {
     throw new Error(`Invalid bump type: "${bump}". Expected one of: ${BUMP_TYPES.join(', ')}.`);
   }
+  if (pkg === PROMLIB && bump !== 'patch') {
+    throw new Error('promlib only supports patch changesets.');
+  }
   if (!summary) {
     throw new Error('A summary is required.');
   }
   const id = await write({ summary, releases: [{ name: pkg, type: bump }] }, repoRoot);
-  return id;
+  let datasourceId = null;
+  let datasourceBump = null;
+  if (pkg !== DATASOURCE) {
+    datasourceBump = pkg === PROMLIB ? 'patch' : bump;
+    datasourceId = await write({ summary, releases: [{ name: DATASOURCE, type: datasourceBump }] }, repoRoot);
+  }
+  return { id, datasourceId, datasourceBump };
 }
 
 // Drives the full CLI flow: parse args, fill in any missing inputs via the
@@ -110,6 +126,9 @@ async function run({ argv, repoRoot, prompt = defaultPrompt, log = console.log }
   const pkg = args.pkg || (await pickPackageInteractively(prompt, log));
 
   let bump = args.bump;
+  if (pkg === PROMLIB && !bump) {
+    bump = 'patch';
+  }
   if (!bump) {
     bump = (await prompt('Bump type [patch/minor/major] (patch): ', 'patch')).toLowerCase();
   }
@@ -119,11 +138,15 @@ async function run({ argv, repoRoot, prompt = defaultPrompt, log = console.log }
     summary = await prompt('Summary: ', '');
   }
 
-  const id = await createChangeset({ pkg, bump, summary, repoRoot });
+  const { id, datasourceId, datasourceBump } = await createChangeset({ pkg, bump, summary, repoRoot });
 
   log(`Created .changeset/${id}.md`);
   log(`  - ${pkg}: ${bump}`);
-  return { id, pkg, bump, summary };
+  if (datasourceId) {
+    log(`Created .changeset/${datasourceId}.md`);
+    log(`  - ${DATASOURCE}: ${datasourceBump}`);
+  }
+  return { id, datasourceId, pkg, bump, summary };
 }
 
 if (require.main === module) {

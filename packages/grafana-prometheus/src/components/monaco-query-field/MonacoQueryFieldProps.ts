@@ -3,6 +3,7 @@ import { type HistoryItem, type TimeRange } from '@grafana/data';
 
 import { type PrometheusDatasource } from '../../datasource';
 import { type PrometheusLanguageProviderInterface } from '../../language_provider';
+import { type QueryEditorCoauthoringRegistrationV1 } from '../../query_coauthoring/internalCoauthoringContract';
 import { type PromQuery } from '../../types';
 
 // we need to store this in a separate file,
@@ -18,4 +19,7 @@ export type Props = {
   onBlur: (value: string) => void;
   datasource: PrometheusDatasource;
   timeRange: TimeRange;
+  /** @internal */
+  createQueryForCoauthoring?: (value: string) => PromQuery;
+  unstable_queryEditorCoauthoringV1?: QueryEditorCoauthoringRegistrationV1<PromQuery>;
 };

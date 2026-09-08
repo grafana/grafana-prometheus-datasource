@@ -33,6 +33,18 @@ describe('PromQueryBuilderContainer', () => {
       expect(container.querySelector(`${getOperationParamId('0', 0)}`)).toBeInTheDocument();
     });
   });
+
+  it('can add a second label to sum by without it reverting', async () => {
+    setup({ expr: 'sum by(job) (ALERTS)' });
+
+    await userEvent.click(screen.getByTestId('operations.0.add-rest-param'));
+    // The remove button for each label only renders when params.length > def.params.length.
+    // With the bug, a spurious useEffect re-parse reverts params back to ['job'] (length 1),
+    // so no remove buttons appear. With the fix, both labels persist (length 2), giving 2 buttons.
+    await waitFor(() => {
+      expect(screen.getAllByTestId('operations.0.remove-rest-param')).toHaveLength(2);
+    });
+  });
 });
 
 function setup(queryOverrides: Partial<PromQuery> = {}) {

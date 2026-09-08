@@ -579,7 +579,7 @@ func setup() (*testContext, error) {
 		JSONData: json.RawMessage(`{"timeInterval": "15s"}`),
 	}
 
-	opts, err := client.CreateTransportOptions(context.Background(), settings, log.New())
+	opts, err := client.CreateTransportOptions(context.Background(), settings, log.NewWithLevel(log.Info))
 	if err != nil {
 		return nil, err
 	}
@@ -589,7 +589,7 @@ func setup() (*testContext, error) {
 		return nil, err
 	}
 
-	queryData, _ := querydata.New(httpClient, settings, log.New(), backend.FeatureToggles{})
+	queryData, _ := querydata.New(httpClient, settings, log.NewWithLevel(log.Info), backend.FeatureToggles{})
 
 	return &testContext{
 		httpProvider: httpProvider,

@@ -1,6 +1,7 @@
 package converter
 
 import (
+	"math"
 	"os"
 	"path"
 	"strings"
@@ -219,4 +220,32 @@ func TestTimeConversions(t *testing.T) {
 	assert.Equal(t,
 		time.Date(2033, time.May, 18, 3, 33, 20, 0, time.UTC),
 		ti)
+}
+
+func TestReadPrometheusNumericStrings(t *testing.T) {
+	t.Run("matrix", func(t *testing.T) {
+		input := []byte(`{"status":"success","data":{"resultType":"matrix","result":[{"metric":{},"values":[[1,"1.25"],[2,"1.25e10"],[3,"NaN"],[4,"+Inf"],[5,"-Inf"]]}]}}`)
+		rsp := ReadPrometheusStyleResult(jsoniter.ParseBytes(sdkjsoniter.ConfigDefault, input), Options{})
+		require.NoError(t, rsp.Error)
+		require.Len(t, rsp.Frames, 1)
+		assertNumericStringValues(t, rsp.Frames[0].Fields[1])
+	})
+
+	t.Run("exemplars", func(t *testing.T) {
+		input := []byte(`{"status":"success","data":[{"seriesLabels":{},"exemplars":[{"value":"1.25","timestamp":1},{"value":"1.25e10","timestamp":2},{"value":"NaN","timestamp":3},{"value":"+Inf","timestamp":4},{"value":"-Inf","timestamp":5}]}]}`)
+		rsp := ReadPrometheusStyleResult(jsoniter.ParseBytes(sdkjsoniter.ConfigDefault, input), Options{})
+		require.NoError(t, rsp.Error)
+		require.Len(t, rsp.Frames, 1)
+		assertNumericStringValues(t, rsp.Frames[0].Fields[1])
+	})
+}
+
+func assertNumericStringValues(t *testing.T, field *data.Field) {
+	t.Helper()
+	require.Equal(t, 5, field.Len())
+	assert.Equal(t, 1.25, field.At(0))
+	assert.Equal(t, 1.25e10, field.At(1))
+	assert.True(t, math.IsNaN(field.At(2).(float64)))
+	assert.Equal(t, math.Inf(1), field.At(3))
+	assert.Equal(t, math.Inf(-1), field.At(4))
 }

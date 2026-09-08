@@ -17,6 +17,7 @@ import { clearButtonStyles, Icon, useTheme2 } from '@grafana/ui';
 
 import { type PrometheusDatasource } from '../datasource';
 import { getInitHints } from '../query_hints';
+import { type QueryEditorCoauthoringRegistrationV1 } from '../query_coauthoring/internalCoauthoringContract';
 import { type PromOptions, type PromQuery } from '../types';
 
 import { MetricsBrowser } from './metrics-browser/MetricsBrowser';
@@ -26,6 +27,8 @@ import { MonacoQueryFieldWrapper } from './monaco-query-field/MonacoQueryFieldWr
 interface PromQueryFieldProps extends QueryEditorProps<PrometheusDatasource, PromQuery, PromOptions> {
   ExtraFieldElement?: ReactNode;
   hideMetricsBrowser?: boolean;
+  /** @internal */
+  unstable_queryEditorCoauthoringV1?: QueryEditorCoauthoringRegistrationV1<PromQuery>;
   'data-testid'?: string;
 }
 
@@ -42,6 +45,7 @@ export const PromQueryField = (props: PromQueryFieldProps) => {
     onChange,
     onRunQuery,
     hideMetricsBrowser = false,
+    unstable_queryEditorCoauthoringV1,
   } = props;
 
   const theme = useTheme2();
@@ -143,6 +147,8 @@ export const PromQueryField = (props: PromQueryFieldProps) => {
             )}
             datasource={datasource}
             timeRange={range ?? getDefaultTimeRange()}
+            createQueryForCoauthoring={(value) => ({ ...query, expr: value })}
+            unstable_queryEditorCoauthoringV1={unstable_queryEditorCoauthoringV1}
           />
         </div>
       </div>
