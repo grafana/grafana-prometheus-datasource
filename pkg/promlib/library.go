@@ -88,7 +88,15 @@ func newInstanceSettings(httpClientProvider *sdkhttpclient.Provider, log log.Log
 		featureToggles := backend.GrafanaConfigFromContext(ctx).FeatureToggles()
 
 		// New version using custom client and better response parsing
-		qd, err := querydata.New(httpClient, settings, jsonData, log, featureToggles)
+		qd, err := querydata.New(
+			httpClient,
+			settings,
+			jsonData.HTTPMethod,
+			jsonData.QueryTimeout,
+			jsonData.TimeInterval,
+			log,
+			featureToggles,
+		)
 		if err != nil {
 			return nil, err
 		}

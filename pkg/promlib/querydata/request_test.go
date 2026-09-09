@@ -603,7 +603,15 @@ func setup() (*testContext, error) {
 		return nil, err
 	}
 
-	queryData, _ := querydata.New(httpClient, settings, jsonData, log.NewWithLevel(log.Info), backend.FeatureToggles{})
+	queryData, _ := querydata.New(
+		httpClient,
+		settings,
+		jsonData.HTTPMethod,
+		jsonData.QueryTimeout,
+		jsonData.TimeInterval,
+		log.NewWithLevel(log.Info),
+		backend.FeatureToggles{},
+	)
 
 	return &testContext{
 		httpProvider: httpProvider,
