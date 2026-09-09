@@ -102,7 +102,7 @@ func newInstanceSettings(httpClientProvider *sdkhttpclient.Provider, log log.Log
 		}
 
 		// Resource call management using new custom client same as querydata
-		r, err := resource.New(httpClient, settings, jsonData, log)
+		r, err := resource.New(httpClient, settings, jsonData.HTTPMethod, log)
 		if err != nil {
 			return nil, err
 		}

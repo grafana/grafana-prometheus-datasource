@@ -32,7 +32,7 @@ func newResource(t *testing.T, httpClient *http.Client, settings backend.DataSou
 	if err != nil {
 		return nil, err
 	}
-	return resource.New(httpClient, settings, jsonData, plog)
+	return resource.New(httpClient, settings, jsonData.HTTPMethod, plog)
 }
 
 type mockRoundTripper struct {
