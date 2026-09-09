@@ -140,6 +140,7 @@ var queryStatPrefixes = map[models.TimeSeriesQueryType]string{
 func parseQueryStats(header http.Header, queryType models.TimeSeriesQueryType) []data.QueryStat {
 	var stats []data.QueryStat
 	prefix := queryStatPrefixes[queryType]
+	seen := make(map[string]bool)
 
 	for _, line := range header.Values("Server-Timing") {
 		for entry := range strings.SplitSeq(line, ",") {
@@ -147,7 +148,7 @@ func parseQueryStats(header http.Header, queryType models.TimeSeriesQueryType) [
 			name := strings.TrimSpace(parts[0])
 
 			known, ok := knownQueryStats[name]
-			if !ok {
+			if !ok || seen[name] {
 				continue
 			}
 
@@ -167,6 +168,7 @@ func parseQueryStats(header http.Header, queryType models.TimeSeriesQueryType) [
 				continue
 			}
 
+			seen[name] = true
 			stats = append(stats, data.QueryStat{
 				FieldConfig: data.FieldConfig{DisplayName: prefix + known.displayName, Unit: known.unit},
 				Value:       value,

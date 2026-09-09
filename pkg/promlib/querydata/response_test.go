@@ -156,6 +156,22 @@ func TestParseQueryStats(t *testing.T) {
 				{FieldConfig: data.FieldConfig{DisplayName: "Range: Bytes processed", Unit: "decbytes"}, Value: 5},
 			},
 		},
+		{
+			name:        "a metric repeated within one header line keeps only the first value",
+			headerLines: []string{"bytes_processed;val=1, bytes_processed;val=2"},
+			queryType:   models.RangeQueryType,
+			want: []data.QueryStat{
+				{FieldConfig: data.FieldConfig{DisplayName: "Range: Bytes processed", Unit: "decbytes"}, Value: 1},
+			},
+		},
+		{
+			name:        "a metric repeated across header lines keeps only the first value",
+			headerLines: []string{"bytes_processed;val=1", "bytes_processed;val=2"},
+			queryType:   models.RangeQueryType,
+			want: []data.QueryStat{
+				{FieldConfig: data.FieldConfig{DisplayName: "Range: Bytes processed", Unit: "decbytes"}, Value: 1},
+			},
+		},
 	}
 
 	for _, tt := range tests {
