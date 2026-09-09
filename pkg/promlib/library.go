@@ -59,7 +59,16 @@ func newInstanceSettings(httpClientProvider *sdkhttpclient.Provider, log log.Log
 		}
 
 		// Creates a http roundTripper.
-		opts, err := client.CreateTransportOptions(ctx, settings, jsonData, log)
+		opts, err := client.CreateTransportOptions(
+			ctx,
+			settings,
+			jsonData.HTTPMethod,
+			jsonData.CustomQueryParameters,
+			jsonData.MaxSamplesProcessedWarningThreshold,
+			jsonData.MaxSamplesProcessedErrorThreshold,
+			jsonData.QueryStatsEnabled,
+			log,
+		)
 		if err != nil {
 			return nil, fmt.Errorf("error creating transport options: %v", err)
 		}

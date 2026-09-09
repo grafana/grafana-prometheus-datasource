@@ -23,7 +23,16 @@ func TestCreateTransportOptions(t *testing.T) {
 		}
 		jsonData, err := models.ParsePromOptions(settings)
 		require.NoError(t, err)
-		opts, err := CreateTransportOptions(context.Background(), settings, jsonData, backend.NewLoggerWith("logger", "test"))
+		opts, err := CreateTransportOptions(
+			context.Background(),
+			settings,
+			jsonData.HTTPMethod,
+			jsonData.CustomQueryParameters,
+			jsonData.MaxSamplesProcessedWarningThreshold,
+			jsonData.MaxSamplesProcessedErrorThreshold,
+			jsonData.QueryStatsEnabled,
+			backend.NewLoggerWith("logger", "test"),
+		)
 		require.NoError(t, err)
 		require.Equal(t, http.Header{"Foo": []string{"bar"}}, opts.Header)
 		require.Equal(t, 1, len(opts.Middlewares))
@@ -33,7 +42,16 @@ func TestCreateTransportOptions(t *testing.T) {
 		settings := backend.DataSourceInstanceSettings{}
 		jsonData, err := models.ParsePromOptions(settings)
 		require.NoError(t, err)
-		opts, err := CreateTransportOptions(context.Background(), settings, jsonData, backend.NewLoggerWith("logger", "test"))
+		opts, err := CreateTransportOptions(
+			context.Background(),
+			settings,
+			jsonData.HTTPMethod,
+			jsonData.CustomQueryParameters,
+			jsonData.MaxSamplesProcessedWarningThreshold,
+			jsonData.MaxSamplesProcessedErrorThreshold,
+			jsonData.QueryStatsEnabled,
+			backend.NewLoggerWith("logger", "test"),
+		)
 		require.NoError(t, err)
 		require.True(t, opts.ForwardHTTPHeaders)
 	})

@@ -584,7 +584,16 @@ func setup() (*testContext, error) {
 		return nil, err
 	}
 
-	opts, err := client.CreateTransportOptions(context.Background(), settings, jsonData, log.NewWithLevel(log.Info))
+	opts, err := client.CreateTransportOptions(
+		context.Background(),
+		settings,
+		jsonData.HTTPMethod,
+		jsonData.CustomQueryParameters,
+		jsonData.MaxSamplesProcessedWarningThreshold,
+		jsonData.MaxSamplesProcessedErrorThreshold,
+		jsonData.QueryStatsEnabled,
+		log.NewWithLevel(log.Info),
+	)
 	if err != nil {
 		return nil, err
 	}
