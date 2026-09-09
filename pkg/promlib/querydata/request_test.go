@@ -634,37 +634,7 @@ func (p *fakeHttpClientProvider) GetTransport(opts ...httpclient.Options) (http.
 func (p *fakeHttpClientProvider) setResponse(rangeRes, instantRes, exemplarRes *http.Response) {
 	p.rangeRes = rangeRes
 	p.instantRes = instantRes
-
-	// Create a proper clone manually ensuring we have a fresh response
-	if exemplarRes != nil {
-		bodyBytes, _ := io.ReadAll(exemplarRes.Body)
-		err := exemplarRes.Body.Close() // Close the original
-		if err != nil {
-			fmt.Println(fmt.Errorf("exemplarRes body close error: %v", err))
-			return
-		}
-
-		// Create a new request if the original has one
-		var newRequest *http.Request
-		if exemplarRes.Request != nil {
-			newRequest = &http.Request{
-				Method: exemplarRes.Request.Method,
-				URL:    exemplarRes.Request.URL,
-				Header: exemplarRes.Request.Header.Clone(),
-			}
-		}
-
-		// Create a new response with the same data but new body
-		p.exemplarRes = &http.Response{
-			StatusCode: exemplarRes.StatusCode,
-			Body:       io.NopCloser(bytes.NewReader(bodyBytes)),
-			Request:    newRequest,
-			Header:     exemplarRes.Header.Clone(),
-		}
-
-		// Reset the original body with a new reader
-		exemplarRes.Body = io.NopCloser(bytes.NewReader(bodyBytes))
-	}
+	p.exemplarRes = exemplarRes
 }
 
 func (p *fakeHttpClientProvider) RoundTrip(req *http.Request) (*http.Response, error) {
