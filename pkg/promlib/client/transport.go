@@ -13,16 +13,13 @@ import (
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/models"
 )
 
-// CreateTransportOptions creates options for the http client.
-func CreateTransportOptions(ctx context.Context, settings backend.DataSourceInstanceSettings, logger log.Logger) (*sdkhttpclient.Options, error) {
+// CreateTransportOptions creates options for the http client. jsonData is the already
+// parsed datasource settings, shared with the other instance constructors so the raw
+// settings blob is only unmarshalled once per instance.
+func CreateTransportOptions(ctx context.Context, settings backend.DataSourceInstanceSettings, jsonData *models.PromOptions, logger log.Logger) (*sdkhttpclient.Options, error) {
 	opts, err := settings.HTTPClientOptions(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("error getting HTTP options: %w", err)
-	}
-
-	jsonData, err := models.ParsePromOptions(settings)
-	if err != nil {
-		return nil, fmt.Errorf("error reading settings: %w", err)
 	}
 
 	middlewares := []sdkhttpclient.Middleware{
