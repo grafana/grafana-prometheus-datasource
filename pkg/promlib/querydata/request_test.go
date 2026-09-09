@@ -579,7 +579,12 @@ func setup() (*testContext, error) {
 		JSONData: json.RawMessage(`{"timeInterval": "15s"}`),
 	}
 
-	opts, err := client.CreateTransportOptions(context.Background(), settings, log.NewWithLevel(log.Info))
+	jsonData, err := models.ParsePromOptions(settings)
+	if err != nil {
+		return nil, err
+	}
+
+	opts, err := client.CreateTransportOptions(context.Background(), settings, jsonData, log.NewWithLevel(log.Info))
 	if err != nil {
 		return nil, err
 	}
@@ -589,7 +594,7 @@ func setup() (*testContext, error) {
 		return nil, err
 	}
 
-	queryData, _ := querydata.New(httpClient, settings, log.NewWithLevel(log.Info), backend.FeatureToggles{})
+	queryData, _ := querydata.New(httpClient, settings, jsonData, log.NewWithLevel(log.Info), backend.FeatureToggles{})
 
 	return &testContext{
 		httpProvider: httpProvider,

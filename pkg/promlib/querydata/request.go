@@ -47,17 +47,14 @@ type QueryData struct {
 	featureToggles     backend.FeatureToggles
 }
 
+
 func New(
 	httpClient *http.Client,
 	settings backend.DataSourceInstanceSettings,
+	jsonData *models.PromOptions,
 	plog log.Logger,
 	featureToggles backend.FeatureToggles,
 ) (*QueryData, error) {
-	jsonData, err := models.ParsePromOptions(settings)
-	if err != nil {
-		return nil, err
-	}
-
 	promClient := client.NewClient(httpClient, jsonData.HTTPMethod, settings.URL, jsonData.QueryTimeout)
 
 	// standard deviation sampler is the default for backwards compatibility
