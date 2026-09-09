@@ -2,4 +2,4 @@
 'grafana-prometheus-datasource': patch
 ---
 
-Pin resource-call Accept-Encoding to gzip and decode zstd-encoded upstream responses
+Pin the upstream Accept-Encoding for resource calls to gzip in QueryResource, so the browser's Accept-Encoding no longer leaks upstream and zstd-encoded responses can no longer cause 500s

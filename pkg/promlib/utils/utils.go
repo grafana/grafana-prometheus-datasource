@@ -2,16 +2,13 @@ package utils
 
 import (
 	"bytes"
-	"compress/flate"
 	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 
-	"github.com/andybalholm/brotli"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
-	"github.com/klauspost/compress/zstd"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -39,7 +36,10 @@ func StartTrace(ctx context.Context, tracer trace.Tracer, name string, attribute
 }
 
 // Adapted from grafana/grafana-azuremonitor-datasource
-// This function handles various compression mechanisms that may have been used on a response body
+// Decode decompresses a response body. QueryResource pins the upstream
+// Accept-Encoding to gzip, so only gzip and identity are expected here; any
+// other encoding means the upstream ignored content negotiation and is
+// reported as an error rather than silently mishandled.
 // Determine encoding by: encoding := resp.Header.Get("Content-Encoding")
 func Decode(encoding string, original io.ReadCloser) ([]byte, error) {
 	var reader io.Reader
@@ -55,22 +55,6 @@ func Decode(encoding string, original io.ReadCloser) ([]byte, error) {
 				backend.Logger.Warn("Failed to close reader body", "err", err)
 			}
 		}()
-	case "deflate":
-		reader = flate.NewReader(original)
-		defer func() {
-			if err := reader.(io.ReadCloser).Close(); err != nil {
-				backend.Logger.Warn("Failed to close reader body", "err", err)
-			}
-		}()
-	case "br":
-		reader = brotli.NewReader(original)
-	case "zstd":
-		zr, err := zstd.NewReader(original, zstd.WithDecoderConcurrency(1))
-		if err != nil {
-			return nil, err
-		}
-		defer zr.Close()
-		reader = zr
 	case "":
 		reader = original
 	default:

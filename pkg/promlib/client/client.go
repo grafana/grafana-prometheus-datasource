@@ -137,11 +137,12 @@ func (c *Client) QueryResource(ctx context.Context, req *backend.CallResourceReq
 	if err != nil {
 		return nil, err
 	}
-	// Resource handlers opt into a specific encoding policy: both Execute and
-	// ExecuteSearch pin Accept-Encoding to gzip before calling QueryResource.
-	if acceptEncoding := req.GetHTTPHeaders().Get("Accept-Encoding"); acceptEncoding != "" {
-		httpRequest.Header.Set("Accept-Encoding", acceptEncoding)
-	}
+	// The browser<->Grafana and plugin<->upstream hops negotiate compression
+	// independently, so the browser's Accept-Encoding must not leak upstream:
+	// without an explicit value here the SDK's ForwardHTTPHeaders middleware
+	// forwards it (Chrome advertises zstd over HTTPS), and utils.Decode only
+	// handles gzip. Pin gzip for every caller of QueryResource.
+	httpRequest.Header.Set("Accept-Encoding", "gzip")
 
 	return c.doer.Do(httpRequest)
 }
