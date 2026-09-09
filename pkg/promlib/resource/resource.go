@@ -24,15 +24,15 @@ type Resource struct {
 	log        log.Logger
 }
 
+// New builds the resource handler. jsonData is the already parsed datasource settings,
+// shared with the other instance constructors so the raw settings blob is only
+// unmarshalled once per instance.
 func New(
 	httpClient *http.Client,
 	settings backend.DataSourceInstanceSettings,
+	jsonData *models.PromOptions,
 	plog log.Logger,
 ) (*Resource, error) {
-	jsonData, err := models.ParsePromOptions(settings)
-	if err != nil {
-		return nil, err
-	}
 	return &Resource{
 		log: plog,
 		// we don't use queryTimeout for resource calls

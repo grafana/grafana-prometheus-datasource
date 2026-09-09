@@ -20,8 +20,20 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/models"
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/resource"
 )
+
+// newResource parses settings and builds a Resource the way library.go's
+// newInstanceSettings does, instead of resource.New parsing settings itself.
+func newResource(t *testing.T, httpClient *http.Client, settings backend.DataSourceInstanceSettings, plog log.Logger) (*resource.Resource, error) {
+	t.Helper()
+	jsonData, err := models.ParsePromOptions(settings)
+	if err != nil {
+		return nil, err
+	}
+	return resource.New(httpClient, settings, jsonData, plog)
+}
 
 type mockRoundTripper struct {
 	Response        *http.Response
@@ -67,14 +79,14 @@ func setup() (*http.Client, backend.DataSourceInstanceSettings, log.Logger) {
 
 func TestNewResource(t *testing.T) {
 	mockClient, settings, logger := setup()
-	res, err := resource.New(mockClient, settings, logger)
+	res, err := newResource(t, mockClient, settings, logger)
 	require.NoError(t, err)
 	assert.NotNil(t, res)
 }
 
 func TestResource_Execute(t *testing.T) {
 	mockClient, settings, logger := setup()
-	res, err := resource.New(mockClient, settings, logger)
+	res, err := newResource(t, mockClient, settings, logger)
 	require.NoError(t, err)
 
 	req := &backend.CallResourceRequest{
@@ -103,7 +115,7 @@ func TestResource_ExecuteDecodesCompressedResponse(t *testing.T) {
 		URL:      "http://mock-server",
 		JSONData: []byte(`{}`),
 	}
-	res, err := resource.New(mockClient, settings, log.DefaultLogger)
+	res, err := newResource(t, mockClient, settings, log.DefaultLogger)
 	require.NoError(t, err)
 
 	resp, err := res.Execute(context.Background(), &backend.CallResourceRequest{
@@ -161,7 +173,7 @@ func TestResource_ExecuteStripsFramingHeadersAcrossEncodings(t *testing.T) {
 				URL:      "http://mock-server",
 				JSONData: []byte(`{}`),
 			}
-			res, err := resource.New(mockClient, settings, log.DefaultLogger)
+			res, err := newResource(t, mockClient, settings, log.DefaultLogger)
 			require.NoError(t, err)
 
 			resp, err := res.Execute(context.Background(), &backend.CallResourceRequest{URL: "/api/v1/labels"})
@@ -223,7 +235,7 @@ func TestResource_ExecuteResponseSurvivesHTTPBoundary(t *testing.T) {
 	// where utils.Decode (not the transport) owns decompression — the whole
 	// reason the stale-header bug is reachable in the first place.
 	pluginClient := &http.Client{Transport: &http.Transport{DisableCompression: true}}
-	res, err := resource.New(pluginClient, settings, log.DefaultLogger)
+	res, err := newResource(t, pluginClient, settings, log.DefaultLogger)
 	require.NoError(t, err)
 
 	callResp, err := res.Execute(context.Background(), &backend.CallResourceRequest{URL: "/api/v1/labels"})
@@ -260,7 +272,7 @@ func TestResource_GetSuggestions(t *testing.T) {
 		JSONData: []byte(`{"httpMethod": "GET"}`),
 	}
 
-	res, err := resource.New(mockClient, settings, logger)
+	res, err := newResource(t, mockClient, settings, logger)
 	require.NoError(t, err)
 
 	suggestionReq := resource.SuggestionRequest{
@@ -299,7 +311,7 @@ func TestResource_GetSuggestionsForwardsCacheHeader(t *testing.T) {
 		URL:      "http://localhost:9090",
 		JSONData: []byte(`{"httpMethod": "GET"}`),
 	}
-	res, err := resource.New(mockClient, settings, log.DefaultLogger)
+	res, err := newResource(t, mockClient, settings, log.DefaultLogger)
 	require.NoError(t, err)
 
 	suggestionReq := resource.SuggestionRequest{
@@ -354,7 +366,7 @@ func TestResource_GetSuggestionsWithEmptyQueriesButFilters(t *testing.T) {
 		JSONData: []byte(`{"httpMethod": "GET"}`),
 	}
 
-	res, err := resource.New(mockClient, settings, log.DefaultLogger)
+	res, err := newResource(t, mockClient, settings, log.DefaultLogger)
 	require.NoError(t, err)
 
 	// Create a request with empty queries but with filters
