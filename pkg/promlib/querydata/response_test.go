@@ -140,6 +140,22 @@ func TestParseQueryStats(t *testing.T) {
 				{FieldConfig: data.FieldConfig{DisplayName: "Range: Bytes processed", Unit: "decbytes"}, Value: 11188007},
 			},
 		},
+		{
+			name:        "a second entry param after dur/val is ignored, not glued onto the value",
+			headerLines: []string{`response_time;dur=10;desc="foo"`},
+			queryType:   models.RangeQueryType,
+			want: []data.QueryStat{
+				{FieldConfig: data.FieldConfig{DisplayName: "Range: Response time", Unit: "ms"}, Value: 10},
+			},
+		},
+		{
+			name:        "a stray space before the metric name's semicolon still matches the allow-list",
+			headerLines: []string{"bytes_processed ;val=5"},
+			queryType:   models.RangeQueryType,
+			want: []data.QueryStat{
+				{FieldConfig: data.FieldConfig{DisplayName: "Range: Bytes processed", Unit: "decbytes"}, Value: 5},
+			},
+		},
 	}
 
 	for _, tt := range tests {

@@ -106,6 +106,11 @@ func (s *QueryData) parseResponse(ctx context.Context, q *models.Query, res *htt
 // knownQueryStats maps Mimir's Server-Timing metric names to the display
 // name and unit used in the Grafana Inspector's Stats tab. Metrics not in
 // this list are dropped rather than passed through with a raw name.
+//
+// Field names come from Mimir's getQueryStats, gated by the server-side
+// -query-frontend.query-stats-enabled flag (default true), not by a request
+// header:
+// https://github.com/grafana/mimir/blob/a5b9293940cc102152f060234d08691f89ec0045/pkg/frontend/transport/handler.go#L647-L658
 var knownQueryStats = map[string]struct {
 	displayName string
 	unit        string
@@ -138,23 +143,27 @@ func parseQueryStats(header http.Header, queryType models.TimeSeriesQueryType) [
 
 	for _, line := range header.Values("Server-Timing") {
 		for entry := range strings.SplitSeq(line, ",") {
-			name, param, found := strings.Cut(strings.TrimSpace(entry), ";")
-			if !found {
-				continue
-			}
+			parts := strings.Split(entry, ";")
+			name := strings.TrimSpace(parts[0])
 
 			known, ok := knownQueryStats[name]
 			if !ok {
 				continue
 			}
 
-			key, rawValue, found := strings.Cut(param, "=")
-			if !found || (key != "dur" && key != "val") {
-				continue
+			var value float64
+			var found bool
+			for _, param := range parts[1:] {
+				key, rawValue, ok := strings.Cut(strings.TrimSpace(param), "=")
+				if !ok || (key != "dur" && key != "val") {
+					continue
+				}
+				if v, err := strconv.ParseFloat(rawValue, 64); err == nil {
+					value, found = v, true
+					break
+				}
 			}
-
-			value, err := strconv.ParseFloat(rawValue, 64)
-			if err != nil {
+			if !found {
 				continue
 			}
 
