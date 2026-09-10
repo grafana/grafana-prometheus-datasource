@@ -27,16 +27,10 @@ func (r *Resource) ExecuteSearch(
 ) error {
 	r.log.FromContext(ctx).Debug("Sending search resource query", "URL", req.URL)
 
-	// Clone the request because it may be reused by the caller. Pin the upstream
-	// encoding to gzip: the browser's Accept-Encoding (gzip, deflate, br, zstd)
-	// is forwarded to the datasource by the SDK header middleware, and Go only
-	// transparently decompresses gzip. Requesting gzip explicitly keeps the wire
-	// compressed while letting us decode it with a streaming gzip.Reader below.
-	streamReq := *req
-	streamReq.Headers = req.GetHTTPHeaders().Clone()
-	streamReq.Headers["Accept-Encoding"] = []string{"gzip"}
-
-	resp, err := r.promClient.QueryResource(ctx, &streamReq)
+	// QueryResource pins the upstream Accept-Encoding to gzip, which keeps the
+	// wire compressed while letting us decode it with a streaming gzip.Reader
+	// below.
+	resp, err := r.promClient.QueryResource(ctx, req)
 	if err != nil {
 		return fmt.Errorf("error querying search resource: %v", err)
 	}
