@@ -103,10 +103,12 @@ npm run lint:fix
 
 ## Backend Development
 
-Build the backend binary with Mage:
+Build the backend binary with Mage. There's no target for just your desktop
+platform (only the exotic `LinuxS390X`/`WindowsARM64` targets exist
+standalone), so this builds all of them:
 
 ```bash
-mage build:linux   # or build:darwin / build:windows
+mage
 ```
 
 ## Running Locally

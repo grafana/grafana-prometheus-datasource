@@ -170,7 +170,7 @@ func runQuery(response []byte, q *backend.QueryDataRequest) (*backend.QueryDataR
 		},
 	}
 
-	tCtx.httpProvider.setResponse(res, exemplarRes)
+	tCtx.httpProvider.setResponse(res, nil, exemplarRes)
 
 	// Add GrafanaConfig to the context to prevent nil pointer dereference
 	ctx := backend.WithGrafanaConfig(context.Background(), backend.NewGrafanaCfg(map[string]string{
