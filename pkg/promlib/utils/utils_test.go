@@ -2,10 +2,12 @@ package utils
 
 import (
 	"bytes"
+	"compress/flate"
 	"compress/gzip"
 	"io"
 	"testing"
 
+	"github.com/andybalholm/brotli"
 	"github.com/stretchr/testify/require"
 )
 
@@ -27,6 +29,16 @@ func TestDecode(t *testing.T) {
 			encoding: "gzip",
 			body:     gzipBody(t, body),
 		},
+		{
+			name:     "deflate",
+			encoding: "deflate",
+			body:     deflateBody(t, body),
+		},
+		{
+			name:     "brotli",
+			encoding: "br",
+			body:     brotliBody(t, body),
+		},
 	}
 
 	for _, tc := range tests {
@@ -45,16 +57,13 @@ func TestDecodeReturnsErrorForInvalidGzip(t *testing.T) {
 	require.Error(t, err)
 }
 
-// Decode only supports what QueryResource negotiates (gzip). Anything else is
-// an upstream that ignored content negotiation and must surface as an error.
-func TestDecodeReturnsErrorForNonGzipEncodings(t *testing.T) {
-	for _, encoding := range []string{"deflate", "br", "zstd"} {
-		t.Run(encoding, func(t *testing.T) {
-			_, err := Decode(encoding, io.NopCloser(bytes.NewReader([]byte("body"))))
+// zstd is deliberately unsupported: QueryResource pins Accept-Encoding to
+// gzip, so a zstd body means the upstream ignored content negotiation and
+// must surface as an error.
+func TestDecodeReturnsErrorForZstd(t *testing.T) {
+	_, err := Decode("zstd", io.NopCloser(bytes.NewReader([]byte("body"))))
 
-			require.EqualError(t, err, `unexpected encoding type "`+encoding+`"`)
-		})
-	}
+	require.EqualError(t, err, `unexpected encoding type "zstd"`)
 }
 
 func TestDecodeReturnsErrorUnknownEncoding(t *testing.T) {
@@ -68,6 +77,31 @@ func gzipBody(t *testing.T, body []byte) []byte {
 
 	var buf bytes.Buffer
 	writer := gzip.NewWriter(&buf)
+	_, err := writer.Write(body)
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+
+	return buf.Bytes()
+}
+
+func deflateBody(t *testing.T, body []byte) []byte {
+	t.Helper()
+
+	var buf bytes.Buffer
+	writer, err := flate.NewWriter(&buf, flate.DefaultCompression)
+	require.NoError(t, err)
+	_, err = writer.Write(body)
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+
+	return buf.Bytes()
+}
+
+func brotliBody(t *testing.T, body []byte) []byte {
+	t.Helper()
+
+	var buf bytes.Buffer
+	writer := brotli.NewWriter(&buf)
 	_, err := writer.Write(body)
 	require.NoError(t, err)
 	require.NoError(t, writer.Close())
