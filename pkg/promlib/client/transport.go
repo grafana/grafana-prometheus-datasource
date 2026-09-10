@@ -40,5 +40,16 @@ func CreateTransportOptions(ctx context.Context, settings backend.DataSourceInst
 	// do the forwarding here.
 	opts.ForwardHTTPHeaders = true
 
+	// Custom HTTP headers configured on the datasource are applied by the SDK's
+	// CustomHeadersMiddleware, which deletes and re-adds each one on the outgoing
+	// request. A custom Accept-Encoding would therefore replace the encoding the
+	// resource path pins for itself, and the response would come back in an
+	// encoding the resource handlers cannot decode. Response compression is
+	// negotiated by the plugin rather than configured by the user, so drop it.
+	if opts.Header.Get("Accept-Encoding") != "" {
+		logger.Warn("Ignoring custom Accept-Encoding header, the datasource negotiates response compression itself")
+		opts.Header.Del("Accept-Encoding")
+	}
+
 	return &opts, nil
 }

@@ -109,6 +109,71 @@ func TestResourceExecuteSearchDecodesGzipResponse(t *testing.T) {
 	require.Equal(t, payload, body.String())
 }
 
+// TestResourceExecuteSearchRejectsUnexpectedEncoding covers the upstream that
+// ignores the pinned Accept-Encoding and compresses with something else. The
+// stream must fail rather than forward bytes it did not decode: the framing
+// headers are stripped before the body is sent, so a passed-through payload
+// would reach the browser as compressed data advertised as plaintext NDJSON.
+func TestResourceExecuteSearchRejectsUnexpectedEncoding(t *testing.T) {
+	for _, encoding := range []string{"zstd", "br", "deflate"} {
+		t.Run(encoding, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.Header().Set("Content-Encoding", encoding)
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte("compressed bytes"))
+			}))
+			defer server.Close()
+
+			res := newSearchResource(t, server.URL)
+			var responses []*backend.CallResourceResponse
+			err := res.ExecuteSearch(context.Background(), &backend.CallResourceRequest{
+				Method: http.MethodGet,
+				Path:   "api/v1/search/metric_names",
+				URL:    "/api/v1/search/metric_names",
+			}, backend.CallResourceResponseSenderFunc(func(resp *backend.CallResourceResponse) error {
+				responses = append(responses, resp)
+				return nil
+			}))
+
+			require.EqualError(t, err, `unexpected encoding type "`+encoding+`"`)
+			require.Empty(t, responses, "no part of an undecodable body may be streamed to the caller")
+		})
+	}
+}
+
+// TestResourceExecuteSearchAcceptsIdentityEncoding guards the reject case above
+// from over-reaching: an upstream that declares identity is sending plaintext and
+// must still stream normally.
+func TestResourceExecuteSearchAcceptsIdentityEncoding(t *testing.T) {
+	payload := "{\"results\":[\"up\"]}\n"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Encoding", "identity")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(payload))
+	}))
+	defer server.Close()
+
+	res := newSearchResource(t, server.URL)
+	var responses []*backend.CallResourceResponse
+	err := res.ExecuteSearch(context.Background(), &backend.CallResourceRequest{
+		Method: http.MethodGet,
+		Path:   "api/v1/search/metric_names",
+		URL:    "/api/v1/search/metric_names",
+	}, backend.CallResourceResponseSenderFunc(func(resp *backend.CallResourceResponse) error {
+		responses = append(responses, resp)
+		return nil
+	}))
+
+	require.NoError(t, err)
+	var body strings.Builder
+	for _, resp := range responses[1:] {
+		body.Write(resp.Body)
+	}
+	require.Equal(t, payload, body.String())
+}
+
 func TestResourceExecuteSearchPassesThroughErrorResponse(t *testing.T) {
 	errorBody := `{"status":"error","errorType":"unavailable","error":"search API disabled"}`
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
