@@ -2,6 +2,7 @@ package resource_test
 
 import (
 	"bytes"
+	"compress/flate"
 	"compress/gzip"
 	"context"
 	"encoding/json"
@@ -12,6 +13,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/andybalholm/brotli"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 	scope "github.com/grafana/grafana/apps/scope/pkg/apis/scope/v0alpha1"
@@ -117,7 +119,8 @@ func TestResource_ExecuteDecodesCompressedResponse(t *testing.T) {
 // described the *original* payload (Content-Encoding, Content-Length,
 // Transfer-Encoding) must not survive onto the now-plaintext response, while
 // unrelated headers (Content-Type) must. It runs across every encoding Decode
-// understands (gzip) plus the identity ("") case, so neither path can regress.
+// understands plus the identity ("") case, so no single codec can regress and
+// the plaintext path can't be over-pruned.
 func TestResource_ExecuteStripsFramingHeadersAcrossEncodings(t *testing.T) {
 	body := []byte(`{"status":"success","data":["job","instance","__name__"]}`)
 
@@ -126,6 +129,8 @@ func TestResource_ExecuteStripsFramingHeadersAcrossEncodings(t *testing.T) {
 		encoding string
 	}{
 		{name: "gzip", encoding: "gzip"},
+		{name: "deflate", encoding: "deflate"},
+		{name: "brotli", encoding: "br"},
 		{name: "identity", encoding: ""},
 	}
 
@@ -478,6 +483,10 @@ func compress(t *testing.T, encoding string, body []byte) []byte {
 	switch encoding {
 	case "gzip":
 		return gzipBody(t, body)
+	case "deflate":
+		return deflateBody(t, body)
+	case "br":
+		return brotliBody(t, body)
 	case "":
 		return body
 	default:
@@ -491,6 +500,31 @@ func gzipBody(t *testing.T, body []byte) []byte {
 
 	var buf bytes.Buffer
 	writer := gzip.NewWriter(&buf)
+	_, err := writer.Write(body)
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+
+	return buf.Bytes()
+}
+
+func deflateBody(t *testing.T, body []byte) []byte {
+	t.Helper()
+
+	var buf bytes.Buffer
+	writer, err := flate.NewWriter(&buf, flate.DefaultCompression)
+	require.NoError(t, err)
+	_, err = writer.Write(body)
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+
+	return buf.Bytes()
+}
+
+func brotliBody(t *testing.T, body []byte) []byte {
+	t.Helper()
+
+	var buf bytes.Buffer
+	writer := brotli.NewWriter(&buf)
 	_, err := writer.Write(body)
 	require.NoError(t, err)
 	require.NoError(t, writer.Close())
