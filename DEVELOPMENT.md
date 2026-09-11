@@ -21,6 +21,7 @@ npm run build
 | `src/`                         | Plugin frontend source (webpack-built, bundled into the Grafana plugin zip) |
 | `packages/grafana-prometheus/` | `@grafana/prometheus` library (rollup-built, published to npm)              |
 | `pkg/promlib/`                 | Go backend (`promlib`)                                                      |
+| `pkg/schema/`                  | `dsconfig` configuration schema — single source of truth for settings       |
 | `.config/`                     | Grafana plugin tooling config — **do not modify**                           |
 
 ## Running locally
@@ -156,7 +157,26 @@ npm run test:ci          # unit tests
 npm run e2e              # playwright e2e tests (requires running Grafana)
 npm run lint             # eslint
 npm run typecheck        # typescript type checking
+mage test                # go backend tests (includes the schema conformance suite)
 ```
+
+---
+
+## Data source configuration schema
+
+`pkg/schema/dsconfig.json` is the single source of truth for the data source's settings.
+After changing it — or after adding/removing a field on `PromOptions` in
+`pkg/promlib/models/settings.go` — regenerate and verify the committed artifacts:
+
+```bash
+go generate ./pkg/schema/...   # rewrite the *.gen.json artifacts
+go test ./pkg/schema/...       # conformance suite (drift, validity, struct parity)
+```
+
+See [Data Source Configuration Schema](CONTRIBUTING.md#data-source-configuration-schema)
+in the contributing guide for the walkthrough of adding a new settings option, and the
+[`grafana/dsconfig` docs](https://github.com/grafana/dsconfig/tree/main/dsconfig) for the
+schema format itself.
 
 ---
 

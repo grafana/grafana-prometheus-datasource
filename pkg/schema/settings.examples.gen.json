@@ -1,0 +1,126 @@
+{
+  "examples": {
+    "": {
+      "summary": "Default configuration",
+      "description": "The defaults a new datasource starts with: no authentication, POST as the HTTP method. Only root.url needs to be filled in to get a working datasource pointed at a Prometheus server on localhost:9090.",
+      "value": {
+        "jsonData": {
+          "httpMethod": "POST"
+        },
+        "secureJsonData": {
+          "basicAuthPassword": ""
+        },
+        "url": "http://localhost:9090"
+      }
+    },
+    "basicAuth": {
+      "summary": "Basic authentication",
+      "description": "Authenticate with a Prometheus that requires HTTP Basic. Both basicAuth and basicAuthUser live at the datasource root; only basicAuthPassword is secret.",
+      "value": {
+        "basicAuth": true,
+        "basicAuthUser": "grafana",
+        "jsonData": {
+          "httpMethod": "POST"
+        },
+        "secureJsonData": {
+          "basicAuthPassword": "REPLACE_WITH_PASSWORD"
+        },
+        "url": "https://prometheus.example.com"
+      }
+    },
+    "getHTTPMethod": {
+      "summary": "GET HTTP method (legacy or restricted networks)",
+      "description": "Older Prometheus (\u003c 2.1) or environments that block POST. Everything else stays default. seriesEndpoint is enabled to prefer /api/v1/series (which supports POST) over /api/v1/label/*/values.",
+      "value": {
+        "jsonData": {
+          "httpMethod": "GET",
+          "seriesEndpoint": true
+        },
+        "secureJsonData": {
+          "basicAuthPassword": ""
+        },
+        "url": "http://legacy-prom.example.com:9090"
+      }
+    },
+    "mimirWithExemplars": {
+      "summary": "Mimir with exemplar drilldown",
+      "description": "Grafana Mimir with exemplar trace-ID destinations wired to a Tempo data source. name is the label carrying the trace ID; datasourceUid takes precedence over url when set.",
+      "value": {
+        "basicAuth": true,
+        "basicAuthUser": "grafana",
+        "jsonData": {
+          "cacheLevel": "Medium",
+          "exemplarTraceIdDestinations": [
+            {
+              "datasourceUid": "tempo",
+              "name": "traceID"
+            }
+          ],
+          "httpMethod": "POST",
+          "incrementalQuerying": true,
+          "prometheusType": "Mimir",
+          "prometheusVersion": "2.9.1",
+          "timeInterval": "15s"
+        },
+        "secureJsonData": {
+          "basicAuthPassword": "REPLACE_WITH_PASSWORD"
+        },
+        "url": "https://mimir.example.com/prometheus"
+      }
+    },
+    "noAuth": {
+      "summary": "No authentication",
+      "description": "A public or network-isolated Prometheus with no HTTP-level auth. Prometheus type and version are set explicitly so the query editor exposes flavour-specific query hints.",
+      "value": {
+        "jsonData": {
+          "httpMethod": "POST",
+          "prometheusType": "Prometheus",
+          "prometheusVersion": "2.50.1",
+          "timeInterval": "15s"
+        },
+        "url": "http://prometheus.example.com:9090"
+      }
+    },
+    "oauthForward": {
+      "summary": "Forward OAuth Identity",
+      "description": "Forward the signed-in user's upstream OAuth identity to Prometheus. The editor writes only jsonData.oauthPassThru; there is no accompanying secret.",
+      "value": {
+        "jsonData": {
+          "httpMethod": "POST",
+          "oauthPassThru": true
+        },
+        "url": "https://prometheus.example.com"
+      }
+    },
+    "tlsMutualAuth": {
+      "summary": "TLS mutual auth (mTLS)",
+      "description": "Prometheus requiring mTLS. jsonData.tlsAuth=true triggers the SDK to build a client-authenticated transport using serverName plus the PEM-encoded client cert and key in secureJsonData.",
+      "value": {
+        "jsonData": {
+          "httpMethod": "POST",
+          "serverName": "prometheus.example.com",
+          "tlsAuth": true
+        },
+        "secureJsonData": {
+          "tlsClientCert": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
+          "tlsClientKey": "-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----"
+        },
+        "url": "https://prometheus.example.com"
+      }
+    },
+    "tlsSelfSignedCA": {
+      "summary": "Self-signed CA verification",
+      "description": "Prometheus behind a private CA. jsonData.tlsAuthWithCACert=true tells the SDK to verify the server certificate against the PEM-encoded CA in secureJsonData.tlsCACert.",
+      "value": {
+        "jsonData": {
+          "httpMethod": "POST",
+          "tlsAuthWithCACert": true
+        },
+        "secureJsonData": {
+          "tlsCACert": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----"
+        },
+        "url": "https://prometheus.internal.corp"
+      }
+    }
+  }
+}
