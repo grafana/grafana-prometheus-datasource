@@ -148,6 +148,21 @@ func (d *LenientExemplarTraceIDDestinations) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// LenientStringSlice ignores a value it cannot read as a list of strings. It does not salvage a
+// partially valid list: a guess would only disagree with what the frontend reads from jsonData.
+type LenientStringSlice []string
+
+func (s *LenientStringSlice) UnmarshalJSON(data []byte) error {
+	var values []string
+	if err := json.Unmarshal(data, &values); err == nil {
+		*s = values
+		return nil
+	}
+
+	dropped("[]string", "unknown", data)
+	return nil
+}
+
 // encoding/json allocates a pointer field before the lenient type sees the value, so a dropped
 // value leaves it non-nil at zero — indistinguishable from a stored 0, which for seriesLimit is
 // the difference between "apply your own default" and "limit is zero". A lenient type is handed

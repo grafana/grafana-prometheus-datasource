@@ -37,6 +37,18 @@ type PromOptions struct {
 	SeriesEndpoint                LenientBool                        `json:"seriesEndpoint"`
 	SeriesLimit                   *LenientFloat64                    `json:"seriesLimit"`
 	ExemplarTraceIDDestinations   LenientExemplarTraceIDDestinations `json:"exemplarTraceIdDestinations"`
+	ManageAlerts                  LenientBool                        `json:"manageAlerts"`
+	AllowAsRecordingRulesTarget   LenientBool                        `json:"allowAsRecordingRulesTarget"`
+
+	// Following fields are not directly used by prom datasource.
+	// These fields are managed by the Grafana plugin SDK.
+	TimeOut                LenientFloat64     `json:"timeout"`
+	KeepCookies            LenientStringSlice `json:"keepCookies"`
+	TLSAuth                LenientBool        `json:"tlsAuth"`
+	ServerName             LenientString      `json:"serverName"`
+	TLSAuthWithCACert      LenientBool        `json:"tlsAuthWithCACert"`
+	TLSSkipVerify          LenientBool        `json:"tlsSkipVerify"`
+	EnableSecureSocksProxy LenientBool        `json:"enableSecureSocksProxy"`
 }
 
 // ExemplarTraceIDDestination mirrors the frontend ExemplarTraceIdDestination type.
