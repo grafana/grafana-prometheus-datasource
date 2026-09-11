@@ -31,15 +31,6 @@ func CustomQueryParameters(
 	queryStatsEnabled bool,
 ) sdkhttpclient.Middleware {
 	return sdkhttpclient.NamedMiddlewareFunc(customQueryParametersMiddlewareName, func(opts sdkhttpclient.Options, next http.RoundTripper) http.RoundTripper {
-		if jsonData == nil {
-			return next
-		}
-
-		customQueryParams := string(jsonData.CustomQueryParameters)
-		warnVal := float64(jsonData.MaxSamplesProcessedWarningThreshold)
-		errVal := float64(jsonData.MaxSamplesProcessedErrorThreshold)
-		queryStatsEnabled := bool(jsonData.QueryStatsEnabled)
-
 		if customQueryParams == "" && warnVal == 0 && errVal == 0 && !queryStatsEnabled {
 			return next
 		}
