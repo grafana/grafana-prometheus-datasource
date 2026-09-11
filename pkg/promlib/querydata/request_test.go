@@ -588,10 +588,10 @@ func setup() (*testContext, error) {
 		context.Background(),
 		settings,
 		jsonData.HTTPMethod,
-		jsonData.CustomQueryParameters,
-		jsonData.MaxSamplesProcessedWarningThreshold,
-		jsonData.MaxSamplesProcessedErrorThreshold,
-		jsonData.QueryStatsEnabled,
+		string(jsonData.CustomQueryParameters),
+		float64(jsonData.MaxSamplesProcessedWarningThreshold),
+		float64(jsonData.MaxSamplesProcessedErrorThreshold),
+		bool(jsonData.QueryStatsEnabled),
 		log.NewWithLevel(log.Info),
 	)
 	if err != nil {

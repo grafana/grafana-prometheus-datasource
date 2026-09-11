@@ -208,7 +208,7 @@ func TestResource_ExecuteReturnsErrorForUnexpectedEncoding(t *testing.T) {
 		URL:      "http://mock-server",
 		JSONData: []byte(`{}`),
 	}
-	res, err := resource.New(mockClient, settings, log.DefaultLogger)
+	res, err := resource.New(mockClient, settings, "GET", log.DefaultLogger)
 	require.NoError(t, err)
 
 	_, err = res.Execute(context.Background(), &backend.CallResourceRequest{URL: "/api/v1/labels"})
@@ -248,7 +248,7 @@ func TestResource_ExecutePinsAcceptEncodingToGzip(t *testing.T) {
 		URL:      "http://mock-server",
 		JSONData: []byte(`{}`),
 	}
-	res, err := resource.New(mockClient, settings, log.DefaultLogger)
+	res, err := resource.New(mockClient, settings, "GET", log.DefaultLogger)
 	require.NoError(t, err)
 
 	callReq := &backend.CallResourceRequest{

@@ -27,10 +27,10 @@ func TestCreateTransportOptions(t *testing.T) {
 			context.Background(),
 			settings,
 			jsonData.HTTPMethod,
-			jsonData.CustomQueryParameters,
-			jsonData.MaxSamplesProcessedWarningThreshold,
-			jsonData.MaxSamplesProcessedErrorThreshold,
-			jsonData.QueryStatsEnabled,
+			string(jsonData.CustomQueryParameters),
+			float64(jsonData.MaxSamplesProcessedWarningThreshold),
+			float64(jsonData.MaxSamplesProcessedErrorThreshold),
+			bool(jsonData.QueryStatsEnabled),
 			backend.NewLoggerWith("logger", "test"),
 		)
 		require.NoError(t, err)
@@ -46,10 +46,10 @@ func TestCreateTransportOptions(t *testing.T) {
 			context.Background(),
 			settings,
 			jsonData.HTTPMethod,
-			jsonData.CustomQueryParameters,
-			jsonData.MaxSamplesProcessedWarningThreshold,
-			jsonData.MaxSamplesProcessedErrorThreshold,
-			jsonData.QueryStatsEnabled,
+			string(jsonData.CustomQueryParameters),
+			float64(jsonData.MaxSamplesProcessedWarningThreshold),
+			float64(jsonData.MaxSamplesProcessedErrorThreshold),
+			bool(jsonData.QueryStatsEnabled),
 			backend.NewLoggerWith("logger", "test"),
 		)
 		require.NoError(t, err)
