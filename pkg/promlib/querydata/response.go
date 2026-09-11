@@ -45,8 +45,9 @@ func (s *QueryData) parseResponse(ctx context.Context, q *models.Query, res *htt
 		// adds Accept-Encoding: gzip itself. At that point Content-Encoding is
 		// removed from the response headers and the body is already plaintext.
 		// The resource path (resource.go) requires an explicit utils.Decode call
-		// because browser-originated Accept-Encoding headers can reach the
-		// outgoing request via ForwardHTTPHeaders, bypassing Go's auto-decompression.
+		// because QueryResource sets Accept-Encoding: gzip on resource calls
+		// itself, so the body arrives compressed and Go's transport does not
+		// decompress it.
 		// Query requests are always constructed fresh inside the plugin (client.go)
 		// with no external Accept-Encoding, so Go's transparent decompression applies.
 		iter := jsoniter.Parse(jsoniter.ConfigDefault, res.Body, 1024)

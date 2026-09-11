@@ -146,6 +146,17 @@ describe('PrometheusDatasource', () => {
       expect(fetchMock.mock.calls[0][0].url).toBe('/api/datasources/uid/ABCDEF/resources/foo');
       expect(fetchMock.mock.calls[0][0].params).toEqual({ bar: 'baz baz', foo: 'foo' });
     });
+    it('should default to POST for a POST-friendly endpoint when the DS HTTP method is unset', () => {
+      // The shared `ds` is constructed from `instanceSettings` with no `jsonData.httpMethod`,
+      // so it exercises the constructor's default. That default should be POST, matching the
+      // config editor's POST display default, so POST-friendly endpoints send their params in
+      // the request body rather than serialized into the URL query string.
+      ds.metadataRequest('api/v1/labels', { bar: 'baz baz', foo: 'foo' });
+      expect(fetchMock.mock.calls.length).toBe(1);
+      expect(fetchMock.mock.calls[0][0].method).toBe('POST');
+      expect(fetchMock.mock.calls[0][0].url).not.toContain('bar=baz%20baz&foo=foo');
+      expect(fetchMock.mock.calls[0][0].data).toEqual({ bar: 'baz baz', foo: 'foo' });
+    });
     it('should still perform a GET request with the DS HTTP method set to POST and not POST-friendly endpoint', () => {
       const postSettings = cloneDeep(instanceSettings);
       postSettings.jsonData.httpMethod = 'POST';

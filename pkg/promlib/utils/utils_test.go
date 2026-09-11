@@ -57,10 +57,19 @@ func TestDecodeReturnsErrorForInvalidGzip(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestDecodeReturnsErrorUnknownEncoding(t *testing.T) {
+// zstd is deliberately unsupported: QueryResource pins Accept-Encoding to
+// gzip, so a zstd body means the upstream ignored content negotiation and
+// must surface as an error.
+func TestDecodeReturnsErrorForZstd(t *testing.T) {
 	_, err := Decode("zstd", io.NopCloser(bytes.NewReader([]byte("body"))))
 
 	require.EqualError(t, err, `unexpected encoding type "zstd"`)
+}
+
+func TestDecodeReturnsErrorUnknownEncoding(t *testing.T) {
+	_, err := Decode("lzma", io.NopCloser(bytes.NewReader([]byte("body"))))
+
+	require.EqualError(t, err, `unexpected encoding type "lzma"`)
 }
 
 func gzipBody(t *testing.T, body []byte) []byte {
