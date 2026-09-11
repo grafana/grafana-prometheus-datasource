@@ -63,10 +63,10 @@ func newInstanceSettings(httpClientProvider *sdkhttpclient.Provider, log log.Log
 			ctx,
 			settings,
 			jsonData.HTTPMethod,
-			jsonData.CustomQueryParameters,
-			jsonData.MaxSamplesProcessedWarningThreshold,
-			jsonData.MaxSamplesProcessedErrorThreshold,
-			jsonData.QueryStatsEnabled,
+			string(jsonData.CustomQueryParameters),
+			float64(jsonData.MaxSamplesProcessedWarningThreshold),
+			float64(jsonData.MaxSamplesProcessedErrorThreshold),
+			bool(jsonData.QueryStatsEnabled),
 			log,
 		)
 		if err != nil {
