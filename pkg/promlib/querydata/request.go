@@ -47,7 +47,6 @@ type QueryData struct {
 	featureToggles     backend.FeatureToggles
 }
 
-
 func New(
 	httpClient *http.Client,
 	settings backend.DataSourceInstanceSettings,
