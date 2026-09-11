@@ -13,6 +13,7 @@ import (
 
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/client"
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/instrumentation"
+	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/models"
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/querydata"
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/resource"
 )
@@ -51,8 +52,23 @@ func (s *Service) Dispose() {
 
 func newInstanceSettings(httpClientProvider *sdkhttpclient.Provider, log log.Logger, extendOptions ExtendOptions) datasource.InstanceFactoryFunc {
 	return func(ctx context.Context, settings backend.DataSourceInstanceSettings) (instancemgmt.Instance, error) {
+		// Parsed once and shared for consumers below.
+		jsonData, err := models.ParsePromOptions(settings)
+		if err != nil {
+			return nil, fmt.Errorf("error reading settings: %v", err)
+		}
+
 		// Creates a http roundTripper.
-		opts, err := client.CreateTransportOptions(ctx, settings, log)
+		opts, err := client.CreateTransportOptions(
+			ctx,
+			settings,
+			jsonData.HTTPMethod,
+			string(jsonData.CustomQueryParameters),
+			float64(jsonData.MaxSamplesProcessedWarningThreshold),
+			float64(jsonData.MaxSamplesProcessedErrorThreshold),
+			bool(jsonData.QueryStatsEnabled),
+			log,
+		)
 		if err != nil {
 			return nil, fmt.Errorf("error creating transport options: %v", err)
 		}
@@ -72,13 +88,21 @@ func newInstanceSettings(httpClientProvider *sdkhttpclient.Provider, log log.Log
 		featureToggles := backend.GrafanaConfigFromContext(ctx).FeatureToggles()
 
 		// New version using custom client and better response parsing
-		qd, err := querydata.New(httpClient, settings, log, featureToggles)
+		qd, err := querydata.New(
+			httpClient,
+			settings,
+			jsonData.HTTPMethod,
+			jsonData.QueryTimeout,
+			jsonData.TimeInterval,
+			log,
+			featureToggles,
+		)
 		if err != nil {
 			return nil, err
 		}
 
 		// Resource call management using new custom client same as querydata
-		r, err := resource.New(httpClient, settings, log)
+		r, err := resource.New(httpClient, settings, jsonData.HTTPMethod, log)
 		if err != nil {
 			return nil, err
 		}

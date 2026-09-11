@@ -50,15 +50,13 @@ type QueryData struct {
 func New(
 	httpClient *http.Client,
 	settings backend.DataSourceInstanceSettings,
+	httpMethod string,
+	queryTimeout string,
+	timeInterval string,
 	plog log.Logger,
 	featureToggles backend.FeatureToggles,
 ) (*QueryData, error) {
-	jsonData, err := models.ParsePromOptions(settings)
-	if err != nil {
-		return nil, err
-	}
-
-	promClient := client.NewClient(httpClient, jsonData.HTTPMethod, settings.URL, jsonData.QueryTimeout)
+	promClient := client.NewClient(httpClient, httpMethod, settings.URL, queryTimeout)
 
 	// standard deviation sampler is the default for backwards compatibility
 	exemplarSampler := exemplar.NewStandardDeviationSampler
@@ -68,7 +66,7 @@ func New(
 		tracer:             tracing.DefaultTracer(),
 		log:                plog,
 		client:             promClient,
-		TimeInterval:       jsonData.TimeInterval,
+		TimeInterval:       timeInterval,
 		ID:                 settings.ID,
 		URL:                settings.URL,
 		exemplarSampler:    exemplarSampler,

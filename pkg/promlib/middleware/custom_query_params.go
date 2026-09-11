@@ -9,8 +9,6 @@ import (
 	sdkhttpclient "github.com/grafana/grafana-plugin-sdk-go/backend/httpclient"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
-
-	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/models"
 )
 
 const (
@@ -21,21 +19,14 @@ const (
 	queryStatsValue                     = "all"
 )
 
-// CustomQueryParameters returns a middleware that appends user-configured custom
-// query parameters and max-samples-processed thresholds to outgoing Prometheus
-// requests. Configuration is read from the typed PromOptions parsed from the
-// datasource jsonData.
-func CustomQueryParameters(logger log.Logger, jsonData *models.PromOptions) sdkhttpclient.Middleware {
+func CustomQueryParameters(
+	logger log.Logger,
+	customQueryParams string,
+	warnVal float64,
+	errVal float64,
+	queryStatsEnabled bool,
+) sdkhttpclient.Middleware {
 	return sdkhttpclient.NamedMiddlewareFunc(customQueryParametersMiddlewareName, func(opts sdkhttpclient.Options, next http.RoundTripper) http.RoundTripper {
-		if jsonData == nil {
-			return next
-		}
-
-		customQueryParams := string(jsonData.CustomQueryParameters)
-		warnVal := float64(jsonData.MaxSamplesProcessedWarningThreshold)
-		errVal := float64(jsonData.MaxSamplesProcessedErrorThreshold)
-		queryStatsEnabled := bool(jsonData.QueryStatsEnabled)
-
 		if customQueryParams == "" && warnVal == 0 && errVal == 0 && !queryStatsEnabled {
 			return next
 		}
