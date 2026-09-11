@@ -11,6 +11,8 @@ import (
 
 // PromOptions holds the typed datasource configuration stored in jsonData.
 type PromOptions struct {
+	// Strict: httpMethod is validated below, and timeInterval/queryTimeout were already
+	// strict before #220. See lenient.go.
 	HTTPMethod   string `json:"httpMethod"`
 	TimeInterval string `json:"timeInterval"`
 	QueryTimeout string `json:"queryTimeout"`
@@ -85,6 +87,7 @@ func ParsePromOptions(settings backend.DataSourceInstanceSettings) (*PromOptions
 	if err := json.Unmarshal(data, &opts); err != nil {
 		return nil, fmt.Errorf("error unmarshalling JSONData: %w", err)
 	}
+	opts.clearDroppedPointers(data)
 	opts.ApplyDefaults()
 	if err := opts.Validate(); err != nil {
 		return nil, err

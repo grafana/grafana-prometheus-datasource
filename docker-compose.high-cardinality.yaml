@@ -1,0 +1,11 @@
+services:
+  prometheus:
+    volumes:
+      - ./provisioning/prometheus/prometheus.high-cardinality.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      prometheus-high-cardinality:
+        condition: service_started
+
+  prometheus-high-cardinality:
+    build:
+      context: ./devenv/prometheus/high-cardinality

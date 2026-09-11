@@ -1,0 +1,53 @@
+services:
+  prometheus:
+    image: prom/prometheus:v3.2.1
+    volumes:
+      - ./provisioning/prometheus/prometheus.full.yml:/etc/prometheus/prometheus.yml:ro
+      - ./provisioning/prometheus/rules:/etc/prometheus/rules:ro
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --enable-feature=promql-experimental-functions
+      - --web.enable-remote-write-receiver
+    depends_on:
+      alertmanager:
+        condition: service_started
+      fake-prometheus-data:
+        condition: service_started
+      node-exporter:
+        condition: service_started
+      prometheus-high-cardinality:
+        condition: service_started
+      prometheus-random-data:
+        condition: service_started
+      prometheus-utf8:
+        condition: service_started
+
+  alertmanager:
+    image: prom/alertmanager:v0.33.1
+    volumes:
+      - ./provisioning/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+    ports:
+      - 9093:9093/tcp
+
+  node-exporter:
+    image: prom/node-exporter:v1.12.1
+
+  fake-prometheus-data:
+    image: grafana/fake-data-gen:cc22f970a7de333c32aee0b935300c45cfb8a5d3
+    environment:
+      FD_DATASOURCE: prom
+
+  prometheus-random-data:
+    build:
+      context: ./devenv/prometheus/random-data
+
+  prometheus-high-cardinality:
+    build:
+      context: ./devenv/prometheus/high-cardinality
+
+  prometheus-utf8:
+    build:
+      context: ./devenv/prometheus/utf8

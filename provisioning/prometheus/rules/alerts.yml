@@ -1,0 +1,11 @@
+groups:
+  - name: devenv-alerts
+    rules:
+      - alert: PrometheusProcessHasOpenFileDescriptors
+        expr: process_open_fds > 0
+        for: 15s
+        labels:
+          severity: critical
+        annotations:
+          summary: Prometheus has open file descriptors
+          description: Synthetic alert used to exercise alert rule discovery in the Prometheus devenv.
