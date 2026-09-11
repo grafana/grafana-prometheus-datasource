@@ -19,10 +19,6 @@ const (
 	queryStatsValue                     = "all"
 )
 
-// CustomQueryParameters returns a middleware that appends user-configured custom
-// query parameters and max-samples-processed thresholds to outgoing Prometheus
-// requests. Configuration is read from the typed PromOptions parsed from the
-// datasource jsonData.
 func CustomQueryParameters(
 	logger log.Logger,
 	customQueryParams string,
