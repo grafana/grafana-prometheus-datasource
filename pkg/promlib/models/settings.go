@@ -19,33 +19,24 @@ type PromOptions struct {
 	// Following fields are parsed for schema completeness but not yet consumed directly
 	// by the backend. They are currently read via opts.CustomOptions["grafanaData"]
 	// managed by the Grafana plugin SDK. TODO: migrate in a follow-up PR.
-	PrometheusType                      PromApplication              `json:"prometheusType"`
-	PrometheusVersion                   string                       `json:"prometheusVersion"`
-	CustomQueryParameters               string                       `json:"customQueryParameters"`
-	MaxSamplesProcessedWarningThreshold float64                      `json:"maxSamplesProcessedWarningThreshold"`
-	MaxSamplesProcessedErrorThreshold   float64                      `json:"maxSamplesProcessedErrorThreshold"`
-	QueryStatsEnabled                   bool                         `json:"queryStatsEnabled"`
-	DisableMetricsLookup                bool                         `json:"disableMetricsLookup"`
-	CacheLevel                          PrometheusCacheLevel         `json:"cacheLevel"`
-	DefaultEditor                       QueryEditorMode              `json:"defaultEditor"`
-	IncrementalQuerying                 bool                         `json:"incrementalQuerying"`
-	IncrementalQueryOverlapWindow       string                       `json:"incrementalQueryOverlapWindow"`
-	DisableRecordingRules               bool                         `json:"disableRecordingRules"`
-	OauthPassThru                       bool                         `json:"oauthPassThru"`
-	SeriesEndpoint                      bool                         `json:"seriesEndpoint"`
-	SeriesLimit                         *int64                       `json:"seriesLimit"`
-	ExemplarTraceIDDestinations         []ExemplarTraceIDDestination `json:"exemplarTraceIdDestinations"`
-	ManageAlerts                        bool                         `json:"manageAlerts"`
-	AllowAsRecordingRulesTarget         bool                         `json:"allowAsRecordingRulesTarget"`
-	// Following fields are not directly used by prom datasource
-	// These fields are managed by the Grafana plugin SDK.
-	TimeOut                int64    `json:"timeout"`
-	KeepCookies            []string `json:"keepCookies"`
-	TLSAuth                bool     `json:"tlsAuth"`
-	ServerName             string   `json:"serverName"`
-	TLSAuthWithCACert      bool     `json:"tlsAuthWithCACert"`
-	TLSSkipVerify          bool     `json:"tlsSkipVerify"`
-	EnableSecureSocksProxy bool     `json:"enableSecureSocksProxy"`
+	CustomQueryParameters               LenientString  `json:"customQueryParameters"`
+	MaxSamplesProcessedWarningThreshold LenientFloat64 `json:"maxSamplesProcessedWarningThreshold"`
+	MaxSamplesProcessedErrorThreshold   LenientFloat64 `json:"maxSamplesProcessedErrorThreshold"`
+	QueryStatsEnabled                   LenientBool    `json:"queryStatsEnabled"`
+
+	// Frontend only types
+	PrometheusType                LenientString                      `json:"prometheusType"`
+	PrometheusVersion             LenientString                      `json:"prometheusVersion"`
+	DisableMetricsLookup          LenientBool                        `json:"disableMetricsLookup"`
+	CacheLevel                    LenientString                      `json:"cacheLevel"`
+	DefaultEditor                 LenientString                      `json:"defaultEditor"`
+	IncrementalQuerying           LenientBool                        `json:"incrementalQuerying"`
+	IncrementalQueryOverlapWindow LenientString                      `json:"incrementalQueryOverlapWindow"`
+	DisableRecordingRules         LenientBool                        `json:"disableRecordingRules"`
+	OauthPassThru                 LenientBool                        `json:"oauthPassThru"`
+	SeriesEndpoint                LenientBool                        `json:"seriesEndpoint"`
+	SeriesLimit                   *LenientFloat64                    `json:"seriesLimit"`
+	ExemplarTraceIDDestinations   LenientExemplarTraceIDDestinations `json:"exemplarTraceIdDestinations"`
 }
 
 // ExemplarTraceIDDestination mirrors the frontend ExemplarTraceIdDestination type.
