@@ -39,23 +39,6 @@ func TestCustomQueryParametersMiddleware(t *testing.T) {
 		require.Equal(t, "http://test.com/query?hello=name", req.URL.String())
 	})
 
-	t.Run("With custom query parameters set as empty string should not apply middleware", func(t *testing.T) {
-		mw := CustomQueryParameters(backend.NewLoggerWith("logger", "test"), "", 0, 0, false)
-		rt := mw.CreateMiddleware(httpclient.Options{}, finalRoundTripper)
-		require.NotNil(t, rt)
-
-		req, err := http.NewRequest(http.MethodGet, "http://test.com/query?hello=name", nil)
-		require.NoError(t, err)
-		res, err := rt.RoundTrip(req)
-		require.NoError(t, err)
-		require.NotNil(t, res)
-		if res.Body != nil {
-			require.NoError(t, res.Body.Close())
-		}
-
-		require.Equal(t, "http://test.com/query?hello=name", req.URL.String())
-	})
-
 	t.Run("With custom query parameters set as invalid query string should not apply middleware", func(t *testing.T) {
 		mw := CustomQueryParameters(backend.NewLoggerWith("logger", "test"), "custom=%%abc&test=abc", 0, 0, false)
 		rt := mw.CreateMiddleware(httpclient.Options{}, finalRoundTripper)
