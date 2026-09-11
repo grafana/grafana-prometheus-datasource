@@ -6,6 +6,7 @@ require (
 	github.com/grafana/dsconfig/schema v0.0.12
 	github.com/grafana/grafana-plugin-sdk-go v0.296.4
 	github.com/stretchr/testify v1.12.1
+	k8s.io/kube-openapi v0.0.0-20260821135717-be32def86098
 )
 
 require (
@@ -13,21 +14,6 @@ require (
 	github.com/andybalholm/brotli v1.2.2 // indirect
 	github.com/dennwc/varint v1.0.0 // indirect
 	github.com/emicklei/go-restful/v3 v3.13.0 // indirect
-	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
-	github.com/go-openapi/jsonpointer v0.23.2 // indirect
-	github.com/go-openapi/jsonreference v0.21.6 // indirect
-	github.com/go-openapi/swag v0.26.1 // indirect
-	github.com/go-openapi/swag/cmdutils v0.26.1 // indirect
-	github.com/go-openapi/swag/conv v0.26.1 // indirect
-	github.com/go-openapi/swag/fileutils v0.26.1 // indirect
-	github.com/go-openapi/swag/jsonname v0.26.1 // indirect
-	github.com/go-openapi/swag/jsonutils v0.26.1 // indirect
-	github.com/go-openapi/swag/loading v0.26.1 // indirect
-	github.com/go-openapi/swag/mangling v0.26.1 // indirect
-	github.com/go-openapi/swag/netutils v0.26.1 // indirect
-	github.com/go-openapi/swag/stringutils v0.26.1 // indirect
-	github.com/go-openapi/swag/typeutils v0.26.1 // indirect
-	github.com/go-openapi/swag/yamlutils v0.26.1 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.3 // indirect
 	github.com/go-openapi/jsonpointer v1.0.0 // indirect
 	github.com/go-openapi/jsonreference v1.0.0 // indirect
@@ -49,13 +35,8 @@ require (
 	github.com/grafana/grafana/apps/scope v0.0.0-20260427171703-d4f46decefcb // indirect
 	github.com/grafana/grafana/pkg/apimachinery v0.0.0-20260118065639-60cb766a97d6 // indirect
 	github.com/grafana/regexp v0.0.0-20250905093917-f7b3be9d1853 // indirect
-	github.com/grafana/schemads v0.2.3 // indirect
-	github.com/huandu/go-clone v1.7.3 // indirect
-	github.com/huandu/go-sqlbuilder v1.40.2 // indirect
-	github.com/huandu/xstrings v1.4.0 // indirect
 	github.com/jszwedko/go-datemath v0.1.1-0.20260113213115-7f666eef0523 // indirect
-	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
-	github.com/prometheus/prometheus v0.312.0 // indirect
+	github.com/prometheus/prometheus v0.314.0 // indirect
 	github.com/stretchr/objx v0.5.3 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
@@ -63,7 +44,6 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	k8s.io/apimachinery v0.36.4 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
-	k8s.io/kube-openapi v0.0.0-20260821135717-be32def86098 // indirect
 	k8s.io/utils v0.0.0-20260707023825-cf1189d6abe3 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
