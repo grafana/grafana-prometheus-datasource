@@ -39,6 +39,8 @@ export function getSuggestOptions(): monacoTypes.editor.ISuggestOptions {
 
 function getMonacoCompletionItemKind(type: CompletionType, monaco: Monaco): monacoTypes.languages.CompletionItemKind {
   switch (type) {
+    case 'KEYWORD':
+      return monaco.languages.CompletionItemKind.Keyword;
     case 'DURATION':
       return monaco.languages.CompletionItemKind.Unit;
     case 'FUNCTION':

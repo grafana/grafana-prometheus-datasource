@@ -27,6 +27,41 @@ function assertSituation(situation: string, expectedSituation: Situation | null)
 }
 
 describe('situation', () => {
+  it.each(['rate', 'increase', 'delta'])('offers both range modifiers for %s', (name) => {
+    assertSituation(`${name}(requests_total[5m] ^)`, {
+      type: 'RANGE_MODIFIER',
+      modifiers: ['anchored', 'smoothed'],
+    });
+    assertSituation(`${name}(requests_total[5m] smoo^)`, {
+      type: 'RANGE_MODIFIER',
+      modifiers: ['anchored', 'smoothed'],
+    });
+    assertSituation(`${name}(requests_total[$__rate_interval] ^)`, {
+      type: 'RANGE_MODIFIER',
+      modifiers: ['anchored', 'smoothed'],
+    });
+  });
+
+  it.each(['changes', 'resets'])('offers only anchored for %s', (name) => {
+    assertSituation(`${name}(requests_total[5m] ^)`, {
+      type: 'RANGE_MODIFIER',
+      modifiers: ['anchored'],
+    });
+  });
+
+  it('offers smoothed for an instant selector', () => {
+    assertSituation('temperature{job="api"} ^', { type: 'RANGE_MODIFIER', modifiers: ['smoothed'] });
+  });
+
+  it.each([
+    'irate(requests_total[5m] ^)',
+    'rate(requests_total[5m:] ^)',
+    'rate(requests_total[5m] smoothed ^)',
+    'rate(requests_total{job="foo ^"}[5m])',
+  ])('does not offer range modifiers in %s', (expression) => {
+    expect(getSituation(expression.replace('^', ''), expression.indexOf('^'))?.type).not.toBe('RANGE_MODIFIER');
+  });
+
   it('handles things', () => {
     assertSituation('^', {
       type: 'EMPTY',

@@ -81,7 +81,7 @@ func (r *Resource) Execute(ctx context.Context, req *backend.CallResourceRequest
 }
 
 func getSelectors(expr string) ([]string, error) {
-	parsed, err := parser.NewParser(parser.Options{}).ParseExpr(expr)
+	parsed, err := parser.NewParser(parser.Options{EnableExtendedRangeSelectors: true}).ParseExpr(expr)
 	if err != nil {
 		return nil, err
 	}

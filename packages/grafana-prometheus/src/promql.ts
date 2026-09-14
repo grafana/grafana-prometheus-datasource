@@ -4,7 +4,17 @@ import { type Grammar } from 'prismjs';
 import { t } from '@grafana/i18n';
 import { type CompletionItem } from '@grafana/ui';
 
-export const OPERATORS = ['by', 'group_left', 'group_right', 'ignoring', 'on', 'offset', 'without'];
+export const OPERATORS = [
+  'by',
+  'group_left',
+  'group_right',
+  'ignoring',
+  'on',
+  'offset',
+  'without',
+  'anchored',
+  'smoothed',
+];
 export const LOGICAL_OPERATORS = ['or', 'and', 'unless'];
 
 const getTrigonometricFunctions: () => CompletionItem[] = () => [

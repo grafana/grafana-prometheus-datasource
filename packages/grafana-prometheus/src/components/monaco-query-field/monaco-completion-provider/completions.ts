@@ -7,6 +7,7 @@ import { config } from '@grafana/runtime';
 import { DEFAULT_COMPLETION_LIMIT } from '../../../constants';
 import { escapeLabelValueInExactSelector, prometheusRegularEscape } from '../../../escaping';
 import { getFunctions } from '../../../promql';
+import { rangeModifierDocumentation } from '../../../rangeModifiers';
 import { isValidLegacyName } from '../../../utf8_support';
 
 import { type DataProvider } from './data_provider';
@@ -15,7 +16,14 @@ import type { Label, Situation } from './situation';
 import { NeverCaseError } from './util';
 // FIXME: we should not load this from the "outside", but we cannot do that while we have the "old" query-field too
 
-export type CompletionType = 'HISTORY' | 'FUNCTION' | 'METRIC_NAME' | 'DURATION' | 'LABEL_NAME' | 'LABEL_VALUE';
+export type CompletionType =
+  | 'HISTORY'
+  | 'FUNCTION'
+  | 'METRIC_NAME'
+  | 'DURATION'
+  | 'LABEL_NAME'
+  | 'LABEL_VALUE'
+  | 'KEYWORD';
 
 // We cannot use languages.CompletionItemInsertTextRule.InsertAsSnippet because grafana-prometheus package isn't compatible
 // It should first change the moduleResolution to bundler for TS to correctly resolve the types
@@ -234,6 +242,13 @@ export async function getCompletions(
   triggerType: TriggerType = 'full'
 ): Promise<Completion[]> {
   switch (situation.type) {
+    case 'RANGE_MODIFIER':
+      return situation.modifiers.map((modifier) => ({
+        type: 'KEYWORD',
+        label: modifier,
+        insertText: modifier,
+        documentation: rangeModifierDocumentation[modifier],
+      }));
     case 'IN_DURATION':
       return Promise.resolve(DURATION_COMPLETIONS);
     case 'IN_FUNCTION':

@@ -142,7 +142,7 @@ const vectorMatchingRegex =
 const operators = ['+', '-', '*', '/', '%', '^', '==', '!=', '>', '<', '>=', '<=', 'and', 'or', 'unless'];
 // PromQL offset modifier
 // (https://prometheus.io/docs/prometheus/latest/querying/basics/#offset-modifier)
-const offsetModifier = ['offset'];
+const offsetModifier = ['offset', 'anchored', 'smoothed'];
 // Merging all the keywords in one list
 const keywords = aggregations
   .concat(functions)

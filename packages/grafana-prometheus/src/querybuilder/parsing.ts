@@ -4,6 +4,7 @@ import {
   AggregateExpr,
   AggregateModifier,
   AggregateOp,
+  AnchoredExpr,
   BinaryExpr,
   BoolModifier,
   FunctionCall,
@@ -15,11 +16,13 @@ import {
   QuotedLabelName,
   MatchingModifierClause,
   MatchOp,
+  MatrixSelector,
   NumberDurationLiteral,
   On,
   ParenExpr,
   parser,
   StringLiteral,
+  SmoothedExpr,
   QuotedLabelMatcher,
   UnquotedLabelMatcher,
   VectorSelector,
@@ -27,6 +30,8 @@ import {
 } from '@prometheus-io/lezer-promql';
 
 import { t } from '@grafana/i18n';
+
+import { getRangeModifierOperationId, rangeModifierFunctions } from '../rangeModifiers';
 
 import { binaryScalarOperatorToOperatorName } from './binaryScalarOperations';
 import {
@@ -160,6 +165,16 @@ function handleExpression(expr: string, node: SyntaxNode, context: Context) {
       break;
     }
 
+    case AnchoredExpr:
+    case SmoothedExpr: {
+      // Only supported range function arguments can be represented by Builder operations.
+      context.errors.push(makeError(expr, node));
+      if (node.firstChild) {
+        handleExpression(expr, node.firstChild, context);
+      }
+      break;
+    }
+
     case AggregateExpr: {
       handleAggregation(expr, node, context);
       break;
@@ -217,7 +232,7 @@ function getLabel(
   };
 }
 
-const rangeFunctions = ['changes', 'rate', 'irate', 'increase', 'delta'];
+const rangeFunctions = ['changes', 'rate', 'irate', 'increase', 'delta', 'resets'];
 
 /**
  * Handle function call which is usually and identifier and its body > arguments.
@@ -243,6 +258,37 @@ function handleFunction(expr: string, node: SyntaxNode, context: Context) {
   }
 
   const body = node.getChild(FunctionCallBody);
+  const argument = body?.firstChild;
+  if (argument?.type.id === AnchoredExpr || argument?.type.id === SmoothedExpr) {
+    const modifier = argument.type.id === AnchoredExpr ? 'anchored' : 'smoothed';
+    const selector = argument.firstChild;
+    if (
+      !argument.nextSibling &&
+      selector?.type.id === MatrixSelector &&
+      rangeModifierFunctions[modifier].includes(funcName)
+    ) {
+      const vector = selector.getChild(VectorSelector);
+      // Custom interval variables can leave an empty duration node in the syntax tree.
+      // Read the full range after the vector so variables and brackets in labels are preserved.
+      const range = vector
+        ? getString(expr, selector)
+            .slice(getString(expr, vector).length)
+            .match(/^\s*\[([\s\S]+)\]$/)
+        : null;
+      if (vector && range) {
+        visQuery.operations.unshift({
+          id: getRangeModifierOperationId(funcName, modifier),
+          params: [returnBuiltInVariable(range[1])],
+        });
+        if (vector.from !== vector.to) {
+          handleExpression(expr, vector, context);
+        }
+        return;
+      }
+    }
+    // Keep unsupported combinations in Code mode instead of dropping their modifiers.
+    context.errors.push(makeError(expr, argument));
+  }
   const params = [];
   let interval = '';
 
