@@ -9,7 +9,6 @@ require (
 
 require (
 	github.com/AzureAD/microsoft-authentication-library-for-go v1.9.0 // indirect
-	github.com/andybalholm/brotli v1.2.2 // indirect
 	github.com/dennwc/varint v1.0.0 // indirect
 	github.com/emicklei/go-restful/v3 v3.13.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.3 // indirect
