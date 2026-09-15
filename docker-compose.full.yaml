@@ -1,6 +1,6 @@
 services:
   prometheus:
-    image: prom/prometheus:v3.2.1
+    image: prom/prometheus:v3.14.0@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0
     volumes:
       - ./provisioning/prometheus/prometheus.full.yml:/etc/prometheus/prometheus.yml:ro
       - ./provisioning/prometheus/rules:/etc/prometheus/rules:ro
@@ -24,7 +24,7 @@ services:
         condition: service_started
 
   alertmanager:
-    image: prom/alertmanager:v0.33.1
+    image: prom/alertmanager:v0.34.0@sha256:690c7b525f4367aa91f73e2f91c632206d32e97c6384bdbf2fb7a861b420340d
     volumes:
       - ./provisioning/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
     command:
@@ -33,10 +33,10 @@ services:
       - 9093:9093/tcp
 
   node-exporter:
-    image: prom/node-exporter:v1.12.1
+    image: prom/node-exporter:v1.12.1@sha256:1b4e4438faca4dd7e001dd445d161a4a2091b0fededa84093b3a8dfeae1f1be0
 
   fake-prometheus-data:
-    image: grafana/fake-data-gen:cc22f970a7de333c32aee0b935300c45cfb8a5d3
+    image: grafana/fake-data-gen:cc22f970a7de333c32aee0b935300c45cfb8a5d3@sha256:c2800b47a1e946b58350dfd1385088f10650b3810d6d4c7d8e4ec3bb65d9a5e1
     environment:
       FD_DATASOURCE: prom
 
