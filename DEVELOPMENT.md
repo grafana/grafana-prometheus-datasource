@@ -45,10 +45,12 @@ the provisioned `prometheus-direct` and `prometheus-gzip` datasource UIDs:
 | `npm run server:search-api`       | Prometheus 3.13.1 with the experimental Search API enabled            |
 | `npm run server:full`             | All generators, node exporter, fake-data-gen, rules, and Alertmanager |
 
-The scripts are shorthand for layering one override onto the base file:
+The scripts are shorthand for layering one override onto the base file. The base
+`docker-compose.yaml` stays at the repo root; every scenario overlay lives in
+`devenv/compose/` and is always run together with the base file:
 
 ```bash
-docker compose -f docker-compose.yaml -f docker-compose.high-cardinality.yaml up --build
+docker compose -f docker-compose.yaml -f devenv/compose/docker-compose.high-cardinality.yaml up --build
 ```
 
 The full environment also enables Prometheus's remote-write receiver and
@@ -73,7 +75,7 @@ docker compose down --remove-orphans
 For an override environment, pass the same files to `down`, for example:
 
 ```bash
-docker compose -f docker-compose.yaml -f docker-compose.utf8.yaml down --remove-orphans
+docker compose -f docker-compose.yaml -f devenv/compose/docker-compose.utf8.yaml down --remove-orphans
 ```
 
 For starting with a specific Grafana version
