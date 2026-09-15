@@ -2,8 +2,8 @@ import { type TimeRange } from '@grafana/data';
 import { type BackendSrvRequest, config, getBackendSrv } from '@grafana/runtime';
 
 import { SEARCH_STREAM_BATCH_SIZE } from './constants';
-import { getRangeSnapInterval } from './language_utils';
-import { BaseResourceClient } from './resource_clients';
+import { getRangeSnapInterval, processHistogramMetrics, removeQuotesIfExist } from './language_utils';
+import { BaseResourceClient, type ResourceApiClient, ResourceClientsCache } from './resource_clients';
 import { readSearchStream, type SearchStreamResult } from './search_api_stream';
 import { bridgeChunkedResponse } from './search_api_transport';
 
@@ -41,7 +41,66 @@ export interface SearchMetricOptions extends SearchOptions<SearchMetricResult> {
 
 type SearchEndpoint = 'metric_names' | 'label_names' | 'label_values';
 
-export class SearchApiClient extends BaseResourceClient {
+export class SearchApiClient extends BaseResourceClient implements ResourceApiClient {
+  private _cache = new ResourceClientsCache(this.datasource.cacheLevel);
+
+  public histogramMetrics: string[] = [];
+  public metrics: string[] = [];
+  public labelKeys: string[] = [];
+  public cachedLabelValues: Record<string, string[]> = {};
+
+  public start = async (timeRange: TimeRange): Promise<void> => {
+    await this.queryMetrics(timeRange);
+    this.labelKeys = await this.queryLabelKeys(timeRange);
+  };
+
+  public queryMetrics = async (
+    timeRange: TimeRange,
+    limit?: number
+  ): Promise<{ metrics: string[]; histogramMetrics: string[] }> => {
+    const effectiveLimit = this.getEffectiveSearchLimit(limit);
+    const response = await this.searchMetricNames(timeRange, '', { limit: effectiveLimit });
+    this.metrics = response.results.map((result) => result.name);
+    this.histogramMetrics = processHistogramMetrics(this.metrics);
+    this._cache.setLabelValues(timeRange, undefined, effectiveLimit, this.metrics);
+    return { metrics: this.metrics, histogramMetrics: this.histogramMetrics };
+  };
+
+  public queryLabelKeys = async (timeRange: TimeRange, match?: string, limit?: number): Promise<string[]> => {
+    const effectiveLimit = this.getEffectiveSearchLimit(limit);
+    const effectiveMatch = match ?? '';
+    const cached = this._cache.getLabelKeys(timeRange, effectiveMatch, effectiveLimit);
+    if (cached) {
+      return cached.slice();
+    }
+
+    const response = await this.searchLabelNames(timeRange, '', { limit: effectiveLimit, match });
+    this.labelKeys = response.results.map((result) => result.name);
+    this._cache.setLabelKeys(timeRange, effectiveMatch, effectiveLimit, this.labelKeys);
+    return this.labelKeys.slice();
+  };
+
+  public queryLabelValues = async (
+    timeRange: TimeRange,
+    labelKey: string,
+    match?: string,
+    limit?: number
+  ): Promise<string[]> => {
+    const effectiveLimit = this.getEffectiveSearchLimit(limit);
+    const interpolatedName = this.datasource.interpolateString(labelKey);
+    const labelName = removeQuotesIfExist(interpolatedName);
+    const effectiveMatch = JSON.stringify(['label_values', labelName, match ?? '']);
+    const cached = this._cache.getLabelValues(timeRange, effectiveMatch, effectiveLimit);
+    if (cached) {
+      return cached.slice();
+    }
+
+    const response = await this.searchLabelValues(timeRange, labelName, '', { limit: effectiveLimit, match });
+    const values = response.results.map((result) => result.value);
+    this._cache.setLabelValues(timeRange, effectiveMatch, effectiveLimit, values);
+    return values;
+  };
+
   public searchMetricNames = (
     timeRange: TimeRange,
     term: string,
