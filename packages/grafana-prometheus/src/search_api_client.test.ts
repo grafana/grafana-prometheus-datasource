@@ -21,6 +21,7 @@ const datasource = {
   cacheLevel: PrometheusCacheLevel.None,
   seriesLimit: 40000,
   getAdjustedInterval: jest.fn().mockReturnValue({ start: '1681300260', end: '1681300320' }),
+  interpolateString: jest.fn((value: string) => value),
 } as unknown as PrometheusDatasource;
 
 describe('SearchApiClient', () => {
@@ -37,6 +38,72 @@ describe('SearchApiClient', () => {
     setBackendSrv(originalBackendSrv);
     jest.restoreAllMocks();
     jest.clearAllMocks();
+  });
+
+  it('starts metric and label discovery through the resource client contract', async () => {
+    chunkedMock
+      .mockReturnValueOnce(searchResultsStream([{ name: 'up' }]))
+      .mockReturnValueOnce(searchResultsStream([{ name: 'instance' }, { name: 'job' }]));
+    const client = new SearchApiClient(jest.fn(), datasource);
+
+    await client.start(timeRange);
+
+    expect(client.metrics).toEqual(['up']);
+    expect(client.labelKeys).toEqual(['instance', 'job']);
+    expect(chunkedMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('adapts metric records and identifies histogram metrics', async () => {
+    chunkedMock.mockReturnValue(searchResultsStream([{ name: 'request_duration_bucket' }, { name: 'up' }]));
+    const client = new SearchApiClient(jest.fn(), datasource);
+
+    await expect(client.queryMetrics(timeRange, 20)).resolves.toEqual({
+      metrics: ['request_duration_bucket', 'up'],
+      histogramMetrics: ['request_duration_bucket'],
+    });
+  });
+
+  it('adapts and caches label names', async () => {
+    chunkedMock.mockReturnValue(searchResultsStream([{ name: 'instance' }, { name: 'job' }]));
+    const client = new SearchApiClient(jest.fn(), datasource);
+
+    const first = await client.queryLabelKeys(timeRange, '{job="grafana"}', 50);
+    first.push('modified');
+    const second = await client.queryLabelKeys(timeRange, '{job="grafana"}', 50);
+
+    expect(second).toEqual(['instance', 'job']);
+    expect(chunkedMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('interpolates label names and caches adapted label values', async () => {
+    chunkedMock.mockReturnValue(searchResultsStream([{ value: 'dev' }, { value: 'prod' }]));
+    const client = new SearchApiClient(jest.fn(), datasource);
+
+    const first = await client.queryLabelValues(timeRange, '"service.name"', '{job="grafana"}', 50);
+    const second = await client.queryLabelValues(timeRange, '"service.name"', '{job="grafana"}', 50);
+
+    expect(first).toEqual(['dev', 'prod']);
+    expect(second).toEqual(['dev', 'prod']);
+    expect(chunkedMock).toHaveBeenCalledTimes(1);
+    expect(chunkedMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({ label: 'service.name', 'match[]': '{job="grafana"}' }),
+      })
+    );
+  });
+
+  it('keeps label-value cache keys distinct for delimiter-colliding input pairs', async () => {
+    chunkedMock
+      .mockReturnValueOnce(searchResultsStream([{ value: 'first' }]))
+      .mockReturnValueOnce(searchResultsStream([{ value: 'second' }]));
+    const client = new SearchApiClient(jest.fn(), datasource);
+
+    const first = await client.queryLabelValues(timeRange, 'b-c', 'a', 50);
+    const second = await client.queryLabelValues(timeRange, 'c', 'a-b', 50);
+
+    expect(first).toEqual(['first']);
+    expect(second).toEqual(['second']);
+    expect(chunkedMock).toHaveBeenCalledTimes(2);
   });
 
   it('searches metric names with metadata and score ordering', async () => {
@@ -247,4 +314,8 @@ describe('SearchApiClient', () => {
 
 function successfulStream() {
   return chunkedStream(['{"results":[]}\n', '{"status":"success","has_more":false}\n']);
+}
+
+function searchResultsStream(results: Array<Record<string, unknown>>) {
+  return chunkedStream([`${JSON.stringify({ results })}\n`, '{"status":"success","has_more":false}\n']);
 }
