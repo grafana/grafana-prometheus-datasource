@@ -1,5 +1,6 @@
 import { expect, test } from '@grafana/plugin-e2e';
 import { type Locator, type Page } from '@playwright/test';
+import { resolveDataSourceUid } from './env';
 
 // Grafana 13 migrated query editor row selectors from aria-label to data-testid
 // (https://github.com/grafana/grafana/pull/121784). This helper matches both so tests work across versions
@@ -14,7 +15,7 @@ function getQueryEditorRow(page: Page, refId: string): Locator {
 
 test.describe('Query editor', () => {
   test('smoke: renders query editor controls', { tag: '@plugins' }, async ({ explorePage, page }) => {
-    await explorePage.datasource.set('prometheus-gzip');
+    await explorePage.datasource.set(await resolveDataSourceUid(page));
 
     const queryRow = getQueryEditorRow(page, 'A');
     await expect(queryRow.getByRole('button', { name: 'Kick start your query' })).toBeVisible();
