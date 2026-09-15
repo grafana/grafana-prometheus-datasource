@@ -7,7 +7,7 @@ services:
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
-      - --enable-feature=promql-experimental-functions
+      - --enable-feature=promql-experimental-functions,promql-extended-range-selectors
       - --web.enable-remote-write-receiver
     depends_on:
       alertmanager:
