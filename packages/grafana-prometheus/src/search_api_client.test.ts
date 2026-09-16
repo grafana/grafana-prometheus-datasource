@@ -115,10 +115,10 @@ describe('SearchApiClient', () => {
 
   it('falls back to the labels client when the Search API reports unavailable', async () => {
     chunkedMock.mockReturnValue(unavailableStream());
-    requestMock.mockResolvedValue(['legacy-b', 'legacy-a']);
+    requestMock.mockResolvedValue(['standard-b', 'standard-a']);
     const client = new SearchApiClient(requestMock, datasource);
 
-    await expect(client.queryLabelKeys(timeRange)).resolves.toEqual(['legacy-a', 'legacy-b']);
+    await expect(client.queryLabelKeys(timeRange)).resolves.toEqual(['standard-a', 'standard-b']);
 
     expect(requestMock).toHaveBeenCalledWith('/api/v1/labels', expect.anything(), undefined);
     expect(console.warn).toHaveBeenCalledTimes(1);
@@ -126,10 +126,10 @@ describe('SearchApiClient', () => {
 
   it('falls back for a missing Search API route', async () => {
     chunkedMock.mockReturnValue(chunkedStream([], { ok: false, status: 404, statusText: 'Not Found' }));
-    requestMock.mockResolvedValue(['legacy-value']);
+    requestMock.mockResolvedValue(['standard-value']);
     const client = new SearchApiClient(requestMock, datasource);
 
-    await expect(client.queryLabelValues(timeRange, 'job')).resolves.toEqual(['legacy-value']);
+    await expect(client.queryLabelValues(timeRange, 'job')).resolves.toEqual(['standard-value']);
 
     expect(requestMock).toHaveBeenCalledWith('/api/v1/label/job/values', expect.anything(), undefined);
   });
@@ -154,11 +154,11 @@ describe('SearchApiClient', () => {
 
   it('uses the sticky flag after the first unavailable response', async () => {
     chunkedMock.mockReturnValue(unavailableStream());
-    requestMock.mockResolvedValue(['legacy-label']);
+    requestMock.mockResolvedValue(['standard-label']);
     const client = new SearchApiClient(requestMock, datasource);
 
-    await expect(client.queryLabelKeys(timeRange)).resolves.toEqual(['legacy-label']);
-    await expect(client.queryLabelValues(timeRange, 'job')).resolves.toEqual(['legacy-label']);
+    await expect(client.queryLabelKeys(timeRange)).resolves.toEqual(['standard-label']);
+    await expect(client.queryLabelValues(timeRange, 'job')).resolves.toEqual(['standard-label']);
 
     expect(chunkedMock).toHaveBeenCalledTimes(1);
     expect(console.warn).toHaveBeenCalledTimes(1);
@@ -166,11 +166,11 @@ describe('SearchApiClient', () => {
 
   it('marks structured searches unavailable and lets their caller choose the fallback', async () => {
     chunkedMock.mockReturnValue(unavailableStream());
-    requestMock.mockResolvedValue(['legacy-label']);
+    requestMock.mockResolvedValue(['standard-label']);
     const client = new SearchApiClient(requestMock, datasource);
 
     await expect(client.searchMetricNames(timeRange, 'up')).rejects.toBeInstanceOf(SearchApiUnavailableError);
-    await expect(client.queryLabelKeys(timeRange)).resolves.toEqual(['legacy-label']);
+    await expect(client.queryLabelKeys(timeRange)).resolves.toEqual(['standard-label']);
 
     expect(chunkedMock).toHaveBeenCalledTimes(1);
     expect(console.warn).toHaveBeenCalledTimes(1);
@@ -191,7 +191,7 @@ describe('SearchApiClient', () => {
     );
   });
 
-  it('copies legacy discovery state when start falls back', async () => {
+  it('copies standard discovery state when start falls back', async () => {
     chunkedMock.mockReturnValue(unavailableStream());
     requestMock.mockResolvedValueOnce(['request_duration_bucket', 'up']).mockResolvedValueOnce(['instance', 'job']);
     const client = new SearchApiClient(requestMock, datasource);
@@ -301,7 +301,7 @@ describe('SearchApiClient', () => {
 
   it.each([
     ['the datasource default', undefined, '10000'],
-    ['legacy unlimited', 0, '10000'],
+    ['zero, which means unlimited in standard discovery', 0, '10000'],
     ['a limit above the cap', 20000, '10000'],
     ['a limit below the cap', 250, '250'],
   ])('normalizes %s to the Search API limit', async (_name, limit, expected) => {

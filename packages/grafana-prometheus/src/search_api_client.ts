@@ -50,7 +50,7 @@ type SearchEndpoint = 'metric_names' | 'label_names' | 'label_values';
 export class SearchApiClient extends BaseResourceClient implements ResourceApiClient {
   private _cache = new ResourceClientsCache(this.datasource.cacheLevel);
   private searchUnavailable = false;
-  private _legacyClient?: ResourceApiClient;
+  private _fallbackClient?: ResourceApiClient;
 
   public histogramMetrics: string[] = [];
   public metrics: string[] = [];
@@ -64,8 +64,8 @@ export class SearchApiClient extends BaseResourceClient implements ResourceApiCl
         this.labelKeys = await this.queryLabelKeysFromSearch(timeRange);
       },
       async () => {
-        await this.legacyClient.start(timeRange);
-        this.copyLegacyState();
+        await this.fallbackClient.start(timeRange);
+        this.copyFallbackState();
       }
     );
   };
@@ -77,8 +77,8 @@ export class SearchApiClient extends BaseResourceClient implements ResourceApiCl
     return this.withFallback(
       () => this.queryMetricsFromSearch(timeRange, limit),
       async () => {
-        const result = await this.legacyClient.queryMetrics(timeRange);
-        this.copyLegacyState();
+        const result = await this.fallbackClient.queryMetrics(timeRange);
+        this.copyFallbackState();
         return result;
       }
     );
@@ -88,7 +88,7 @@ export class SearchApiClient extends BaseResourceClient implements ResourceApiCl
     return this.withFallback(
       () => this.queryLabelKeysFromSearch(timeRange, match, limit),
       async () => {
-        const result = await this.legacyClient.queryLabelKeys(timeRange, match, limit);
+        const result = await this.fallbackClient.queryLabelKeys(timeRange, match, limit);
         this.labelKeys = result.slice();
         return result;
       }
@@ -103,7 +103,7 @@ export class SearchApiClient extends BaseResourceClient implements ResourceApiCl
   ): Promise<string[]> => {
     return this.withFallback(
       () => this.queryLabelValuesFromSearch(timeRange, labelKey, match, limit),
-      () => this.legacyClient.queryLabelValues(timeRange, labelKey, match, limit)
+      () => this.fallbackClient.queryLabelValues(timeRange, labelKey, match, limit)
     );
   };
 
@@ -183,13 +183,13 @@ export class SearchApiClient extends BaseResourceClient implements ResourceApiCl
     return this.trackAvailability(this.search('label_values', timeRange, term, options, { label: labelName }));
   };
 
-  private get legacyClient(): ResourceApiClient {
-    if (!this._legacyClient) {
-      this._legacyClient = this.datasource.hasLabelsMatchAPISupport()
+  private get fallbackClient(): ResourceApiClient {
+    if (!this._fallbackClient) {
+      this._fallbackClient = this.datasource.hasLabelsMatchAPISupport()
         ? new LabelsApiClient(this.request, this.datasource)
         : new SeriesApiClient(this.request, this.datasource);
     }
-    return this._legacyClient;
+    return this._fallbackClient;
   }
 
   private async withFallback<T>(search: () => Promise<T>, fallback: () => Promise<T>): Promise<T> {
@@ -224,14 +224,14 @@ export class SearchApiClient extends BaseResourceClient implements ResourceApiCl
       return;
     }
     this.searchUnavailable = true;
-    console.warn('Search API unavailable; using legacy Prometheus discovery.', error);
+    console.warn('Search API unavailable; using standard Prometheus discovery.', error);
   }
 
-  private copyLegacyState(): void {
-    this.metrics = this.legacyClient.metrics;
-    this.histogramMetrics = this.legacyClient.histogramMetrics;
-    this.labelKeys = this.legacyClient.labelKeys;
-    this.cachedLabelValues = this.legacyClient.cachedLabelValues;
+  private copyFallbackState(): void {
+    this.metrics = this.fallbackClient.metrics;
+    this.histogramMetrics = this.fallbackClient.histogramMetrics;
+    this.labelKeys = this.fallbackClient.labelKeys;
+    this.cachedLabelValues = this.fallbackClient.cachedLabelValues;
   }
 
   private async search<T>(
