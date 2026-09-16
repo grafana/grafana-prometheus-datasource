@@ -16,22 +16,29 @@ const timeRange: TimeRange = {
   raw: { from: 'now-1s', to: 'now' },
 };
 
+const hasLabelsMatchAPISupport = jest.fn().mockReturnValue(true);
 const datasource = {
   uid: 'prometheus/primary',
   cacheLevel: PrometheusCacheLevel.None,
   seriesLimit: 40000,
   getAdjustedInterval: jest.fn().mockReturnValue({ start: '1681300260', end: '1681300320' }),
+  getTimeRangeParams: jest.fn().mockReturnValue({ start: '1681300260', end: '1681300320' }),
   interpolateString: jest.fn((value: string) => value),
+  hasLabelsMatchAPISupport,
 } as unknown as PrometheusDatasource;
 
 describe('SearchApiClient', () => {
   const originalBackendSrv = getBackendSrv();
   const chunkedMock = jest.fn();
   const getMock = jest.fn().mockResolvedValue(undefined);
+  const requestMock = jest.fn();
 
   beforeEach(() => {
     setBackendSrv({ ...originalBackendSrv, chunked: chunkedMock, get: getMock });
     chunkedMock.mockReturnValue(successfulStream());
+    requestMock.mockReset().mockResolvedValue([]);
+    hasLabelsMatchAPISupport.mockReturnValue(true);
+    jest.spyOn(console, 'warn').mockImplementation();
   });
 
   afterEach(() => {
@@ -104,6 +111,96 @@ describe('SearchApiClient', () => {
     expect(first).toEqual(['first']);
     expect(second).toEqual(['second']);
     expect(chunkedMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('falls back to the labels client when the Search API reports unavailable', async () => {
+    chunkedMock.mockReturnValue(unavailableStream());
+    requestMock.mockResolvedValue(['legacy-b', 'legacy-a']);
+    const client = new SearchApiClient(requestMock, datasource);
+
+    await expect(client.queryLabelKeys(timeRange)).resolves.toEqual(['legacy-a', 'legacy-b']);
+
+    expect(requestMock).toHaveBeenCalledWith('/api/v1/labels', expect.anything(), undefined);
+    expect(console.warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back for a missing Search API route', async () => {
+    chunkedMock.mockReturnValue(chunkedStream([], { ok: false, status: 404, statusText: 'Not Found' }));
+    requestMock.mockResolvedValue(['legacy-value']);
+    const client = new SearchApiClient(requestMock, datasource);
+
+    await expect(client.queryLabelValues(timeRange, 'job')).resolves.toEqual(['legacy-value']);
+
+    expect(requestMock).toHaveBeenCalledWith('/api/v1/label/job/values', expect.anything(), undefined);
+  });
+
+  it('does not fall back for a Search API server error', async () => {
+    chunkedMock.mockReturnValue(
+      chunkedStream(['{"status":"error","errorType":"internal","error":"search failed"}'], {
+        ok: false,
+        status: 500,
+        statusText: 'Internal Server Error',
+      })
+    );
+    const client = new SearchApiClient(requestMock, datasource);
+
+    await expect(client.queryMetrics(timeRange)).rejects.toMatchObject({
+      message: 'search failed',
+      errorType: 'internal',
+    });
+    expect(requestMock).not.toHaveBeenCalled();
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+
+  it('uses the sticky flag after the first unavailable response', async () => {
+    chunkedMock.mockReturnValue(unavailableStream());
+    requestMock.mockResolvedValue(['legacy-label']);
+    const client = new SearchApiClient(requestMock, datasource);
+
+    await expect(client.queryLabelKeys(timeRange)).resolves.toEqual(['legacy-label']);
+    await expect(client.queryLabelValues(timeRange, 'job')).resolves.toEqual(['legacy-label']);
+
+    expect(chunkedMock).toHaveBeenCalledTimes(1);
+    expect(console.warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('marks structured searches unavailable and lets their caller choose the fallback', async () => {
+    chunkedMock.mockReturnValue(unavailableStream());
+    requestMock.mockResolvedValue(['legacy-label']);
+    const client = new SearchApiClient(requestMock, datasource);
+
+    await expect(client.searchMetricNames(timeRange, 'up')).rejects.toBeInstanceOf(SearchApiUnavailableError);
+    await expect(client.queryLabelKeys(timeRange)).resolves.toEqual(['legacy-label']);
+
+    expect(chunkedMock).toHaveBeenCalledTimes(1);
+    expect(console.warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses the series client when the labels API is unsupported', async () => {
+    hasLabelsMatchAPISupport.mockReturnValue(false);
+    chunkedMock.mockReturnValue(unavailableStream());
+    requestMock.mockResolvedValue([{ __name__: 'up', job: 'grafana' }]);
+    const client = new SearchApiClient(requestMock, datasource);
+
+    await expect(client.queryLabelKeys(timeRange)).resolves.toEqual(['job']);
+
+    expect(requestMock).toHaveBeenCalledWith(
+      '/api/v1/series',
+      expect.objectContaining({ 'match[]': '{__name__!=""}' }),
+      undefined
+    );
+  });
+
+  it('copies legacy discovery state when start falls back', async () => {
+    chunkedMock.mockReturnValue(unavailableStream());
+    requestMock.mockResolvedValueOnce(['request_duration_bucket', 'up']).mockResolvedValueOnce(['instance', 'job']);
+    const client = new SearchApiClient(requestMock, datasource);
+
+    await client.start(timeRange);
+
+    expect(client.metrics).toEqual(['request_duration_bucket', 'up']);
+    expect(client.histogramMetrics).toEqual(['request_duration_bucket']);
+    expect(client.labelKeys).toEqual(['instance', 'job']);
   });
 
   it('searches metric names with metadata and score ordering', async () => {
@@ -318,4 +415,12 @@ function successfulStream() {
 
 function searchResultsStream(results: Array<Record<string, unknown>>) {
   return chunkedStream([`${JSON.stringify({ results })}\n`, '{"status":"success","has_more":false}\n']);
+}
+
+function unavailableStream() {
+  return chunkedStream(['{"status":"error","errorType":"unavailable","error":"search API disabled"}'], {
+    ok: false,
+    status: 500,
+    statusText: 'Internal Server Error',
+  });
 }

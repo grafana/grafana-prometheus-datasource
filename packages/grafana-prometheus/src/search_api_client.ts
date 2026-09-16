@@ -3,8 +3,14 @@ import { type BackendSrvRequest, config, getBackendSrv } from '@grafana/runtime'
 
 import { SEARCH_STREAM_BATCH_SIZE } from './constants';
 import { getRangeSnapInterval, processHistogramMetrics, removeQuotesIfExist } from './language_utils';
-import { BaseResourceClient, type ResourceApiClient, ResourceClientsCache } from './resource_clients';
-import { readSearchStream, type SearchStreamResult } from './search_api_stream';
+import {
+  BaseResourceClient,
+  LabelsApiClient,
+  type ResourceApiClient,
+  ResourceClientsCache,
+  SeriesApiClient,
+} from './resource_clients';
+import { readSearchStream, SearchApiUnavailableError, type SearchStreamResult } from './search_api_stream';
 import { bridgeChunkedResponse } from './search_api_transport';
 
 export const DEFAULT_SEARCH_API_MAX_LIMIT = 10_000;
@@ -43,6 +49,8 @@ type SearchEndpoint = 'metric_names' | 'label_names' | 'label_values';
 
 export class SearchApiClient extends BaseResourceClient implements ResourceApiClient {
   private _cache = new ResourceClientsCache(this.datasource.cacheLevel);
+  private searchUnavailable = false;
+  private _legacyClient?: ResourceApiClient;
 
   public histogramMetrics: string[] = [];
   public metrics: string[] = [];
@@ -50,23 +58,68 @@ export class SearchApiClient extends BaseResourceClient implements ResourceApiCl
   public cachedLabelValues: Record<string, string[]> = {};
 
   public start = async (timeRange: TimeRange): Promise<void> => {
-    await this.queryMetrics(timeRange);
-    this.labelKeys = await this.queryLabelKeys(timeRange);
+    return this.withFallback(
+      async () => {
+        await this.queryMetricsFromSearch(timeRange);
+        this.labelKeys = await this.queryLabelKeysFromSearch(timeRange);
+      },
+      async () => {
+        await this.legacyClient.start(timeRange);
+        this.copyLegacyState();
+      }
+    );
   };
 
   public queryMetrics = async (
     timeRange: TimeRange,
     limit?: number
   ): Promise<{ metrics: string[]; histogramMetrics: string[] }> => {
+    return this.withFallback(
+      () => this.queryMetricsFromSearch(timeRange, limit),
+      async () => {
+        const result = await this.legacyClient.queryMetrics(timeRange);
+        this.copyLegacyState();
+        return result;
+      }
+    );
+  };
+
+  public queryLabelKeys = async (timeRange: TimeRange, match?: string, limit?: number): Promise<string[]> => {
+    return this.withFallback(
+      () => this.queryLabelKeysFromSearch(timeRange, match, limit),
+      async () => {
+        const result = await this.legacyClient.queryLabelKeys(timeRange, match, limit);
+        this.labelKeys = result.slice();
+        return result;
+      }
+    );
+  };
+
+  public queryLabelValues = async (
+    timeRange: TimeRange,
+    labelKey: string,
+    match?: string,
+    limit?: number
+  ): Promise<string[]> => {
+    return this.withFallback(
+      () => this.queryLabelValuesFromSearch(timeRange, labelKey, match, limit),
+      () => this.legacyClient.queryLabelValues(timeRange, labelKey, match, limit)
+    );
+  };
+
+  private async queryMetricsFromSearch(
+    timeRange: TimeRange,
+    limit?: number
+  ): Promise<{ metrics: string[]; histogramMetrics: string[] }> {
     const effectiveLimit = this.getEffectiveSearchLimit(limit);
     const response = await this.searchMetricNames(timeRange, '', { limit: effectiveLimit });
     this.metrics = response.results.map((result) => result.name);
     this.histogramMetrics = processHistogramMetrics(this.metrics);
     this._cache.setLabelValues(timeRange, undefined, effectiveLimit, this.metrics);
     return { metrics: this.metrics, histogramMetrics: this.histogramMetrics };
-  };
+  }
 
-  public queryLabelKeys = async (timeRange: TimeRange, match?: string, limit?: number): Promise<string[]> => {
+  private async queryLabelKeysFromSearch(timeRange: TimeRange, match?: string, limit?: number): Promise<string[]> {
     const effectiveLimit = this.getEffectiveSearchLimit(limit);
     const effectiveMatch = match ?? '';
     const cached = this._cache.getLabelKeys(timeRange, effectiveMatch, effectiveLimit);
@@ -78,14 +131,14 @@ export class SearchApiClient extends BaseResourceClient implements ResourceApiCl
     this.labelKeys = response.results.map((result) => result.name);
     this._cache.setLabelKeys(timeRange, effectiveMatch, effectiveLimit, this.labelKeys);
     return this.labelKeys.slice();
-  };
+  }
 
-  public queryLabelValues = async (
+  private async queryLabelValuesFromSearch(
     timeRange: TimeRange,
     labelKey: string,
     match?: string,
     limit?: number
-  ): Promise<string[]> => {
+  ): Promise<string[]> {
     const effectiveLimit = this.getEffectiveSearchLimit(limit);
     const interpolatedName = this.datasource.interpolateString(labelKey);
     const labelName = removeQuotesIfExist(interpolatedName);
@@ -99,16 +152,18 @@ export class SearchApiClient extends BaseResourceClient implements ResourceApiCl
     const values = response.results.map((result) => result.value);
     this._cache.setLabelValues(timeRange, effectiveMatch, effectiveLimit, values);
     return values;
-  };
+  }
 
   public searchMetricNames = (
     timeRange: TimeRange,
     term: string,
     options: SearchMetricOptions = {}
   ): Promise<SearchStreamResult<SearchMetricResult>> => {
-    return this.search('metric_names', timeRange, term, options, {
-      include_metadata: options.includeMetadata ? 'true' : undefined,
-    });
+    return this.trackAvailability(
+      this.search('metric_names', timeRange, term, options, {
+        include_metadata: options.includeMetadata ? 'true' : undefined,
+      })
+    );
   };
 
   public searchLabelNames = (
@@ -116,7 +171,7 @@ export class SearchApiClient extends BaseResourceClient implements ResourceApiCl
     term: string,
     options: SearchOptions<SearchLabelNameResult> = {}
   ): Promise<SearchStreamResult<SearchLabelNameResult>> => {
-    return this.search('label_names', timeRange, term, options);
+    return this.trackAvailability(this.search('label_names', timeRange, term, options));
   };
 
   public searchLabelValues = (
@@ -125,8 +180,59 @@ export class SearchApiClient extends BaseResourceClient implements ResourceApiCl
     term: string,
     options: SearchOptions<SearchLabelValueResult> = {}
   ): Promise<SearchStreamResult<SearchLabelValueResult>> => {
-    return this.search('label_values', timeRange, term, options, { label: labelName });
+    return this.trackAvailability(this.search('label_values', timeRange, term, options, { label: labelName }));
   };
+
+  private get legacyClient(): ResourceApiClient {
+    if (!this._legacyClient) {
+      this._legacyClient = this.datasource.hasLabelsMatchAPISupport()
+        ? new LabelsApiClient(this.request, this.datasource)
+        : new SeriesApiClient(this.request, this.datasource);
+    }
+    return this._legacyClient;
+  }
+
+  private async withFallback<T>(search: () => Promise<T>, fallback: () => Promise<T>): Promise<T> {
+    if (this.searchUnavailable) {
+      return fallback();
+    }
+
+    try {
+      return await search();
+    } catch (error) {
+      if (!(error instanceof SearchApiUnavailableError)) {
+        throw error;
+      }
+      this.markSearchUnavailable(error);
+      return fallback();
+    }
+  }
+
+  private async trackAvailability<T>(search: Promise<T>): Promise<T> {
+    try {
+      return await search;
+    } catch (error) {
+      if (error instanceof SearchApiUnavailableError) {
+        this.markSearchUnavailable(error);
+      }
+      throw error;
+    }
+  }
+
+  private markSearchUnavailable(error: SearchApiUnavailableError): void {
+    if (this.searchUnavailable) {
+      return;
+    }
+    this.searchUnavailable = true;
+    console.warn('Search API unavailable; using legacy Prometheus discovery.', error);
+  }
+
+  private copyLegacyState(): void {
+    this.metrics = this.legacyClient.metrics;
+    this.histogramMetrics = this.legacyClient.histogramMetrics;
+    this.labelKeys = this.legacyClient.labelKeys;
+    this.cachedLabelValues = this.legacyClient.cachedLabelValues;
+  }
 
   private async search<T>(
     endpoint: SearchEndpoint,
