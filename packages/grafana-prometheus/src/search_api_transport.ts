@@ -21,7 +21,7 @@ export async function bridgeChunkedResponse(
   const backendSrv = getBackendSrv();
   // chunked() arrived in Grafana 11.6.0. On an older host the Search API
   // cannot be reached at all, which is a capability signal rather than a
-  // failure, so callers may fall back to legacy discovery.
+  // failure, so callers may fall back to standard Prometheus discovery.
   if (typeof backendSrv.chunked !== 'function') {
     throw new SearchApiUnavailableError('Search API requires Grafana 11.6.0 or later');
   }

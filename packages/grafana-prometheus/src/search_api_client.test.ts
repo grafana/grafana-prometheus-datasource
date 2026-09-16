@@ -204,7 +204,7 @@ describe('SearchApiClient', () => {
 
   it.each([
     ['the datasource default', undefined, '10000'],
-    ['legacy unlimited', 0, '10000'],
+    ['zero, which means unlimited in standard discovery', 0, '10000'],
     ['a limit above the cap', 20000, '10000'],
     ['a limit below the cap', 250, '250'],
   ])('normalizes %s to the Search API limit', async (_name, limit, expected) => {
