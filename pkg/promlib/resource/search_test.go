@@ -69,6 +69,23 @@ func TestResourceExecuteSearchStreamsResponse(t *testing.T) {
 	)
 }
 
+func TestResourceExecuteSearchRejectsDisallowedEndpoint(t *testing.T) {
+	res := newSearchResource(t, "http://localhost:9090")
+	var responses []*backend.CallResourceResponse
+	err := res.ExecuteSearch(context.Background(), &backend.CallResourceRequest{
+		Method: http.MethodGet,
+		Path:   "api/v1/search/../../../-/reload",
+		URL:    "/api/v1/search/../../../-/reload",
+	}, backend.CallResourceResponseSenderFunc(func(resp *backend.CallResourceResponse) error {
+		responses = append(responses, resp)
+		return nil
+	}))
+
+	require.NoError(t, err)
+	require.Len(t, responses, 1)
+	require.Equal(t, http.StatusForbidden, responses[0].Status)
+}
+
 func TestResourceExecuteSearchDecodesGzipResponse(t *testing.T) {
 	payload := "{\"results\":[\"up\"]}\n{\"status\":\"success\",\"has_more\":false}\n"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
