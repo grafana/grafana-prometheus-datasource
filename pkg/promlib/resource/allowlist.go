@@ -23,7 +23,7 @@ var allowedResourcePathPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`^api/v1/search/(metric_names|label_names|label_values)$`),
 }
 
-// isAllowedResourcePath returns whether a resource path request should be allowed
+// isAllowedResourcePath returns whether a resource path request should be allowed;
 // also rejects percent-escapes, empty segments, and
 // "." / ".." segments, which could otherwise bypass the allowlist match.
 func isAllowedResourcePath(path string) bool {
