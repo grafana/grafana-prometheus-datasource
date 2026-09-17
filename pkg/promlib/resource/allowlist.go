@@ -5,7 +5,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/grafana/grafana-plugin-sdk-go/backend"
 )
 
 // allowedResourcePathPatterns are the resource paths callers may reach
@@ -27,7 +26,6 @@ var allowedResourcePathPatterns = []*regexp.Regexp{
 // also rejects percent-escapes, empty segments, and
 // "." / ".." segments, which could otherwise bypass the allowlist match.
 func isAllowedResourcePath(path string) bool {
-	backend.Logger.Warn("Checking allowlist")
 	trimmed := strings.TrimPrefix(path, "/")
 	if trimmed == "" {
 		return false
