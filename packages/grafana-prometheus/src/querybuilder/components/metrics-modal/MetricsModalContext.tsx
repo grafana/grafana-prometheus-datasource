@@ -153,6 +153,7 @@ export const MetricsModalContextProvider: FC<PropsWithChildren<MetricsModalConte
           includeMetadata: true,
           limit: PROMETHEUS_QUERY_BUILDER_MAX_RESULTS,
           match,
+          retainResults: false,
           signal: abortController.signal,
           onBatch: (batch) => {
             resultsCount += batch.length;

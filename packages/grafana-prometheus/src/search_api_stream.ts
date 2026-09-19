@@ -79,7 +79,8 @@ export interface SearchChunkSource {
 export async function readSearchStream<T>(
   source: SearchChunkSource,
   onBatch?: (results: T[]) => void,
-  maxLineLength: number = MAX_SEARCH_STREAM_LINE_LENGTH
+  maxLineLength: number = MAX_SEARCH_STREAM_LINE_LENGTH,
+  retainResults = true
 ): Promise<SearchStreamResult<T>> {
   if (!source.ok) {
     let error: SearchErrorLine | undefined;
@@ -132,7 +133,9 @@ export async function readSearchStream<T>(
     }
 
     if (Array.isArray(parsed.results)) {
-      results.push(...parsed.results);
+      if (retainResults) {
+        results.push(...parsed.results);
+      }
       if (parsed.warnings) {
         warnings.push(...parsed.warnings);
       }
