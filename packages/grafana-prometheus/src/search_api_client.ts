@@ -264,8 +264,9 @@ export class SearchApiClient extends BaseResourceClient implements ResourceApiCl
       limit: String(this.getEffectiveSearchLimit(options.limit)),
     };
 
-    if (term) {
-      params['search[]'] = term;
+    const normalizedTerm = term.trim().replace(/\s+/g, '');
+    if (normalizedTerm) {
+      params['search[]'] = normalizedTerm;
       params.sort_by = 'score';
     }
     if (options.match) {

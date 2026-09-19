@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import '@testing-library/jest-dom';
@@ -6,9 +6,11 @@ import '@testing-library/jest-dom';
 import { type DataSourceInstanceSettings } from '@grafana/data';
 import { reportInteraction } from '@grafana/runtime';
 
+import { DEFAULT_COMPLETION_LIMIT, METRIC_LABEL } from '../../constants';
 import { PrometheusDatasource } from '../../datasource';
 import { type PrometheusLanguageProviderInterface } from '../../language_provider';
 import { EmptyLanguageProviderMock } from '../../language_provider.mock';
+import { SearchApiUnavailableError } from '../../search_api_stream';
 import { getMockTimeRange } from '../../test/mocks/datasource';
 import { type PromOptions } from '../../types';
 
@@ -68,6 +70,8 @@ describe('MetricCombobox', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    (mockLanguageProvider.getSearchApiClient as jest.Mock).mockReturnValue(undefined);
+    mockDatasource.interpolateString = jest.fn((value: string) => value);
   });
 
   it('renders correctly', () => {
@@ -108,6 +112,100 @@ describe('MetricCombobox', () => {
       '__name__',
       '{__name__=~".*unique.*"}'
     );
+  });
+
+  it('uses fuzzy metric search when the Search API is enabled', async () => {
+    const searchMetricNames = jest.fn().mockResolvedValue({
+      results: [{ name: 'http_requests_total' }],
+      warnings: [],
+      hasMore: false,
+    });
+    (mockLanguageProvider.getSearchApiClient as jest.Mock).mockReturnValue({ searchMetricNames });
+
+    render(<MetricCombobox {...defaultProps} />);
+
+    const combobox = screen.getByPlaceholderText('Select metric');
+    await userEvent.click(combobox);
+    await userEvent.type(combobox, 'http   req');
+
+    expect(await screen.findByRole('option', { name: 'http_requests_total' })).toBeInTheDocument();
+    expect(searchMetricNames).toHaveBeenCalledWith(
+      defaultProps.timeRange,
+      'http   req',
+      expect.objectContaining({
+        limit: DEFAULT_COMPLETION_LIMIT,
+        signal: expect.any(AbortSignal),
+      })
+    );
+    expect(mockDatasource.languageProvider.queryLabelValues).not.toHaveBeenCalled();
+  });
+
+  it('preserves label operators in the Search API matcher', async () => {
+    const searchMetricNames = jest.fn().mockResolvedValue({
+      results: [{ name: 'http_requests_total' }],
+      warnings: [],
+      hasMore: false,
+    });
+    (mockLanguageProvider.getSearchApiClient as jest.Mock).mockReturnValue({ searchMetricNames });
+
+    render(
+      <MetricCombobox
+        {...defaultProps}
+        labelsFilters={[
+          { label: 'job', op: '!=', value: 'grafana' },
+          { label: 'environment', op: '=~', value: 'prod.*' },
+        ]}
+      />
+    );
+
+    const combobox = screen.getByPlaceholderText('Select metric');
+    await userEvent.click(combobox);
+    await userEvent.type(combobox, 'http');
+
+    expect(await screen.findByRole('option', { name: 'http_requests_total' })).toBeInTheDocument();
+    expect(searchMetricNames).toHaveBeenCalledWith(
+      defaultProps.timeRange,
+      'http',
+      expect.objectContaining({
+        match: '{job!="grafana", environment=~"prod.*"}',
+      })
+    );
+  });
+
+  it('falls back to standard discovery when fuzzy metric search is unavailable', async () => {
+    const searchMetricNames = jest.fn().mockRejectedValue(new SearchApiUnavailableError('disabled'));
+    (mockLanguageProvider.getSearchApiClient as jest.Mock).mockReturnValue({ searchMetricNames });
+    mockDatasource.languageProvider.queryLabelValues = jest.fn().mockResolvedValue(['standard_metric']);
+
+    render(<MetricCombobox {...defaultProps} />);
+
+    const combobox = screen.getByPlaceholderText('Select metric');
+    await userEvent.click(combobox);
+    await userEvent.type(combobox, 'standard');
+
+    expect(await screen.findByRole('option', { name: 'standard_metric' })).toBeInTheDocument();
+    expect(mockDatasource.languageProvider.queryLabelValues).toHaveBeenCalledWith(
+      defaultProps.timeRange,
+      METRIC_LABEL,
+      '{__name__=~".*standard.*"}'
+    );
+  });
+
+  it('does not fall back when fuzzy metric search is aborted', async () => {
+    const abortError = Object.assign(new Error('The user aborted a request.'), { name: 'AbortError' });
+    const searchMetricNames = jest.fn().mockRejectedValue(abortError);
+    (mockLanguageProvider.getSearchApiClient as jest.Mock).mockReturnValue({ searchMetricNames });
+    mockDatasource.languageProvider.queryLabelValues = jest.fn().mockResolvedValue(['standard_metric']);
+
+    render(<MetricCombobox {...defaultProps} />);
+
+    const combobox = screen.getByPlaceholderText('Select metric');
+    await userEvent.click(combobox);
+    await userEvent.type(combobox, 'standard');
+
+    await waitFor(() => expect(searchMetricNames).toHaveBeenCalled());
+    expect(mockDatasource.languageProvider.queryLabelValues).not.toHaveBeenCalled();
+    expect(screen.queryByRole('option', { name: 'standard_metric' })).not.toBeInTheDocument();
   });
 
   it('calls onChange with the correct value when a metric is selected', async () => {
@@ -191,9 +289,6 @@ describe('MetricCombobox', () => {
     await userEvent.click(button);
 
     expect(screen.queryByText('Metrics explorer')).not.toBeInTheDocument();
-    expect(reportInteraction).not.toHaveBeenCalledWith(
-      'grafana_prometheus_metrics_explorer_opened',
-      expect.anything()
-    );
+    expect(reportInteraction).not.toHaveBeenCalledWith('grafana_prometheus_metrics_explorer_opened', expect.anything());
   });
 });

@@ -54,6 +54,26 @@ describe('MetricsModal', () => {
     });
   });
 
+  it('passes query labels to backend metric searches', async () => {
+    const query: PromVisualQuery = {
+      metric: '',
+      labels: [{ op: '!=', label: 'action', value: 'remove' }],
+      operations: [],
+    };
+    const { datasource } = setup(query, ['with-labels']);
+    datasource.languageProvider.queryLabelValues = jest.fn().mockResolvedValue([]);
+
+    await userEvent.type(screen.getByTestId(metricsModaltestIds.searchMetric), 'http');
+
+    await waitFor(() => {
+      expect(datasource.languageProvider.queryLabelValues).toHaveBeenCalledWith(
+        expect.anything(),
+        '__name__',
+        '{__name__=~"(?i).*http.*",action!="remove"}'
+      );
+    });
+  });
+
   it('displays a type for a metric when the metric is clicked', async () => {
     setup(defaultQuery, listOfMetrics);
     await waitFor(() => {
@@ -172,6 +192,7 @@ describe('MetricsModal', () => {
       expect(reportInteraction).toHaveBeenCalledWith('grafana_prometheus_metrics_explorer_search_performed', {
         searchQuery: 'a_buck',
         resultsCount: 0,
+        discoveryApi: 'standard',
       });
     });
   });
@@ -310,6 +331,7 @@ function createDatasource(withLabels?: boolean) {
         help: 'with-labels-help',
       },
     });
+    languageProvider.queryLabelValues = jest.fn().mockResolvedValue(['with-labels']);
   } else {
     // all metrics - create metadata for all metrics in listOfMetrics
     const mockMetadata: Record<string, { type: string; help: string }> = {};
@@ -367,6 +389,8 @@ function createDatasource(withLabels?: boolean) {
     undefined,
     languageProvider
   );
+  datasource.interpolateString = jest.fn((value: string) => value);
+  languageProvider.datasource = datasource;
   return datasource;
 }
 

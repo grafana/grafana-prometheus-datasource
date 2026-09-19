@@ -240,7 +240,7 @@ describe('SearchApiClient', () => {
         start: '1681300260',
         end: '1681300320',
         limit: '100',
-        'search[]': 'http req',
+        'search[]': 'httpreq',
         sort_by: 'score',
         batch_size: '100',
         include_metadata: 'true',
@@ -249,10 +249,30 @@ describe('SearchApiClient', () => {
     });
   });
 
+  it.each([
+    ['leading and trailing whitespace', '  http req  ', 'httpreq'],
+    ['tabs and repeated spaces', '\thttp \t  req\t', 'httpreq'],
+    ['a quoted UTF-8 value', '  "café au lait"  ', '"caféaulait"'],
+    ['a value containing spaces', 'New York City', 'NewYorkCity'],
+  ])('normalizes %s into one Search API term', async (_name, term, expected) => {
+    const client = new SearchApiClient(jest.fn(), datasource);
+
+    await client.searchMetricNames(timeRange, term);
+
+    expect(chunkedMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          'search[]': expected,
+          sort_by: 'score',
+        }),
+      })
+    );
+  });
+
   it('uses snapped range parameters and match filters for label names', async () => {
     const client = new SearchApiClient(jest.fn(), datasource);
 
-    await client.searchLabelNames(timeRange, '', { match: '{job="grafana"}', limit: 20 });
+    await client.searchLabelNames(timeRange, 'extra lab', { match: '{job="grafana"}', limit: 20 });
 
     expect(chunkedMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -261,6 +281,8 @@ describe('SearchApiClient', () => {
           start: '1681300293',
           end: '1681300294',
           limit: '20',
+          'search[]': 'extralab',
+          sort_by: 'score',
           'match[]': '{job="grafana"}',
           batch_size: '100',
         },
@@ -271,7 +293,7 @@ describe('SearchApiClient', () => {
   it('sends the label name and adjusted range when searching label values', async () => {
     const client = new SearchApiClient(jest.fn(), datasource);
 
-    await client.searchLabelValues(timeRange, 'service.name', 'api', { limit: 25 });
+    await client.searchLabelValues(timeRange, 'service.name', 'datasource uid', { limit: 25 });
 
     expect(chunkedMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -280,7 +302,7 @@ describe('SearchApiClient', () => {
           start: '1681300260',
           end: '1681300320',
           label: 'service.name',
-          'search[]': 'api',
+          'search[]': 'datasourceuid',
         }),
       })
     );
