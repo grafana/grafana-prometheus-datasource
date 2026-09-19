@@ -1,5 +1,31 @@
 # grafana-prometheus-datasource
 
+## 13.1.10
+
+🐛 Support PromQL anchored and smoothed range selectors in the query builder, code editor, scope filtering, and label suggestions. ([#343](https://github.com/grafana/grafana-prometheus-datasource/pull/343))
+
+⚙️ Chore: align Grafana peer ranges to >=12.3.0 so they match grafanaDependency and the required @grafana/i18n peer ([#340](https://github.com/grafana/grafana-prometheus-datasource/pull/340))
+
+🐛 Default to POST for POST-friendly metadata endpoints (e.g. /api/v1/labels) when no HTTP method is configured, matching the config editor's default. ([#322](https://github.com/grafana/grafana-prometheus-datasource/pull/322))
+
+🐛 Recognise native-histogram trim operators (</, >/) in the PromQL query editor by bumping @prometheus-io/lezer-promql to 0.313.3 ([#338](https://github.com/grafana/grafana-prometheus-datasource/pull/338))
+
+🐛 Parse datasource jsonData once per instance construction instead of independently in the transport, query handler, and resource handler. Reduces redundant parsing/logging. ([#341](https://github.com/grafana/grafana-prometheus-datasource/pull/341))
+
+🐛 Add NDJSON search stream parser and error taxonomy ([#337](https://github.com/grafana/grafana-prometheus-datasource/pull/337))
+
+🐛 Add the typed Search API client for metric and label discovery ([#342](https://github.com/grafana/grafana-prometheus-datasource/pull/342))
+
+🐛 Add the chunked transport bridge for the Search API stream and require @grafana/runtime >=11.6.0 ([#338](https://github.com/grafana/grafana-prometheus-datasource/pull/338))
+
+🐛 Fix: Stop rejecting loosely-typed jsonData (e.g. `"true"` for a boolean, `"1000"` for a number) so datasources provisioned with off-spec values load instead of failing every query and health check. `timeInterval`, `queryTimeout` and `httpMethod` still reject a wrong type.
+
+**Breaking (Go API):** affected `models.PromOptions` fields move from plain `string`/`bool`/`float64`/`*int64` to named lenient types with the same JSON encoding. Passing one to a `string`/`bool`/`float64` parameter now needs an explicit conversion. See [#310](https://github.com/grafana/grafana-prometheus-datasource/pull/310) for details. ([#310](https://github.com/grafana/grafana-prometheus-datasource/pull/310))
+
+🐛 Surface Mimir query stats in the Inspector's Stats tab ([#319](https://github.com/grafana/grafana-prometheus-datasource/pull/319))
+
+🐛 Request gzip for resource calls to prevent failures caused by forwarding the browser's Accept-Encoding to upstream servers ([#334](https://github.com/grafana/grafana-prometheus-datasource/pull/334))
+
 ## 13.1.9
 
 🐛 Add an internal, experimental PromQL coauthoring capability for the Monaco code editor, including its Grafana Core exposed-surface integration. ([#308](https://github.com/grafana/grafana-prometheus-datasource/pull/308))
