@@ -1,4 +1,11 @@
 // Core Grafana history https://github.com/grafana/grafana/blob/v11.0.0-preview/public/app/plugins/datasource/prometheus/querybuilder/operations.ts
+import {
+  getRangeModifierOperationId,
+  rangeModifierDocumentation,
+  rangeModifierFunctions,
+  type RangeModifier,
+} from '../rangeModifiers';
+
 import { binaryScalarOperations } from './binaryScalarOperations';
 import {
   defaultAddOperationHandler,
@@ -74,6 +81,9 @@ export function getOperationDefinitions(): QueryBuilderOperationDef[] {
     createRangeFunction(PromOperationId.Increase, true),
     createRangeFunction(PromOperationId.Idelta),
     createRangeFunction(PromOperationId.Delta),
+    ...(['anchored', 'smoothed'] as const).flatMap((modifier) =>
+      rangeModifierFunctions[modifier].map((name) => createExtendedRangeFunction(name, modifier))
+    ),
     createFunction({
       id: PromOperationId.DoubleExponentialSmoothing,
       params: [
@@ -307,6 +317,16 @@ function createRangeFunction(name: string, withRateInterval = false): QueryBuild
     renderer: operationWithRangeVectorRenderer,
     addOperationHandler: addOperationWithRangeVector,
     changeTypeHandler: operationTypeChangedHandlerForRangeFunction,
+  };
+}
+
+function createExtendedRangeFunction(name: string, modifier: RangeModifier): QueryBuilderOperationDef {
+  return {
+    ...createRangeFunction(name, name === PromOperationId.Rate || name === PromOperationId.Increase),
+    id: getRangeModifierOperationId(name, modifier),
+    name: `${getPromOperationDisplayName(modifier)} ${getPromOperationDisplayName(name).toLowerCase()}`,
+    documentation: rangeModifierDocumentation[modifier],
+    renderer: (model, def, innerExpr) => `${name}(${innerExpr}[${model.params[0] ?? '5m'}] ${modifier})`,
   };
 }
 

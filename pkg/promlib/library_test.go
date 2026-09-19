@@ -83,6 +83,7 @@ func TestService(t *testing.T) {
 				require.Equal(
 					t,
 					http.Header{
+						"Accept-Encoding": {"gzip"},
 						"Content-Type":    {"application/x-www-form-urlencoded"},
 						"Idempotency-Key": []string(nil),
 					},

@@ -24,19 +24,17 @@ type Resource struct {
 	log        log.Logger
 }
 
+// New builds the resource handler.
 func New(
 	httpClient *http.Client,
 	settings backend.DataSourceInstanceSettings,
+	httpMethod string,
 	plog log.Logger,
 ) (*Resource, error) {
-	jsonData, err := models.ParsePromOptions(settings)
-	if err != nil {
-		return nil, err
-	}
 	return &Resource{
 		log: plog,
 		// we don't use queryTimeout for resource calls
-		promClient: client.NewClient(httpClient, jsonData.HTTPMethod, settings.URL, ""),
+		promClient: client.NewClient(httpClient, httpMethod, settings.URL, ""),
 	}, nil
 }
 
@@ -83,7 +81,7 @@ func (r *Resource) Execute(ctx context.Context, req *backend.CallResourceRequest
 }
 
 func getSelectors(expr string) ([]string, error) {
-	parsed, err := parser.NewParser(parser.Options{}).ParseExpr(expr)
+	parsed, err := parser.NewParser(parser.Options{EnableExtendedRangeSelectors: true}).ParseExpr(expr)
 	if err != nil {
 		return nil, err
 	}

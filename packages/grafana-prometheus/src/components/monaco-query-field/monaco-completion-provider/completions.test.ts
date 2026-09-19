@@ -28,6 +28,21 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
+it('completes selector modifiers as keywords with their feature requirements', async () => {
+  const completions = await getCompletions(
+    { type: 'RANGE_MODIFIER', modifiers: ['anchored', 'smoothed'] },
+    dataProvider,
+    getMockTimeRange()
+  );
+  expect(completions.map(({ type, insertText }) => ({ type, insertText }))).toEqual([
+    { type: 'KEYWORD', insertText: 'anchored' },
+    { type: 'KEYWORD', insertText: 'smoothed' },
+  ]);
+  for (const completion of completions) {
+    expect(completion.documentation).toContain('--enable-feature=promql-extended-range-selectors');
+  }
+});
+
 type MetricNameSituation = Extract<Situation['type'], 'AT_ROOT' | 'EMPTY' | 'IN_FUNCTION'>;
 const metricNameCompletionSituations = ['AT_ROOT', 'IN_FUNCTION', 'EMPTY'] as MetricNameSituation[];
 

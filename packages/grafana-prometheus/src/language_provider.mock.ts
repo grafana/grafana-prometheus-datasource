@@ -18,4 +18,6 @@ export class EmptyLanguageProviderMock {
     .fn()
     .mockReturnValue({ histogram_metric_sum: { type: 'counter', help: '', unit: 'sum' } });
   queryMetricsMetadata = jest.fn().mockResolvedValue({});
+  hasSearchSupport = jest.fn().mockReturnValue(false);
+  getSearchApiClient = jest.fn().mockReturnValue(undefined);
 }

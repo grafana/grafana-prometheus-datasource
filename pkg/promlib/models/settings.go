@@ -11,14 +11,16 @@ import (
 
 // DataSourceJsonData mirrors the base @grafana/data DataSourceJsonData interface
 // that all Grafana datasource jsonData types extend.
+//
+// All unknown fields before #220, so all lenient. See lenient.go.
 type DataSourceJsonData struct {
-	AuthType                    string `json:"authType"`
-	DefaultRegion               string `json:"defaultRegion"`
-	Profile                     string `json:"profile"`
-	ManageAlerts                bool   `json:"manageAlerts"`
-	AllowAsRecordingRulesTarget bool   `json:"allowAsRecordingRulesTarget"`
-	AlertmanagerUID             string `json:"alertmanagerUid"`
-	DisableGrafanaCache         bool   `json:"disableGrafanaCache"`
+	AuthType                    LenientString `json:"authType"`
+	DefaultRegion               LenientString `json:"defaultRegion"`
+	Profile                     LenientString `json:"profile"`
+	ManageAlerts                LenientBool   `json:"manageAlerts"`
+	AllowAsRecordingRulesTarget LenientBool   `json:"allowAsRecordingRulesTarget"`
+	AlertmanagerUID             LenientString `json:"alertmanagerUid"`
+	DisableGrafanaCache         LenientBool   `json:"disableGrafanaCache"`
 }
 
 // PromOptions holds the typed datasource configuration stored in jsonData.
@@ -28,27 +30,31 @@ type PromOptions struct {
 	// PromOptions extends DataSourceJsonData.
 	// Even though it is not directly consumed by the prom datasource, it is consumed via plugin-sdk.
 	DataSourceJsonData
-	HTTPMethod                          string  `json:"httpMethod"`
-	TimeInterval                        string  `json:"timeInterval"`
-	QueryTimeout                        string  `json:"queryTimeout"`
-	CustomQueryParameters               string  `json:"customQueryParameters"`
-	MaxSamplesProcessedWarningThreshold float64 `json:"maxSamplesProcessedWarningThreshold"`
-	MaxSamplesProcessedErrorThreshold   float64 `json:"maxSamplesProcessedErrorThreshold"`
-	QueryStatsEnabled                   bool    `json:"queryStatsEnabled"`
+
+	// Strict: httpMethod is validated below, and timeInterval/queryTimeout were already
+	// strict before #220. See lenient.go.
+	HTTPMethod   string `json:"httpMethod"`
+	TimeInterval string `json:"timeInterval"`
+	QueryTimeout string `json:"queryTimeout"`
+
+	CustomQueryParameters               LenientString  `json:"customQueryParameters"`
+	MaxSamplesProcessedWarningThreshold LenientFloat64 `json:"maxSamplesProcessedWarningThreshold"`
+	MaxSamplesProcessedErrorThreshold   LenientFloat64 `json:"maxSamplesProcessedErrorThreshold"`
+	QueryStatsEnabled                   LenientBool    `json:"queryStatsEnabled"`
 
 	// Frontend only types
-	PrometheusType                string                       `json:"prometheusType"`
-	PrometheusVersion             string                       `json:"prometheusVersion"`
-	DisableMetricsLookup          bool                         `json:"disableMetricsLookup"`
-	CacheLevel                    string                       `json:"cacheLevel"`
-	DefaultEditor                 string                       `json:"defaultEditor"`
-	IncrementalQuerying           bool                         `json:"incrementalQuerying"`
-	IncrementalQueryOverlapWindow string                       `json:"incrementalQueryOverlapWindow"`
-	DisableRecordingRules         bool                         `json:"disableRecordingRules"`
-	OauthPassThru                 bool                         `json:"oauthPassThru"`
-	SeriesEndpoint                bool                         `json:"seriesEndpoint"`
-	SeriesLimit                   *int64                       `json:"seriesLimit"`
-	ExemplarTraceIDDestinations   []ExemplarTraceIDDestination `json:"exemplarTraceIdDestinations"`
+	PrometheusType                LenientString                      `json:"prometheusType"`
+	PrometheusVersion             LenientString                      `json:"prometheusVersion"`
+	DisableMetricsLookup          LenientBool                        `json:"disableMetricsLookup"`
+	CacheLevel                    LenientString                      `json:"cacheLevel"`
+	DefaultEditor                 LenientString                      `json:"defaultEditor"`
+	IncrementalQuerying           LenientBool                        `json:"incrementalQuerying"`
+	IncrementalQueryOverlapWindow LenientString                      `json:"incrementalQueryOverlapWindow"`
+	DisableRecordingRules         LenientBool                        `json:"disableRecordingRules"`
+	OauthPassThru                 LenientBool                        `json:"oauthPassThru"`
+	SeriesEndpoint                LenientBool                        `json:"seriesEndpoint"`
+	SeriesLimit                   *LenientFloat64                    `json:"seriesLimit"`
+	ExemplarTraceIDDestinations   LenientExemplarTraceIDDestinations `json:"exemplarTraceIdDestinations"`
 }
 
 // ExemplarTraceIDDestination mirrors the frontend ExemplarTraceIdDestination type.
@@ -70,6 +76,7 @@ func ParsePromOptions(settings backend.DataSourceInstanceSettings) (*PromOptions
 	if err := json.Unmarshal(data, &opts); err != nil {
 		return nil, fmt.Errorf("error unmarshalling JSONData: %w", err)
 	}
+	opts.clearDroppedPointers(data)
 	opts.ApplyDefaults()
 	if err := opts.Validate(); err != nil {
 		return nil, err

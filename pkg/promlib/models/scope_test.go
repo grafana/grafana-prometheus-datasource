@@ -7,6 +7,21 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestApplyFiltersAndGroupByExtendedRanges(t *testing.T) {
+	for _, modifier := range []string{"anchored", "smoothed"} {
+		t.Run(modifier, func(t *testing.T) {
+			query := `sum(rate(http_requests_total[5m] ` + modifier + `))`
+			got, err := ApplyFiltersAndGroupBy(query,
+				[]scope.ScopeFilter{{Key: "cluster", Value: "prod", Operator: scope.FilterOperatorEquals}},
+				[]scope.ScopeFilter{{Key: "job", Value: "api", Operator: scope.FilterOperatorEquals}},
+				[]string{"job"},
+			)
+			require.NoError(t, err)
+			require.Equal(t, `sum by (job) (rate(http_requests_total{cluster="prod",job="api"}[5m] `+modifier+`))`, got)
+		})
+	}
+}
+
 func TestApplyQueryFiltersAndGroupBy_Filters(t *testing.T) {
 	tests := []struct {
 		name         string

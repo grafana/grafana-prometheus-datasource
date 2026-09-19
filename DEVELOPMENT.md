@@ -45,10 +45,12 @@ the provisioned `prometheus-direct` and `prometheus-gzip` datasource UIDs:
 | `npm run server:search-api`       | Prometheus 3.13.1 with the experimental Search API enabled            |
 | `npm run server:full`             | All generators, node exporter, fake-data-gen, rules, and Alertmanager |
 
-The scripts are shorthand for layering one override onto the base file:
+The scripts are shorthand for layering one override onto the base file. The base
+`docker-compose.yaml` stays at the repo root; every scenario overlay lives in
+`devenv/compose/` and is always run together with the base file:
 
 ```bash
-docker compose -f docker-compose.yaml -f docker-compose.high-cardinality.yaml up --build
+docker compose -f docker-compose.yaml -f devenv/compose/docker-compose.high-cardinality.yaml up --build
 ```
 
 The full environment also enables Prometheus's remote-write receiver and
@@ -73,7 +75,7 @@ docker compose down --remove-orphans
 For an override environment, pass the same files to `down`, for example:
 
 ```bash
-docker compose -f docker-compose.yaml -f docker-compose.utf8.yaml down --remove-orphans
+docker compose -f docker-compose.yaml -f devenv/compose/docker-compose.utf8.yaml down --remove-orphans
 ```
 
 For starting with a specific Grafana version
@@ -126,13 +128,15 @@ the plugin from `workspace/plugins/grafana-prometheus-datasource`, and you can i
 
 ### 4. Build the plugin
 
-**Backend** — build the Go binary for your platform. On Apple Silicon:
+**Backend** — build the Go binary. There's no target for just your desktop
+platform (only the exotic `LinuxS390X`/`WindowsARM64` targets exist
+standalone), so this builds all of them:
 
 ```bash
-mage build:darwinARM64
+mage
 ```
 
-Run `mage -v` with no target to build for all supported platforms. You must re-run this command after every backend change. After rebuilding, tell Grafana to reload the plugin:
+You must re-run this command after every backend change. After rebuilding, tell Grafana to reload the plugin:
 
 ```bash
 mage reloadPlugin

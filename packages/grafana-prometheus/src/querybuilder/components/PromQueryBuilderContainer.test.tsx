@@ -14,6 +14,15 @@ import { addOperationInQueryBuilder } from '../testUtils';
 import { PromQueryBuilderContainer } from './PromQueryBuilderContainer';
 
 describe('PromQueryBuilderContainer', () => {
+  it.each([
+    ['Smoothed rate', 'rate(metric_test[$__rate_interval] smoothed)'],
+    ['Anchored increase', 'increase(metric_test[$__rate_interval] anchored)'],
+    ['Anchored resets', 'resets(metric_test[$__interval] anchored)'],
+  ])('displays %s when loading a modified query', (name, expr) => {
+    setup({ expr });
+    expect(screen.getByText(name)).toBeInTheDocument();
+  });
+
   it('translates query between string and model', async () => {
     const { props } = setup({ expr: 'rate(metric_test{job="testjob"}[$__rate_interval])' });
 

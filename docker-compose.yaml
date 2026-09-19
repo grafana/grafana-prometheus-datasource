@@ -10,6 +10,16 @@ services:
       - ./provisioning/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     ports:
       - 9090:9090/tcp
+    # Explicit command (rather than the image's default CMD) so scenario overlays
+    # that don't override it still get shared flags like --enable-feature. Overlays
+    # that replace this list entirely (full.yaml, search-api.yaml) repeat the flags
+    # they need, since Compose replaces array fields rather than merging them.
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.console.libraries=/usr/share/prometheus/console_libraries
+      - --web.console.templates=/usr/share/prometheus/consoles
+      - --enable-feature=promql-extended-range-selectors
 
   # Test-only gzip-forcing reverse proxy in front of Prometheus. The provisioned
   # datasource points at this (http://prometheus-gzip:9091) instead of directly

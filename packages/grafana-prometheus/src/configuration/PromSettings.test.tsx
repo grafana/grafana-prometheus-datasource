@@ -6,7 +6,7 @@ import { type SelectableValue } from '@grafana/data';
 
 import { createDefaultConfigOptions } from '../test/mocks/datasource';
 
-import { getValueFromEventItem, PromSettings } from './PromSettings';
+import { getValueFromEventItem, getCustomQueryThresholdParams, PromSettings } from './PromSettings';
 
 describe('PromSettings', () => {
   describe('getValueFromEventItem', () => {
@@ -36,8 +36,33 @@ describe('PromSettings', () => {
     });
   });
 
+  describe('getCustomQueryThresholdParams', () => {
+    it('returns empty params for nullish and blank strings', () => {
+      expect(getCustomQueryThresholdParams(undefined).toString()).toBe('');
+      expect(getCustomQueryThresholdParams(null).toString()).toBe('');
+      expect(getCustomQueryThresholdParams('   ').toString()).toBe('');
+    });
+
+    it('parses string custom query parameters', () => {
+      expect(getCustomQueryThresholdParams('foo=bar').get('foo')).toBe('bar');
+    });
+
+    it('coerces non-string provisioning values like datasource.ts', () => {
+      expect(getCustomQueryThresholdParams(123).toString()).toBe('123=');
+    });
+  });
+
   describe('PromSettings component', () => {
     const defaultProps = createDefaultConfigOptions();
+
+    it('should render when customQueryParameters is provisioned as a non-string value', () => {
+      const options = createDefaultConfigOptions();
+      (options.jsonData as { customQueryParameters?: unknown }).customQueryParameters = 123;
+
+      render(<PromSettings onOptionsChange={() => {}} options={options} />);
+
+      expect(screen.getByDisplayValue('123')).toBeInTheDocument();
+    });
 
     it('should show POST httpMethod if no httpMethod', () => {
       const options = defaultProps;
@@ -69,6 +94,32 @@ describe('PromSettings', () => {
 
       render(<PromSettings onOptionsChange={() => {}} options={options} />);
       expect(screen.getByText('Use series endpoint')).toBeInTheDocument();
+    });
+
+    it('should show the Search API as beta and keep it disabled', () => {
+      const onOptionsChange = jest.fn();
+      const options = createDefaultConfigOptions();
+
+      render(<PromSettings onOptionsChange={onOptionsChange} options={options} />);
+      const searchApiSwitch = screen.getByRole('switch', { name: 'Enable Search API (beta)' });
+
+      expect(screen.getByText('Search API (beta)')).toBeInTheDocument();
+      expect(searchApiSwitch).toBeDisabled();
+      fireEvent.click(searchApiSwitch);
+      expect(onOptionsChange).not.toHaveBeenCalled();
+    });
+
+    it('should keep the Search API disabled by default and restore a saved value', () => {
+      const defaultOptions = createDefaultConfigOptions();
+      const { rerender } = render(<PromSettings onOptionsChange={() => {}} options={defaultOptions} />);
+
+      expect(screen.getByRole('switch', { name: 'Enable Search API (beta)' })).not.toBeChecked();
+
+      const enabledOptions = createDefaultConfigOptions();
+      enabledOptions.jsonData.enableSearchApi = true;
+      rerender(<PromSettings onOptionsChange={() => {}} options={enabledOptions} />);
+
+      expect(screen.getByRole('switch', { name: 'Enable Search API (beta)' })).toBeChecked();
     });
 
     it('should hide query samples processed threshold fields by default', () => {

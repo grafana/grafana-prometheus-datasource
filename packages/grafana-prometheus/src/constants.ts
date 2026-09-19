@@ -20,6 +20,8 @@ export const DEFAULT_SERIES_LIMIT = 40000;
 
 export const DEFAULT_COMPLETION_LIMIT = 1000;
 
+export const SEARCH_STREAM_BATCH_SIZE = 100;
+
 /**
  * Only for /series endpoint. Don't use this anywhere else as it cause an expensive query
  */

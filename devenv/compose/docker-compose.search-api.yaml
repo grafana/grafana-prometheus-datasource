@@ -3,7 +3,7 @@ services:
     image: prom/prometheus:v3.13.1
     command:
       - --config.file=/etc/prometheus/prometheus.yml
-      - --enable-feature=search-api
+      - --enable-feature=search-api,promql-extended-range-selectors
       - --web.listen-address=0.0.0.0:9090
       - --storage.tsdb.path=/prometheus
 

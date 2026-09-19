@@ -54,11 +54,15 @@ func BenchmarkExemplarJson(b *testing.B) {
 	ctx := config.WithGrafanaConfig(context.Background(), grafanaCfg)
 
 	for b.Loop() {
-		res := http.Response{
+		rangeRes := http.Response{
 			StatusCode: 200,
 			Body:       io.NopCloser(bytes.NewReader(responseBytes)),
 		}
-		tCtx.httpProvider.setResponse(&res, &res)
+		exemplarRes := http.Response{
+			StatusCode: 200,
+			Body:       io.NopCloser(bytes.NewReader(responseBytes)),
+		}
+		tCtx.httpProvider.setResponse(&rangeRes, nil, &exemplarRes)
 		resp, err := tCtx.queryData.Execute(ctx, query)
 		require.NoError(b, err)
 		for _, r := range resp.Responses {
@@ -96,11 +100,15 @@ func BenchmarkRangeJson(b *testing.B) {
 	ctx := config.WithGrafanaConfig(context.Background(), grafanaCfg)
 
 	for b.Loop() {
-		res := http.Response{
+		rangeRes := http.Response{
 			StatusCode: 200,
 			Body:       io.NopCloser(bytes.NewReader(body)),
 		}
-		tCtx.httpProvider.setResponse(&res, &res)
+		exemplarRes := http.Response{
+			StatusCode: 200,
+			Body:       io.NopCloser(bytes.NewReader(body)),
+		}
+		tCtx.httpProvider.setResponse(&rangeRes, nil, &exemplarRes)
 		r, err = tCtx.queryData.Execute(ctx, q)
 		require.NoError(b, err)
 	}

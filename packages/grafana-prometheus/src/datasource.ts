@@ -89,6 +89,7 @@ export class PrometheusDatasource
   languageProvider: PrometheusLanguageProviderInterface;
   lookupsDisabled: boolean;
   ruleMappings: RuleQueryMapping;
+  enableSearchApi: boolean;
   seriesEndpoint: boolean;
   seriesLimit: number;
   type: string;
@@ -119,10 +120,11 @@ export class PrometheusDatasource
     this.exemplarTraceIdDestinations = instanceSettings.jsonData.exemplarTraceIdDestinations;
     this.exemplarsAvailable = true;
     this.hasIncrementalQuery = instanceSettings.jsonData.incrementalQuerying ?? false;
-    this.httpMethod = instanceSettings.jsonData.httpMethod || 'GET';
+    this.httpMethod = instanceSettings.jsonData.httpMethod || 'POST';
     this.interval = instanceSettings.jsonData.timeInterval || '15s';
     this.lookupsDisabled = instanceSettings.jsonData.disableMetricsLookup ?? false;
     this.ruleMappings = {};
+    this.enableSearchApi = instanceSettings.jsonData.enableSearchApi ?? false;
     this.seriesEndpoint = instanceSettings.jsonData.seriesEndpoint ?? false;
     this.seriesLimit = instanceSettings.jsonData.seriesLimit ?? DEFAULT_SERIES_LIMIT;
     this.type = 'prometheus';
@@ -234,6 +236,11 @@ export class PrometheusDatasource
       //https://github.com/thanos-io/thanos/releases/tag/v0.18.0
       this._isDatasourceVersionGreaterOrEqualTo('0.18.0', PromApplication.Thanos)
     );
+  }
+
+  hasSearchApiSupport(): boolean {
+    // Return false until we wire up search api functionality in UI
+    return false;
   }
 
   _isDatasourceVersionGreaterOrEqualTo(targetVersion: string, targetFlavor: PromApplication): boolean {

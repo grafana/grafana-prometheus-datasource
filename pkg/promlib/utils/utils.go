@@ -39,6 +39,9 @@ func StartTrace(ctx context.Context, tracer trace.Tracer, name string, attribute
 
 // Adapted from grafana/grafana-azuremonitor-datasource
 // This function handles various compression mechanisms that may have been used on a response body
+// (QueryResource pins the upstream Accept-Encoding to gzip, so on the resource
+// path only gzip and identity are expected; an unsupported encoding means the
+// upstream ignored content negotiation and is reported as an error).
 // Determine encoding by: encoding := resp.Header.Get("Content-Encoding")
 func Decode(encoding string, original io.ReadCloser) ([]byte, error) {
 	var reader io.Reader

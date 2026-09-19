@@ -162,6 +162,7 @@
         "aria-label-query-error-threshold": "Query error threshold",
         "aria-label-query-statistics": "Query statistics",
         "aria-label-query-warning-threshold": "Query warning threshold",
+        "aria-label-search-api": "Enable Search API (beta)",
         "aria-label-select-http-method": "Select HTTP method",
         "editor-options": {
           "label-builder": "Builder",
@@ -182,6 +183,7 @@
         "label-query-timeout": "Query timeout",
         "label-query-warning-threshold": "Query warning threshold",
         "label-scrape-interval": "Scrape interval",
+        "label-search-api-beta": "Search API (beta)",
         "label-series-limit": "Series limit",
         "label-use-series-endpoint": "Use series endpoint",
         "more-info": "For more information on configuring prometheus type and version in data sources, see the <2>provisioning documentation</2>.",
@@ -209,6 +211,7 @@
         "tooltip-query-timeout": "Set the Prometheus query timeout.",
         "tooltip-query-warning-threshold": "When set, Grafana appends this value to Prometheus query requests as the max_samples_processed_warning_threshold URL parameter. Leave empty to omit.",
         "tooltip-scrape-interval": "This interval is how frequently Prometheus scrapes targets. Set this to the typical scrape and evaluation interval configured in your Prometheus config file. If you set this to a greater value than your Prometheus config file interval, Grafana will evaluate the data according to this interval and you will see less data points. Defaults to {{default}}.",
+        "tooltip-search-api": "Use the streaming Search API for metric and label discovery. Requires Prometheus with --enable-feature=search-api or Mimir with -querier.experimental-search-api-enabled.",
         "tooltip-series-limit": "The limit applies to all resources (metrics, labels, and values) for both endpoints (series and labels). Leave the field empty to use the default limit (40000). Set to 0 to disable the limit and fetch everything — this may cause performance issues. Default limit is 40000.",
         "tooltip-use-series-endpoint": "Checking this option will favor the series endpoint with {{exampleParameter}} parameter over the label values endpoint with {{exampleParameter}} parameter. While the label values endpoint is considered more performant, some users may prefer the series because it has a POST method while the label values endpoint only has a GET method."
       }

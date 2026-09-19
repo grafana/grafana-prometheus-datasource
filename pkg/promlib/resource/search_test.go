@@ -287,7 +287,7 @@ func TestResourceExecuteSearchHandlesNilResponseHeader(t *testing.T) {
 			Body:       io.NopCloser(strings.NewReader("{\"results\":[\"up\"]}\n")),
 		}, nil
 	})}
-	res, err := resource.New(client, backend.DataSourceInstanceSettings{
+	res, err := newResource(t, client, backend.DataSourceInstanceSettings{
 		URL:      "http://prometheus.example",
 		JSONData: []byte(`{"httpMethod":"GET"}`),
 	}, log.DefaultLogger)
@@ -347,7 +347,7 @@ func newSearchResource(t *testing.T, serverURL string) *resource.Resource {
 
 func newSearchResourceWithLogger(t *testing.T, serverURL string, logger log.Logger) *resource.Resource {
 	t.Helper()
-	res, err := resource.New(http.DefaultClient, backend.DataSourceInstanceSettings{
+	res, err := newResource(t, http.DefaultClient, backend.DataSourceInstanceSettings{
 		URL:      serverURL,
 		JSONData: []byte(`{"httpMethod":"GET"}`),
 	}, logger)

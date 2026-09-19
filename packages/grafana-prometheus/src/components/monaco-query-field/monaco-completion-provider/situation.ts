@@ -7,6 +7,7 @@ import {
   EqlRegex,
   EqlSingle,
   FunctionCallBody,
+  FunctionIdentifier,
   GroupingLabels,
   Identifier,
   LabelMatchers,
@@ -24,6 +25,9 @@ import {
   UnquotedLabelMatcher,
   VectorSelector,
 } from '@prometheus-io/lezer-promql';
+
+import { rangeModifierFunctions, type RangeModifier } from '../../../rangeModifiers';
+import { replaceBuiltInVariable } from '../../../querybuilder/parsingUtils';
 
 import { NeverCaseError } from './util';
 
@@ -130,6 +134,10 @@ export type Label = {
 };
 
 export type Situation =
+  | {
+      type: 'RANGE_MODIFIER';
+      modifiers: RangeModifier[];
+    }
   | {
       type: 'IN_FUNCTION';
     }
@@ -573,6 +581,11 @@ export function getSituation(text: string, pos: number): Situation | null {
     };
   }
 
+  const modifierSituation = getRangeModifierSituation(text, pos);
+  if (modifierSituation) {
+    return modifierSituation;
+  }
+
   /**
    PromQL
    Expr
@@ -605,6 +618,47 @@ export function getSituation(text: string, pos: number): Situation | null {
   }
 
   return null;
+}
+
+function getRangeModifierSituation(text: string, pos: number): Situation | null {
+  const prefix = text.slice(0, pos);
+  const suffix = prefix.match(/\s+([a-z]*)$/);
+  if (!suffix) {
+    return null;
+  }
+
+  const selectorText = replaceBuiltInVariable(prefix.slice(0, suffix.index));
+  const tree = parser.parse(selectorText);
+  let modifiers: RangeModifier[] = [];
+  tree.iterate({
+    enter: ({ node }) => {
+      if (node.to !== selectorText.length || hasSyntaxError(node)) {
+        return;
+      }
+      if (node.type.id === MatrixSelector && node.parent?.type.id === FunctionCallBody) {
+        const functionNode = node.parent.parent?.getChild(FunctionIdentifier);
+        const functionName = functionNode ? getNodeText(functionNode, selectorText) : '';
+        modifiers = (['anchored', 'smoothed'] as const).filter((modifier) =>
+          rangeModifierFunctions[modifier].includes(functionName)
+        );
+      } else if (node.type.id === VectorSelector && node.parent?.type.id === PromQL) {
+        modifiers = ['smoothed'];
+      }
+    },
+  });
+  return modifiers.length ? { type: 'RANGE_MODIFIER', modifiers } : null;
+}
+
+function hasSyntaxError(node: SyntaxNode): boolean {
+  if (node.type.isError) {
+    return true;
+  }
+  for (let child = node.firstChild; child; child = child.nextSibling) {
+    if (hasSyntaxError(child)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function notEmpty<TValue>(value: TValue | null | undefined): value is TValue {

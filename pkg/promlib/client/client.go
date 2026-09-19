@@ -137,11 +137,9 @@ func (c *Client) QueryResource(ctx context.Context, req *backend.CallResourceReq
 	if err != nil {
 		return nil, err
 	}
-	// Resource handlers opt into a specific encoding policy. Search streaming
-	// uses identity so the caller can forward bytes without buffering a decode.
-	if acceptEncoding := req.GetHTTPHeaders().Get("Accept-Encoding"); acceptEncoding != "" {
-		httpRequest.Header.Set("Accept-Encoding", acceptEncoding)
-	}
+	// Request gzip explicitly so the SDK does not forward the browser's
+	// Accept-Encoding, which may include unsupported encodings such as zstd.
+	httpRequest.Header.Set("Accept-Encoding", "gzip")
 
 	return c.doer.Do(httpRequest)
 }

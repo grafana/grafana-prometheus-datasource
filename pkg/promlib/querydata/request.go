@@ -50,15 +50,13 @@ type QueryData struct {
 func New(
 	httpClient *http.Client,
 	settings backend.DataSourceInstanceSettings,
+	httpMethod string,
+	queryTimeout string,
+	timeInterval string,
 	plog log.Logger,
 	featureToggles backend.FeatureToggles,
 ) (*QueryData, error) {
-	jsonData, err := models.ParsePromOptions(settings)
-	if err != nil {
-		return nil, err
-	}
-
-	promClient := client.NewClient(httpClient, jsonData.HTTPMethod, settings.URL, jsonData.QueryTimeout)
+	promClient := client.NewClient(httpClient, httpMethod, settings.URL, queryTimeout)
 
 	// standard deviation sampler is the default for backwards compatibility
 	exemplarSampler := exemplar.NewStandardDeviationSampler
@@ -68,7 +66,7 @@ func New(
 		tracer:             tracing.DefaultTracer(),
 		log:                plog,
 		client:             promClient,
-		TimeInterval:       jsonData.TimeInterval,
+		TimeInterval:       timeInterval,
 		ID:                 settings.ID,
 		URL:                settings.URL,
 		exemplarSampler:    exemplarSampler,
@@ -192,7 +190,7 @@ func (s *QueryData) rangeQuery(ctx context.Context, c *client.Client, q *models.
 		}
 	}()
 
-	return s.parseResponse(ctx, q, res)
+	return s.parseResponse(ctx, q, res, models.RangeQueryType)
 }
 
 func (s *QueryData) instantQuery(ctx context.Context, c *client.Client, q *models.Query) backend.DataResponse {
@@ -216,7 +214,7 @@ func (s *QueryData) instantQuery(ctx context.Context, c *client.Client, q *model
 		}
 	}()
 
-	return s.parseResponse(ctx, q, res)
+	return s.parseResponse(ctx, q, res, models.InstantQueryType)
 }
 
 func (s *QueryData) exemplarQuery(ctx context.Context, c *client.Client, q *models.Query) backend.DataResponse {
@@ -238,7 +236,7 @@ func (s *QueryData) exemplarQuery(ctx context.Context, c *client.Client, q *mode
 			s.log.Warn("Failed to close response body", "error", err)
 		}
 	}()
-	return s.parseResponse(ctx, q, res)
+	return s.parseResponse(ctx, q, res, models.ExemplarQueryType)
 }
 
 func addDataResponse(res *backend.DataResponse, dr *backend.DataResponse) {
