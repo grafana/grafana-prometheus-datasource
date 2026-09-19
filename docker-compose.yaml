@@ -4,7 +4,7 @@ services:
   # It scrapes itself and the Grafana dev container, giving real metric names,
   # label names and label values to exercise the plugin against.
   prometheus:
-    image: prom/prometheus
+    image: prom/prometheus@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0
     container_name: 'prometheus'
     volumes:
       - ./provisioning/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
@@ -28,7 +28,7 @@ services:
   # produced the externalized-plugin 500s; vanilla Prometheus does not reliably
   # emit this shape, which is exactly why the original bug hid from tests.
   prometheus-gzip:
-    image: golang:1.26.7-alpine
+    image: golang:1.27.0-alpine@sha256:4c9fe60190a2a3350ddc51de80d0224b8a6698d12bdfc999fee45ea9d6c46dbc
     container_name: 'prometheus-gzip'
     depends_on:
       - prometheus
