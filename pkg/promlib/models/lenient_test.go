@@ -203,6 +203,9 @@ var strictJSONDataFields = map[string]bool{
 	"httpMethod":   true,
 	"timeInterval": true,
 	"queryTimeout": true,
+	// Enabling the OAuth2 client-credentials grant without a client id or token url is a
+	// misconfiguration Validate reports, not a stored type it can read leniently.
+	"oauth2ClientCredentialsEnabled": true,
 }
 
 // jsonDataKeys returns every json key PromOptions declares. Marshalling a zero value lets

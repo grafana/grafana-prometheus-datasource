@@ -126,6 +126,8 @@
         "title-error": "Error"
       },
       "data-source-http-settings-overhaul": {
+        "description-oauth2-client-credentials": "Authenticate using the OAuth2 client credentials grant.",
+        "label-oauth2-client-credentials": "OAuth2 Client Credentials",
         "tooltip-browser-access-mode": "Your access method is <1>Browser</1>, this means the URL needs to be accessible from the browser.",
         "tooltip-http-url": "Specify a complete HTTP URL (for example {{exampleURL}})",
         "tooltip-server-access-mode": "Your access method is <1>Server</1>, this means the URL needs to be accessible from the grafana backend/server."
@@ -154,6 +156,15 @@
         "add": "Add",
         "no-exemplars-configurations": "No exemplars configurations",
         "title-exemplars": "Exemplars"
+      },
+      "o-auth2-client-credentials-auth": {
+        "label-client-id": "Client ID",
+        "label-client-secret": "Client secret",
+        "label-scopes": "Scopes",
+        "label-token-url": "Token URL",
+        "placeholder-scopes": "read, write",
+        "placeholder-token-url": "https://example.com/oauth2/token",
+        "tooltip-scopes": "Comma-separated list of scopes to request from the token endpoint."
       },
       "prom-settings": {
         "aria-label-default-editor": "Default Editor (Code or Builder)",

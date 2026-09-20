@@ -15,6 +15,7 @@ jest.mock('@grafana/plugin-ui', () => ({
       <button onClick={() => onAuthMethodSelect('BasicAuth')}>Basic auth</button>
       <button onClick={() => onAuthMethodSelect('OAuthForward')}>Forward OAuth Identity</button>
       <button onClick={() => onAuthMethodSelect('CrossSiteCredentials')}>Cross-site credentials</button>
+      <button onClick={() => onAuthMethodSelect('custom-oauth2-client-credentials')}>OAuth2 Client Credentials</button>
     </div>
   ),
 }));
@@ -118,5 +119,24 @@ describe('HttpSettings', () => {
     );
     await userEvent.click(screen.getByRole('button', { name: 'Cross-site credentials' }));
     expect(onOptionsChange).toHaveBeenCalledWith(expect.objectContaining({ basicAuth: false, withCredentials: true }));
+  });
+
+  it('calls onOptionsChange with oauth2ClientCredentialsEnabled:true when OAuth2 Client Credentials is selected', async () => {
+    const onOptionsChange = jest.fn();
+    render(
+      <HttpSettings
+        options={createDefaultConfigOptions()}
+        onOptionsChange={onOptionsChange}
+        secureSocksDSProxyEnabled={false}
+      />
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'OAuth2 Client Credentials' }));
+    expect(onOptionsChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        basicAuth: false,
+        withCredentials: false,
+        jsonData: expect.objectContaining({ oauth2ClientCredentialsEnabled: true }),
+      })
+    );
   });
 });

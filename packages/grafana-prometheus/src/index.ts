@@ -26,6 +26,7 @@ export { AlertingSettingsOverhaul } from './configuration/AlertingSettingsOverha
 export { DataSourceHttpSettingsOverhaul } from './configuration/DataSourceHttpSettingsOverhaul';
 export { ExemplarSetting } from './configuration/ExemplarSetting';
 export { ExemplarsSettings } from './configuration/ExemplarsSettings';
+export { OAuth2ClientCredentialsAuth } from './configuration/OAuth2ClientCredentialsAuth';
 export { PromFlavorVersions } from './configuration/PromFlavorVersions';
 export { PromSettings } from './configuration/PromSettings';
 
