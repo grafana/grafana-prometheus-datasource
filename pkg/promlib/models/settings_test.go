@@ -219,3 +219,59 @@ func TestPromOptions_Validate(t *testing.T) {
 		})
 	}
 }
+
+func TestPromOptions_Validate_OAuth2ClientCredentials(t *testing.T) {
+	cases := []struct {
+		name       string
+		opts       models.PromOptions
+		wantErrStr string
+	}{
+		{
+			name: "disabled is valid even with empty fields",
+			opts: models.PromOptions{OAuth2ClientCredentialsEnabled: false},
+		},
+		{
+			name: "enabled with clientId and valid tokenUrl is valid",
+			opts: models.PromOptions{
+				OAuth2ClientCredentialsEnabled:  true,
+				OAuth2ClientCredentialsID:       "client-id",
+				OAuth2ClientCredentialsTokenURL: "https://auth.example.com/oauth2/token",
+			},
+		},
+		{
+			name: "enabled without clientId is rejected",
+			opts: models.PromOptions{
+				OAuth2ClientCredentialsEnabled:  true,
+				OAuth2ClientCredentialsTokenURL: "https://auth.example.com/oauth2/token",
+			},
+			wantErrStr: "oauth2ClientId is required",
+		},
+		{
+			name: "enabled without tokenUrl is rejected",
+			opts: models.PromOptions{
+				OAuth2ClientCredentialsEnabled: true,
+				OAuth2ClientCredentialsID:      "client-id",
+			},
+			wantErrStr: "oauth2TokenUrl is required",
+		},
+		{
+			name: "enabled with malformed tokenUrl is rejected",
+			opts: models.PromOptions{
+				OAuth2ClientCredentialsEnabled:  true,
+				OAuth2ClientCredentialsID:       "client-id",
+				OAuth2ClientCredentialsTokenURL: "://not-a-url",
+			},
+			wantErrStr: "invalid oauth2TokenUrl",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.opts.Validate()
+			if tc.wantErrStr != "" {
+				require.ErrorContains(t, err, tc.wantErrStr)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
