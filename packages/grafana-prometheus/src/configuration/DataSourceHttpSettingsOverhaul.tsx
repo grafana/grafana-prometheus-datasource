@@ -1,12 +1,15 @@
 // Core Grafana history https://github.com/grafana/grafana/blob/v11.0.0-preview/public/app/plugins/datasource/prometheus/configuration/DataSourceHttpSettingsOverhaul.tsx
 import { type DataSourceSettings } from '@grafana/data';
-import { Trans } from '@grafana/i18n';
+import { Trans, t } from '@grafana/i18n';
 import { Auth, AuthMethod, ConnectionSettings, convertLegacyAuthProps } from '@grafana/plugin-ui';
 import { SecureSocksProxySettings, useTheme2 } from '@grafana/ui';
 
 import { type PromOptions } from '../types';
 
+import { OAuth2ClientCredentialsAuth } from './OAuth2ClientCredentialsAuth';
 import { docsTip, overhaulStyles } from './shared/utils';
+
+const OAUTH2_CLIENT_CREDENTIALS_METHOD_ID = 'custom-oauth2-client-credentials' as const;
 
 type DataSourceHttpSettingsProps = {
   options: DataSourceSettings<PromOptions, {}>;
@@ -26,6 +29,9 @@ export const DataSourceHttpSettingsOverhaul = (props: DataSourceHttpSettingsProp
   const styles = overhaulStyles(theme);
 
   function returnSelectedMethod() {
+    if (options.jsonData.oauth2ClientCredentialsEnabled) {
+      return OAUTH2_CLIENT_CREDENTIALS_METHOD_ID;
+    }
     return newAuthProps.selectedMethod;
   }
 
@@ -92,12 +98,32 @@ export const DataSourceHttpSettingsOverhaul = (props: DataSourceHttpSettingsProp
             jsonData: {
               ...options.jsonData,
               oauthPassThru: method === AuthMethod.OAuthForward,
+              oauth2ClientCredentialsEnabled: method === OAUTH2_CLIENT_CREDENTIALS_METHOD_ID,
             },
           });
         }}
         // If your method is selected pass its id to `selectedMethod`,
         // otherwise pass the id from converted legacy data
         selectedMethod={returnSelectedMethod()}
+        // The library default order is [BasicAuth, OAuthForward, NoAuth, ...customMethods],
+        // which puts "No Authentication" ahead of custom methods. Override explicitly so it
+        // stays last. If another built-in or custom auth method is added, add it here too,
+        // before AuthMethod.NoAuth.
+        visibleMethods={[AuthMethod.BasicAuth, AuthMethod.OAuthForward, OAUTH2_CLIENT_CREDENTIALS_METHOD_ID, AuthMethod.NoAuth]}
+        customMethods={[
+          {
+            id: OAUTH2_CLIENT_CREDENTIALS_METHOD_ID,
+            label: t(
+              'grafana-prometheus.configuration.data-source-http-settings-overhaul.label-oauth2-client-credentials',
+              'OAuth2 Client Credentials'
+            ),
+            description: t(
+              'grafana-prometheus.configuration.data-source-http-settings-overhaul.description-oauth2-client-credentials',
+              'Authenticate using the OAuth2 client credentials grant.'
+            ),
+            component: <OAuth2ClientCredentialsAuth options={options} onOptionsChange={onOptionsChange} />,
+          },
+        ]}
       />
       <div className={styles.sectionBottomPadding} />
       {secureSocksDSProxyEnabled && (
