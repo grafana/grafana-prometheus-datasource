@@ -1,5 +1,19 @@
 # Changelog
 
+## 13.2.0
+
+🐛 Implement Search API toggle in configuration editor
+🐛 Recognise native-histogram trim operators (</, >/) in the PromQL query editor by bumping @prometheus-io/lezer-promql to 0.313.3 ([#338](https://github.com/grafana/grafana-prometheus-datasource/pull/338))
+🐛 Support PromQL anchored and smoothed range selectors in the query builder, code editor, scope filtering, and label suggestions. ([#343](https://github.com/grafana/grafana-prometheus-datasource/pull/343))
+🐛 Fix config editor crash when customQueryParameters is provisioned as a non-string value. ([#347](https://github.com/grafana/grafana-prometheus-datasource/pull/347))
+🐛 Default to POST for POST-friendly metadata endpoints (e.g. /api/v1/labels) when no HTTP method is configured, matching the config editor's default. ([#322](https://github.com/grafana/grafana-prometheus-datasource/pull/322))
+🐛 Add NDJSON search stream parser and error taxonomy ([#337](https://github.com/grafana/grafana-prometheus-datasource/pull/337))
+🐛 Fall back to standard Prometheus discovery when the Search API is unavailable ([#348](https://github.com/grafana/grafana-prometheus-datasource/pull/348))
+🐛 Add the typed Search API client for metric and label discovery ([#342](https://github.com/grafana/grafana-prometheus-datasource/pull/342))
+🐛 Adapt the Search API client to the resource client contract ([#344](https://github.com/grafana/grafana-prometheus-datasource/pull/344))
+⚙️ Chore: align Grafana peer ranges to >=12.3.0 so they match grafanaDependency and the required @grafana/i18n peer ([#340](https://github.com/grafana/grafana-prometheus-datasource/pull/340))
+🐛 Add the chunked transport bridge for the Search API stream and require @grafana/runtime >=11.6.0 ([#338](https://github.com/grafana/grafana-prometheus-datasource/pull/338))
+
 ## 13.1.14
 
 🐛 Add an internal, experimental PromQL coauthoring capability for the Monaco code editor, including its Grafana Core exposed-surface integration. ([#308](https://github.com/grafana/grafana-prometheus-datasource/pull/308))
