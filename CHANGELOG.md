@@ -1,5 +1,11 @@
 # grafana-prometheus-datasource
 
+## 13.2.1
+
+🐛 Improve Search API ranking and bound streamed response memory
+
+🐛 Use the Search API for metric and label discovery
+
 ## 13.2.0
 
 🐛 Support PromQL anchored and smoothed range selectors in the query builder, code editor, scope filtering, and label suggestions. ([#343](https://github.com/grafana/grafana-prometheus-datasource/pull/343))
