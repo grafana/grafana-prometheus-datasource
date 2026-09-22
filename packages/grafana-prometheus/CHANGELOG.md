@@ -2,11 +2,11 @@
 
 ## 13.2.0
 
-🐛 Implement Search API toggle in configuration editor ([#350](https://github.com/grafana/grafana-prometheus-datasource/pull/))
+🐛 Implement Search API toggle in configuration editor ([#350](https://github.com/grafana/grafana-prometheus-datasource/pull/350))
 
 🐛 Recognise native-histogram trim operators (</, >/) in the PromQL query editor by bumping @prometheus-io/lezer-promql to 0.313.3 ([#338](https://github.com/grafana/grafana-prometheus-datasource/pull/338))
 
-🐛 Support PromQL anchored and smoothed range selectors in the query builder, code editor, scope filtering, and label suggestions.
+🐛 Support PromQL anchored and smoothed range selectors in the query builder, code editor, scope filtering, and label suggestions. ([#343](https://github.com/grafana/grafana-prometheus-datasource/pull/343))
 
 🐛 Fix config editor crash when customQueryParameters is provisioned as a non-string value. ([#347](https://github.com/grafana/grafana-prometheus-datasource/pull/347))
 
