@@ -1,12 +1,12 @@
 # promlib
 
-## 0.0.21
+## 0.0.20
 
-🐛 Support PromQL anchored and smoothed range selectors in the query builder, code editor, scope filtering, and label suggestions.
+🐛 Support PromQL anchored and smoothed range selectors in the query builder, code editor, scope filtering, and label suggestions. ([#343](https://github.com/grafana/grafana-prometheus-datasource/pull/343))
 
 🐛 Surface Mimir query stats in the Inspector's Stats tab ([#319](https://github.com/grafana/grafana-prometheus-datasource/pull/319))
 
-🐛 Fix: Stop rejecting loosely-typed jsonData (e.g. `"true"` for a boolean, `"1000"` for a number) so datasources provisioned with off-spec values load instead of failing every query and health check. `timeInterval`, `queryTimeout` and `httpMethod` still reject a wrong type.
+🐛 Fix: Stop rejecting loosely-typed jsonData (e.g. `"true"` for a boolean, `"1000"` for a number) so datasources provisioned with off-spec values load instead of failing every query and health check. `timeInterval`, `queryTimeout` and `httpMethod` still reject a wrong type. ([#310](https://github.com/grafana/grafana-prometheus-datasource/pull/310))
 
 **Breaking (Go API):** affected `models.PromOptions` fields move from plain `string`/`bool`/`float64`/`*int64` to named lenient types with the same JSON encoding. Passing one to a `string`/`bool`/`float64` parameter now needs an explicit conversion. See [#310](https://github.com/grafana/grafana-prometheus-datasource/pull/310) for details. ([#310](https://github.com/grafana/grafana-prometheus-datasource/pull/310))
 

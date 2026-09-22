@@ -1,8 +1,8 @@
 # grafana-prometheus-datasource
 
-## 13.2.1
+## 13.2.0
 
-🐛 Support PromQL anchored and smoothed range selectors in the query builder, code editor, scope filtering, and label suggestions.
+🐛 Support PromQL anchored and smoothed range selectors in the query builder, code editor, scope filtering, and label suggestions. ([#343](https://github.com/grafana/grafana-prometheus-datasource/pull/343))
 
 ⚙️ Chore: align Grafana peer ranges to >=12.3.0 so they match grafanaDependency and the required @grafana/i18n peer ([#340](https://github.com/grafana/grafana-prometheus-datasource/pull/340))
 
@@ -12,27 +12,25 @@
 
 🐛 Recognise native-histogram trim operators (</, >/) in the PromQL query editor by bumping @prometheus-io/lezer-promql to 0.313.3 ([#338](https://github.com/grafana/grafana-prometheus-datasource/pull/338))
 
-🐛 Fall back to standard Prometheus discovery when the Search API is unavailable
+🐛 Fall back to standard Prometheus discovery when the Search API is unavailable ([#348](https://github.com/grafana/grafana-prometheus-datasource/pull/348))
 
 🐛 Parse datasource jsonData once per instance construction instead of independently in the transport, query handler, and resource handler. Reduces redundant parsing/logging. ([#341](https://github.com/grafana/grafana-prometheus-datasource/pull/341))
 
-🐛 Add NDJSON search stream parser and error taxonomy
+🐛 Add NDJSON search stream parser and error taxonomy ([#337](https://github.com/grafana/grafana-prometheus-datasource/pull/337))
 
-🐛 Add the typed Search API client for metric and label discovery
+🐛 Add the typed Search API client for metric and label discovery ([#342](https://github.com/grafana/grafana-prometheus-datasource/pull/342))
 
 🐛 Add the chunked transport bridge for the Search API stream and require @grafana/runtime >=11.6.0 ([#338](https://github.com/grafana/grafana-prometheus-datasource/pull/338))
 
-🐛 Fix: Stop rejecting loosely-typed jsonData (e.g. `"true"` for a boolean, `"1000"` for a number) so datasources provisioned with off-spec values load instead of failing every query and health check. `timeInterval`, `queryTimeout` and `httpMethod` still reject a wrong type.
+🐛 Fix: Stop rejecting loosely-typed jsonData (e.g. `"true"` for a boolean, `"1000"` for a number) so datasources provisioned with off-spec values load instead of failing every query and health check. `timeInterval`, `queryTimeout` and `httpMethod` still reject a wrong type. ([#310](https://github.com/grafana/grafana-prometheus-datasource/pull/310))
 
 **Breaking (Go API):** affected `models.PromOptions` fields move from plain `string`/`bool`/`float64`/`*int64` to named lenient types with the same JSON encoding. Passing one to a `string`/`bool`/`float64` parameter now needs an explicit conversion. See [#310](https://github.com/grafana/grafana-prometheus-datasource/pull/310) for details. ([#310](https://github.com/grafana/grafana-prometheus-datasource/pull/310))
 
 🐛 Surface Mimir query stats in the Inspector's Stats tab ([#319](https://github.com/grafana/grafana-prometheus-datasource/pull/319))
 
-🐛 Adapt the Search API client to the resource client contract
+🐛 Adapt the Search API client to the resource client contract ([#344](https://github.com/grafana/grafana-prometheus-datasource/pull/344))
 
-🐛 Use the Search API for metric and label discovery
-
-🐛 Implement Search API toggle in configuration editor
+🐛 Implement Search API toggle in configuration editor ([#350](https://github.com/grafana/grafana-prometheus-datasource/pull/))
 
 🐛 Request gzip for resource calls to prevent failures caused by forwarding the browser's Accept-Encoding to upstream servers ([#334](https://github.com/grafana/grafana-prometheus-datasource/pull/334))
 
