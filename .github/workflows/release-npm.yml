@@ -31,13 +31,12 @@ jobs:
     permissions:
       contents: read
     steps:
-#      Disabled to try the fix
-#      - name: Verify branch is main
-#        run: |
-#          if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
-#            echo "::error::This workflow can only be run on the main branch. Current ref: ${GITHUB_REF}"
-#            exit 1
-#          fi
+      - name: Verify branch is main
+        run: |
+          if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+            echo "::error::This workflow can only be run on the main branch. Current ref: ${GITHUB_REF}"
+            exit 1
+          fi
 
       - name: Check GitHub permission level
         env:
