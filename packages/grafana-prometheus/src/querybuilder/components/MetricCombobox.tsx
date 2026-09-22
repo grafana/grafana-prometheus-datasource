@@ -1,5 +1,5 @@
 import { css } from '@emotion/css';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { type GrafanaTheme2, type SelectableValue, type TimeRange } from '@grafana/data';
 import { selectors } from '@grafana/e2e-selectors';
@@ -8,12 +8,13 @@ import { EditorField, EditorFieldGroup } from '@grafana/plugin-ui';
 import { reportInteraction } from '@grafana/runtime';
 import { Button, InlineField, InlineFieldRow, Combobox, type ComboboxOption, useTheme2 } from '@grafana/ui';
 
-import { METRIC_LABEL } from '../../constants';
+import { DEFAULT_COMPLETION_LIMIT, METRIC_LABEL } from '../../constants';
 import { type PrometheusDatasource } from '../../datasource';
+import { isAbortError, SearchApiUnavailableError } from '../../search_api_stream';
 import { type QueryBuilderLabelFilter } from '../shared/types';
 import { type PromVisualQuery } from '../types';
 
-import { formatKeyValueStrings } from './formatter';
+import { formatKeyValueStrings, formatLabelFiltersToString } from './formatter';
 import { MetricsModal } from './metrics-modal/MetricsModal';
 
 export interface MetricComboboxProps {
@@ -38,6 +39,7 @@ export function MetricCombobox({
   timeRange,
 }: Readonly<MetricComboboxProps>) {
   const [metricsModalOpen, setMetricsModalOpen] = useState(false);
+  const searchAbortControllerRef = useRef<AbortController>();
   const styles = getStyles(useTheme2());
 
   /**
@@ -45,6 +47,34 @@ export function MetricCombobox({
    */
   const getMetricLabels = useCallback(
     async (query: string) => {
+      const searchClient = datasource.languageProvider.getSearchApiClient?.();
+      if (searchClient) {
+        searchAbortControllerRef.current?.abort();
+        const abortController = new AbortController();
+        searchAbortControllerRef.current = abortController;
+        const rawMatch = formatLabelFiltersToString(labelsFilters) || undefined;
+        const match = rawMatch ? datasource.interpolateString(rawMatch) : undefined;
+
+        try {
+          const response = await searchClient.searchMetricNames(timeRange, query, {
+            limit: DEFAULT_COMPLETION_LIMIT,
+            match,
+            signal: abortController.signal,
+          });
+          return response.results.map((result) => ({
+            label: result.name,
+            value: result.name,
+          }));
+        } catch (error) {
+          if (isAbortError(error)) {
+            return [];
+          }
+          if (!(error instanceof SearchApiUnavailableError)) {
+            throw error;
+          }
+        }
+      }
+
       const match = formatKeyValueStrings(query, labelsFilters);
       const results = await datasource.languageProvider.queryLabelValues(timeRange, METRIC_LABEL, match);
 
@@ -56,8 +86,10 @@ export function MetricCombobox({
       });
       return resultsOptions;
     },
-    [datasource.languageProvider, labelsFilters, timeRange]
+    [datasource, labelsFilters, timeRange]
   );
+
+  useEffect(() => () => searchAbortControllerRef.current?.abort(), []);
 
   const onComboboxChange = useCallback(
     (opt: ComboboxOption<string> | null) => {

@@ -146,10 +146,11 @@ async function getLabelNames(
   metric: string | undefined,
   otherLabels: Label[],
   dataProvider: DataProvider,
-  timeRange: TimeRange
+  timeRange: TimeRange,
+  searchTerm?: string
 ): Promise<string[]> {
   const selector = makeSelector(metric, otherLabels);
-  const labelNames = await dataProvider.queryLabelKeys(timeRange, selector, DEFAULT_COMPLETION_LIMIT);
+  const labelNames = await dataProvider.queryLabelKeys(timeRange, selector, DEFAULT_COMPLETION_LIMIT, searchTerm);
   // Exclude __name__ from output
   otherLabels.push({ name: '__name__', value: '', op: '!=' });
   const usedLabelNames = new Set(otherLabels.map((l) => l.name));
@@ -163,9 +164,10 @@ async function getLabelNamesForCompletions(
   triggerOnInsert: boolean,
   otherLabels: Label[],
   dataProvider: DataProvider,
-  timeRange: TimeRange
+  timeRange: TimeRange,
+  searchTerm?: string
 ): Promise<Completion[]> {
-  const labelNames = await getLabelNames(metric, otherLabels, dataProvider, timeRange);
+  const labelNames = await getLabelNames(metric, otherLabels, dataProvider, timeRange, searchTerm);
   return labelNames.map((text) => {
     const isUtf8 = !isValidLegacyName(text);
     return {
@@ -188,18 +190,20 @@ async function getLabelNamesForSelectorCompletions(
   metric: string | undefined,
   otherLabels: Label[],
   dataProvider: DataProvider,
-  timeRange: TimeRange
+  timeRange: TimeRange,
+  searchTerm?: string
 ): Promise<Completion[]> {
-  return getLabelNamesForCompletions(metric, '=', true, otherLabels, dataProvider, timeRange);
+  return getLabelNamesForCompletions(metric, '=', true, otherLabels, dataProvider, timeRange, searchTerm);
 }
 
 async function getLabelNamesForByCompletions(
   metric: string | undefined,
   otherLabels: Label[],
   dataProvider: DataProvider,
-  timeRange: TimeRange
+  timeRange: TimeRange,
+  searchTerm?: string
 ): Promise<Completion[]> {
-  return getLabelNamesForCompletions(metric, '', false, otherLabels, dataProvider, timeRange);
+  return getLabelNamesForCompletions(metric, '', false, otherLabels, dataProvider, timeRange, searchTerm);
 }
 
 async function getLabelValues(
@@ -207,10 +211,11 @@ async function getLabelValues(
   labelName: string,
   otherLabels: Label[],
   dataProvider: DataProvider,
-  timeRange: TimeRange
+  timeRange: TimeRange,
+  searchTerm?: string
 ): Promise<string[]> {
   const selector = makeSelector(metric, otherLabels);
-  return await dataProvider.queryLabelValues(timeRange, labelName, selector);
+  return await dataProvider.queryLabelValues(timeRange, labelName, selector, DEFAULT_COMPLETION_LIMIT, searchTerm);
 }
 
 async function getLabelValuesForMetricCompletions(
@@ -219,9 +224,10 @@ async function getLabelValuesForMetricCompletions(
   betweenQuotes: boolean,
   otherLabels: Label[],
   dataProvider: DataProvider,
-  timeRange: TimeRange
+  timeRange: TimeRange,
+  searchTerm?: string
 ): Promise<Completion[]> {
-  const values = await getLabelValues(metric, labelName, otherLabels, dataProvider, timeRange);
+  const values = await getLabelValues(metric, labelName, otherLabels, dataProvider, timeRange, searchTerm);
   return values.map((text) => ({
     type: 'LABEL_VALUE',
     label: text,
@@ -269,9 +275,21 @@ export async function getCompletions(
       return Promise.resolve([...historyCompletions, ...getFunctionCompletions(), ...metricNames]);
     }
     case 'IN_LABEL_SELECTOR_NO_LABEL_NAME':
-      return getLabelNamesForSelectorCompletions(situation.metricName, situation.otherLabels, dataProvider, timeRange);
+      return getLabelNamesForSelectorCompletions(
+        situation.metricName,
+        situation.otherLabels,
+        dataProvider,
+        timeRange,
+        searchTerm
+      );
     case 'IN_GROUPING':
-      return getLabelNamesForByCompletions(situation.metricName, situation.otherLabels, dataProvider, timeRange);
+      return getLabelNamesForByCompletions(
+        situation.metricName,
+        situation.otherLabels,
+        dataProvider,
+        timeRange,
+        searchTerm
+      );
     case 'IN_LABEL_SELECTOR_WITH_LABEL_NAME':
       return getLabelValuesForMetricCompletions(
         situation.metricName,
@@ -279,7 +297,8 @@ export async function getCompletions(
         situation.betweenQuotes,
         situation.otherLabels,
         dataProvider,
-        timeRange
+        timeRange,
+        searchTerm
       );
     default:
       throw new NeverCaseError(situation);

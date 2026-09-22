@@ -53,9 +53,9 @@ const MetricsModalContent = (props: MetricsModalProps) => {
     };
   });
 
-  const searchCallback = (query: string, fullMetaSearchVal?: boolean) => {
-    setSearchedText(query);
-    debouncedBackendSearch(timeRange, query);
+  const searchCallback = (searchText: string) => {
+    setSearchedText(searchText);
+    debouncedBackendSearch(timeRange, searchText, query.labels);
   };
 
   return (
@@ -80,7 +80,6 @@ const MetricsModalContent = (props: MetricsModalProps) => {
             value={searchedText}
             onInput={(e) => {
               const value = e.currentTarget.value ?? '';
-              setSearchedText(value);
               setPagination({ ...pagination, pageNum: 1 });
               searchCallback(value);
             }}
@@ -152,7 +151,11 @@ const MetricsModalContent = (props: MetricsModalProps) => {
 
 export const MetricsModal = (props: MetricsModalProps) => {
   return (
-    <MetricsModalContextProvider languageProvider={props.datasource.languageProvider} timeRange={props.timeRange}>
+    <MetricsModalContextProvider
+      languageProvider={props.datasource.languageProvider}
+      queryLabels={props.query.labels}
+      timeRange={props.timeRange}
+    >
       <MetricsModalContent {...props} />
     </MetricsModalContextProvider>
   );

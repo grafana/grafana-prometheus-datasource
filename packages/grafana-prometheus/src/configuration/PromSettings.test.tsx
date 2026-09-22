@@ -96,19 +96,6 @@ describe('PromSettings', () => {
       expect(screen.getByText('Use series endpoint')).toBeInTheDocument();
     });
 
-    it('should show the Search API as beta and keep it disabled', () => {
-      const onOptionsChange = jest.fn();
-      const options = createDefaultConfigOptions();
-
-      render(<PromSettings onOptionsChange={onOptionsChange} options={options} />);
-      const searchApiSwitch = screen.getByRole('switch', { name: 'Enable Search API (beta)' });
-
-      expect(screen.getByText('Search API (beta)')).toBeInTheDocument();
-      expect(searchApiSwitch).toBeDisabled();
-      fireEvent.click(searchApiSwitch);
-      expect(onOptionsChange).not.toHaveBeenCalled();
-    });
-
     it('should keep the Search API disabled by default and restore a saved value', () => {
       const defaultOptions = createDefaultConfigOptions();
       const { rerender } = render(<PromSettings onOptionsChange={() => {}} options={defaultOptions} />);

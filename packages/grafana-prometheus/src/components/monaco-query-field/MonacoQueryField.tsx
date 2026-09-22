@@ -242,6 +242,7 @@ const MonacoQueryField = (props: Props) => {
           // Combine cleanup functions
           autocompleteDisposeFun.current = () => {
             document.removeEventListener('keydown', handleKeyDown, true);
+            dataProvider.dispose();
             dispose();
           };
 

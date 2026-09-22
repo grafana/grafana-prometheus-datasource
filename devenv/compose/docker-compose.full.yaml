@@ -1,6 +1,6 @@
 services:
   prometheus:
-    image: prom/prometheus:v3.2.1
+    image: prom/prometheus:v3.13.3
     volumes:
       - ./provisioning/prometheus/prometheus.full.yml:/etc/prometheus/prometheus.yml:ro
       - ./provisioning/prometheus/rules:/etc/prometheus/rules:ro

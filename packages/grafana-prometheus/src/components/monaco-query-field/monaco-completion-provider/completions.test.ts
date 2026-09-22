@@ -1,5 +1,6 @@
 import { config } from '@grafana/runtime';
 
+import { DEFAULT_COMPLETION_LIMIT } from '../../../constants';
 import { getFunctions } from '../../../promql';
 import { getMockTimeRange } from '../../../test/mocks/datasource';
 
@@ -15,6 +16,10 @@ const dataProviderSettings = {
     queryMetricsMetadata: jest.fn().mockResolvedValue({}),
     retrieveLabelKeys: jest.fn(),
     retrieveMetricsMetadata: jest.fn().mockReturnValue({}),
+    getSearchApiClient: jest.fn().mockReturnValue(undefined),
+    datasource: {
+      interpolateString: (value: string) => value,
+    },
   },
   historyProvider: history.map((expr, idx) => ({ query: { expr, refId: 'some-ref' }, ts: idx })),
 } as unknown as DataProviderParams;
@@ -106,6 +111,22 @@ describe('metric name completions (utf8)', () => {
   });
 });
 
+describe('Label name completions', () => {
+  it('passes the typed term to label name search', async () => {
+    const queryLabelKeys = jest.spyOn(dataProvider, 'queryLabelKeys').mockResolvedValue(['environment']);
+    const timeRange = getMockTimeRange();
+
+    await getCompletions(
+      { type: 'IN_LABEL_SELECTOR_NO_LABEL_NAME', otherLabels: [], betweenQuotes: false },
+      dataProvider,
+      timeRange,
+      'env'
+    );
+
+    expect(queryLabelKeys).toHaveBeenCalledWith(timeRange, undefined, DEFAULT_COMPLETION_LIMIT, 'env');
+  });
+});
+
 describe('Label value completions', () => {
   let dataProvider: DataProvider;
 
@@ -117,6 +138,27 @@ describe('Label value completions', () => {
 
   afterEach(() => {
     jest.restoreAllMocks();
+  });
+
+  it('passes the typed term to label value search', async () => {
+    const queryLabelValues = jest.spyOn(dataProvider, 'queryLabelValues').mockResolvedValue(['production']);
+    const situation: Situation = {
+      type: 'IN_LABEL_SELECTOR_WITH_LABEL_NAME',
+      labelName: 'environment',
+      betweenQuotes: true,
+      otherLabels: [],
+    };
+    const timeRange = getMockTimeRange();
+
+    await getCompletions(situation, dataProvider, timeRange, 'prod');
+
+    expect(queryLabelValues).toHaveBeenCalledWith(
+      timeRange,
+      'environment',
+      undefined,
+      DEFAULT_COMPLETION_LIMIT,
+      'prod'
+    );
   });
 
   describe('with prometheusSpecialCharsInLabelValues disabled', () => {

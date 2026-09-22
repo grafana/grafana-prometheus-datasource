@@ -514,7 +514,6 @@ export const PromSettings = (props: Props) => {
                 </Trans>
               }
               interactive={true}
-              disabled={true}
               className={styles.switchField}
             >
               <Switch

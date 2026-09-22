@@ -239,8 +239,7 @@ export class PrometheusDatasource
   }
 
   hasSearchApiSupport(): boolean {
-    // Return false until we wire up search api functionality in UI
-    return false;
+    return this.enableSearchApi;
   }
 
   _isDatasourceVersionGreaterOrEqualTo(targetVersion: string, targetFlavor: PromApplication): boolean {
