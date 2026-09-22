@@ -323,7 +323,11 @@ describe('MetricsModalContext', () => {
       expect(searchMetricNames).toHaveBeenCalledWith(
         defaultTimeRange,
         'http   req',
-        expect.objectContaining({ signal: expect.any(AbortSignal) })
+        expect.objectContaining({
+          includeMetadata: true,
+          retainResults: false,
+          signal: expect.any(AbortSignal),
+        })
       );
       expect(searchLanguageProvider.queryLabelValues).not.toHaveBeenCalled();
       expect(reportInteraction).toHaveBeenCalledWith('grafana_prometheus_metrics_explorer_search_performed', {

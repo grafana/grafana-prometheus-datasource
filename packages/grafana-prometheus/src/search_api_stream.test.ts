@@ -29,6 +29,21 @@ describe('readSearchStream', () => {
     expect(onBatch).toHaveBeenNthCalledWith(2, [{ name: 'http_request_duration_seconds' }]);
   });
 
+  it('forwards batches without retaining results when requested', async () => {
+    const onBatch = jest.fn();
+    const source = chunkSource([
+      '{"results":[{"name":"up"}]}\n',
+      '{"results":[{"name":"go_goroutines"}]}\n',
+      '{"status":"success","has_more":false}\n',
+    ]);
+
+    const result = await readSearchStream<TestResult>(source, onBatch, undefined, false);
+
+    expect(result).toEqual({ results: [], warnings: [], hasMore: false });
+    expect(onBatch).toHaveBeenNthCalledWith(1, [{ name: 'up' }]);
+    expect(onBatch).toHaveBeenNthCalledWith(2, [{ name: 'go_goroutines' }]);
+  });
+
   it('surfaces mid-stream errors with partial results', async () => {
     const source = chunkSource([
       '{"results":[{"name":"up"}]}\n',

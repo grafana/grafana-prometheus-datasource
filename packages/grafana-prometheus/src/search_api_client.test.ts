@@ -242,6 +242,9 @@ describe('SearchApiClient', () => {
         limit: '100',
         'search[]': 'httpreq',
         sort_by: 'score',
+        fuzz_threshold: '80',
+        fuzz_alg: 'jarowinkler',
+        case_sensitive: 'false',
         batch_size: '100',
         include_metadata: 'true',
       },
@@ -283,6 +286,9 @@ describe('SearchApiClient', () => {
           limit: '20',
           'search[]': 'extralab',
           sort_by: 'score',
+          fuzz_threshold: '80',
+          fuzz_alg: 'jarowinkler',
+          case_sensitive: 'false',
           'match[]': '{job="grafana"}',
           batch_size: '100',
         },
@@ -303,6 +309,42 @@ describe('SearchApiClient', () => {
           end: '1681300320',
           label: 'service.name',
           'search[]': 'datasourceuid',
+        }),
+      })
+    );
+  });
+
+  it('accepts endpoint-specific fuzzy matching options', async () => {
+    const client = new SearchApiClient(jest.fn(), datasource);
+
+    await client.searchLabelValues(timeRange, 'service.name', 'API', {
+      fuzzThreshold: 100,
+      fuzzAlgorithm: 'subsequence',
+      caseSensitive: true,
+    });
+
+    expect(chunkedMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          fuzz_threshold: '100',
+          fuzz_alg: 'subsequence',
+          case_sensitive: 'true',
+        }),
+      })
+    );
+  });
+
+  it('omits fuzzy matching parameters when no search term is provided', async () => {
+    const client = new SearchApiClient(jest.fn(), datasource);
+
+    await client.searchLabelNames(timeRange, '');
+
+    expect(chunkedMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.not.objectContaining({
+          fuzz_threshold: expect.anything(),
+          fuzz_alg: expect.anything(),
+          case_sensitive: expect.anything(),
         }),
       })
     );
@@ -445,6 +487,34 @@ describe('SearchApiClient', () => {
       warnings: ['limited'],
       hasMore: true,
     });
+  });
+
+  it('supports batch-only consumers without retaining the complete result', async () => {
+    chunkedMock.mockReturnValue(
+      chunkedStream([
+        '{"results":[{"name":"up"}]}\n',
+        '{"results":[{"name":"go_goroutines"}]}\n',
+        '{"status":"success","has_more":false}\n',
+      ])
+    );
+    const onBatch = jest.fn();
+    const onTransportStats = jest.fn();
+    const client = new SearchApiClient(jest.fn(), datasource);
+
+    const result = await client.searchMetricNames(timeRange, '', {
+      onBatch,
+      onTransportStats,
+      retainResults: false,
+    });
+
+    expect(onBatch).toHaveBeenCalledTimes(2);
+    expect(onTransportStats).toHaveBeenCalledWith({
+      queuedBytes: 0,
+      queuedChunks: 0,
+      peakQueuedBytes: expect.any(Number),
+      peakQueuedChunks: expect.any(Number),
+    });
+    expect(result).toEqual({ results: [], warnings: [], hasMore: false });
   });
 });
 
