@@ -190,7 +190,7 @@ jobs:
       - name: Publish to NPM
         env:
           NPM_TAG: ${{ needs.build.outputs.tag }}
-        run: npm publish pkg/*.tgz --access public --tag "$NPM_TAG"
+        run: npm publish ./pkg/*.tgz --access public --tag "$NPM_TAG"
 
   dry-run-summary:
     name: Dry run summary
