@@ -195,6 +195,28 @@ describe('DataProvider', () => {
       );
       expect(languageProvider.queryLabelValues).not.toHaveBeenCalled();
     });
+
+    it('returns an empty list when a search is aborted and does not fall back', async () => {
+      const languageProvider = createLanguageProviderMock();
+      const abortError = Object.assign(new Error('The user aborted a request.'), { name: 'AbortError' });
+      languageProvider.getSearchApiClient.mockReturnValue({
+        searchMetricNames: jest.fn().mockRejectedValue(abortError),
+        searchLabelNames: jest.fn().mockRejectedValue(abortError),
+        searchLabelValues: jest.fn().mockRejectedValue(abortError),
+      });
+      const dataProvider = createDataProvider(languageProvider);
+
+      await expect(dataProvider.queryMetricNames(timeRange, 'up')).resolves.toEqual([]);
+      await expect(
+        dataProvider.queryLabelKeys(timeRange, undefined, DEFAULT_COMPLETION_LIMIT, 'job')
+      ).resolves.toEqual([]);
+      await expect(
+        dataProvider.queryLabelValues(timeRange, 'job', undefined, DEFAULT_COMPLETION_LIMIT, 'api')
+      ).resolves.toEqual([]);
+
+      expect(languageProvider.queryLabelKeys).not.toHaveBeenCalled();
+      expect(languageProvider.queryLabelValues).not.toHaveBeenCalled();
+    });
   });
 
   describe('search lifecycle', () => {

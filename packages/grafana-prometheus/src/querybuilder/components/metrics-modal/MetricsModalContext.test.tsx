@@ -323,11 +323,7 @@ describe('MetricsModalContext', () => {
       expect(searchMetricNames).toHaveBeenCalledWith(
         defaultTimeRange,
         'http   req',
-        expect.objectContaining({
-          includeMetadata: true,
-          retainResults: false,
-          signal: expect.any(AbortSignal),
-        })
+        expect.objectContaining({ signal: expect.any(AbortSignal) })
       );
       expect(searchLanguageProvider.queryLabelValues).not.toHaveBeenCalled();
       expect(reportInteraction).toHaveBeenCalledWith('grafana_prometheus_metrics_explorer_search_performed', {
@@ -429,6 +425,27 @@ describe('MetricsModalContext', () => {
       expect(result.current.filteredMetricsData).toEqual([
         { value: 'standard_metric', type: 'counter', description: 'Test metric' },
       ]);
+    });
+
+    it('does not fall back when a Search API request is aborted', async () => {
+      const abortError = Object.assign(new Error('The user aborted a request.'), { name: 'AbortError' });
+      const searchMetricNames = jest.fn().mockRejectedValue(abortError);
+      const searchLanguageProvider = {
+        ...mockLanguageProvider,
+        hasSearchSupport: jest.fn().mockReturnValue(true),
+        getSearchApiClient: jest.fn().mockReturnValue({ searchMetricNames }),
+        queryLabelValues: jest.fn().mockResolvedValue(['standard_metric']),
+      } as unknown as PrometheusLanguageProviderInterface;
+      const { result } = renderHook(() => useMetricsModal(), {
+        wrapper: createWrapper(searchLanguageProvider),
+      });
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      await act(async () => {
+        await result.current.debouncedBackendSearch(defaultTimeRange, 'standard');
+      });
+
+      expect(searchLanguageProvider.queryLabelValues).not.toHaveBeenCalled();
     });
 
     it('should perform backend search with results', async () => {

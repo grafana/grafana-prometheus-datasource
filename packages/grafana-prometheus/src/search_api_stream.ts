@@ -61,6 +61,10 @@ export class SearchApiUnavailableError<T = unknown> extends SearchApiError<T> {
   }
 }
 
+export function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError';
+}
+
 // Abstracts over the transport that feeds readSearchStream so both a real
 // Response.body reader (native fetch) and a getBackendSrv().chunked()
 // Observable (bridged into this shape) can drive the same NDJSON parser.

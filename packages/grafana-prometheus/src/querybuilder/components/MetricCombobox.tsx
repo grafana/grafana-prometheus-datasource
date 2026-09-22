@@ -10,7 +10,7 @@ import { Button, InlineField, InlineFieldRow, Combobox, type ComboboxOption, use
 
 import { DEFAULT_COMPLETION_LIMIT, METRIC_LABEL } from '../../constants';
 import { type PrometheusDatasource } from '../../datasource';
-import { SearchApiUnavailableError } from '../../search_api_stream';
+import { isAbortError, SearchApiUnavailableError } from '../../search_api_stream';
 import { type QueryBuilderLabelFilter } from '../shared/types';
 import { type PromVisualQuery } from '../types';
 
@@ -66,6 +66,9 @@ export function MetricCombobox({
             value: result.name,
           }));
         } catch (error) {
+          if (isAbortError(error)) {
+            return [];
+          }
           if (!(error instanceof SearchApiUnavailableError)) {
             throw error;
           }

@@ -6,7 +6,7 @@ import { type SelectableValue } from '@grafana/data';
 
 import { createDefaultConfigOptions } from '../test/mocks/datasource';
 
-import { getValueFromEventItem, PromSettings } from './PromSettings';
+import { getValueFromEventItem, getCustomQueryThresholdParams, PromSettings } from './PromSettings';
 
 describe('PromSettings', () => {
   describe('getValueFromEventItem', () => {
@@ -36,8 +36,33 @@ describe('PromSettings', () => {
     });
   });
 
+  describe('getCustomQueryThresholdParams', () => {
+    it('returns empty params for nullish and blank strings', () => {
+      expect(getCustomQueryThresholdParams(undefined).toString()).toBe('');
+      expect(getCustomQueryThresholdParams(null).toString()).toBe('');
+      expect(getCustomQueryThresholdParams('   ').toString()).toBe('');
+    });
+
+    it('parses string custom query parameters', () => {
+      expect(getCustomQueryThresholdParams('foo=bar').get('foo')).toBe('bar');
+    });
+
+    it('coerces non-string provisioning values like datasource.ts', () => {
+      expect(getCustomQueryThresholdParams(123).toString()).toBe('123=');
+    });
+  });
+
   describe('PromSettings component', () => {
     const defaultProps = createDefaultConfigOptions();
+
+    it('should render when customQueryParameters is provisioned as a non-string value', () => {
+      const options = createDefaultConfigOptions();
+      (options.jsonData as { customQueryParameters?: unknown }).customQueryParameters = 123;
+
+      render(<PromSettings onOptionsChange={() => {}} options={options} />);
+
+      expect(screen.getByDisplayValue('123')).toBeInTheDocument();
+    });
 
     it('should show POST httpMethod if no httpMethod', () => {
       const options = defaultProps;

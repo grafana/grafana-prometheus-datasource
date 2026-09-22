@@ -566,7 +566,7 @@ export const PromSettings = (props: Props) => {
             >
               <Input
                 className="width-20"
-                value={optionsWithDefaults.jsonData.customQueryParameters}
+                value={formatCustomQueryParametersForInput(optionsWithDefaults.jsonData.customQueryParameters)}
                 onChange={onChangeHandler('customQueryParameters', optionsWithDefaults, onOptionsChange)}
                 spellCheck={false}
                 placeholder={t(
@@ -868,10 +868,31 @@ const onChangeHandler =
     });
   };
 
-function getCustomQueryThresholdParams(customQueryParameters?: string): URLSearchParams {
-  if (!customQueryParameters?.trim()) {
+export function formatCustomQueryParametersForInput(customQueryParameters: unknown): string {
+  if (customQueryParameters == null) {
+    return '';
+  }
+
+  if (typeof customQueryParameters === 'string') {
+    return customQueryParameters;
+  }
+
+  return String(customQueryParameters);
+}
+
+export function getCustomQueryThresholdParams(customQueryParameters?: unknown): URLSearchParams {
+  if (customQueryParameters == null) {
     return new URLSearchParams();
   }
 
-  return new URLSearchParams(customQueryParameters);
+  if (typeof customQueryParameters === 'string') {
+    if (!customQueryParameters.trim()) {
+      return new URLSearchParams();
+    }
+
+    return new URLSearchParams(customQueryParameters);
+  }
+
+  // Match datasource.ts URLSearchParams coercion for mistyped provisioning values (e.g. numbers).
+  return new URLSearchParams(String(customQueryParameters));
 }

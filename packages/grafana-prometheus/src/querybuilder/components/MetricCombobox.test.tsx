@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import '@testing-library/jest-dom';
@@ -189,6 +189,23 @@ describe('MetricCombobox', () => {
       METRIC_LABEL,
       '{__name__=~".*standard.*"}'
     );
+  });
+
+  it('does not fall back when fuzzy metric search is aborted', async () => {
+    const abortError = Object.assign(new Error('The user aborted a request.'), { name: 'AbortError' });
+    const searchMetricNames = jest.fn().mockRejectedValue(abortError);
+    (mockLanguageProvider.getSearchApiClient as jest.Mock).mockReturnValue({ searchMetricNames });
+    mockDatasource.languageProvider.queryLabelValues = jest.fn().mockResolvedValue(['standard_metric']);
+
+    render(<MetricCombobox {...defaultProps} />);
+
+    const combobox = screen.getByPlaceholderText('Select metric');
+    await userEvent.click(combobox);
+    await userEvent.type(combobox, 'standard');
+
+    await waitFor(() => expect(searchMetricNames).toHaveBeenCalled());
+    expect(mockDatasource.languageProvider.queryLabelValues).not.toHaveBeenCalled();
+    expect(screen.queryByRole('option', { name: 'standard_metric' })).not.toBeInTheDocument();
   });
 
   it('calls onChange with the correct value when a metric is selected', async () => {

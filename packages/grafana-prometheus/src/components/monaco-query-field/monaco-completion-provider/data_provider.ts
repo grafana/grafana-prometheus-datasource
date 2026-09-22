@@ -3,7 +3,7 @@ import { type HistoryItem, type TimeRange } from '@grafana/data';
 import { DEFAULT_COMPLETION_LIMIT, METRIC_LABEL } from '../../../constants';
 import { type PrometheusLanguageProviderInterface } from '../../../language_provider';
 import { removeQuotesIfExist } from '../../../language_utils';
-import { SearchApiUnavailableError } from '../../../search_api_stream';
+import { isAbortError, SearchApiUnavailableError } from '../../../search_api_stream';
 import { type PromQuery } from '../../../types';
 import { escapeForUtf8Support, isValidLegacyName } from '../../../utf8_support';
 
@@ -57,6 +57,9 @@ export class DataProvider {
           });
           return response.results.map((result) => result.name);
         } catch (error) {
+          if (isAbortError(error)) {
+            return [];
+          }
           if (!(error instanceof SearchApiUnavailableError)) {
             throw error;
           }
@@ -84,6 +87,80 @@ export class DataProvider {
       return [];
     }
   };
+
+  queryLabelKeys = async (
+    timeRange: TimeRange,
+    match?: string,
+    limit?: number,
+    searchTerm?: string
+  ): Promise<string[]> => {
+    const searchClient = this.languageProvider.getSearchApiClient?.();
+    if (searchClient && searchTerm) {
+      this.labelKeySearchAbortController?.abort();
+      this.labelKeySearchAbortController = new AbortController();
+
+      try {
+        const response = await searchClient.searchLabelNames(timeRange, searchTerm, {
+          limit: limit ?? DEFAULT_COMPLETION_LIMIT,
+          match: match ? this.languageProvider.datasource.interpolateString(match) : undefined,
+          signal: this.labelKeySearchAbortController.signal,
+        });
+        return response.results.map((result) => result.name);
+      } catch (error) {
+        if (isAbortError(error)) {
+          return [];
+        }
+        if (!(error instanceof SearchApiUnavailableError)) {
+          throw error;
+        }
+      }
+    }
+
+    return this.languageProvider.queryLabelKeys(timeRange, match, limit);
+  };
+
+  queryLabelValues = async (
+    timeRange: TimeRange,
+    labelKey: string,
+    match?: string,
+    limit?: number,
+    searchTerm?: string
+  ): Promise<string[]> => {
+    const searchClient = this.languageProvider.getSearchApiClient?.();
+    if (searchClient && searchTerm) {
+      this.labelValueSearchAbortController?.abort();
+      this.labelValueSearchAbortController = new AbortController();
+
+      try {
+        const response = await searchClient.searchLabelValues(
+          timeRange,
+          removeQuotesIfExist(this.languageProvider.datasource.interpolateString(labelKey)),
+          removeQuotesIfExist(searchTerm),
+          {
+            limit: limit ?? DEFAULT_COMPLETION_LIMIT,
+            match: match ? this.languageProvider.datasource.interpolateString(match) : undefined,
+            signal: this.labelValueSearchAbortController.signal,
+          }
+        );
+        return response.results.map((result) => result.value);
+      } catch (error) {
+        if (isAbortError(error)) {
+          return [];
+        }
+        if (!(error instanceof SearchApiUnavailableError)) {
+          throw error;
+        }
+      }
+    }
+
+    return this.languageProvider.queryLabelValues(timeRange, labelKey, match, limit);
+  };
+
+  dispose(): void {
+    this.metricSearchAbortController?.abort();
+    this.labelKeySearchAbortController?.abort();
+    this.labelValueSearchAbortController?.abort();
+  }
 
   queryLabelKeys = async (
     timeRange: TimeRange,
