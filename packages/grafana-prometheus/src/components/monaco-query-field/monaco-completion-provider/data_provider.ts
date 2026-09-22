@@ -162,74 +162,6 @@ export class DataProvider {
     this.labelValueSearchAbortController?.abort();
   }
 
-  queryLabelKeys = async (
-    timeRange: TimeRange,
-    match?: string,
-    limit?: number,
-    searchTerm?: string
-  ): Promise<string[]> => {
-    const searchClient = this.languageProvider.getSearchApiClient?.();
-    if (searchClient && searchTerm) {
-      this.labelKeySearchAbortController?.abort();
-      this.labelKeySearchAbortController = new AbortController();
-
-      try {
-        const response = await searchClient.searchLabelNames(timeRange, searchTerm, {
-          limit: limit ?? DEFAULT_COMPLETION_LIMIT,
-          match: match ? this.languageProvider.datasource.interpolateString(match) : undefined,
-          signal: this.labelKeySearchAbortController.signal,
-        });
-        return response.results.map((result) => result.name);
-      } catch (error) {
-        if (!(error instanceof SearchApiUnavailableError)) {
-          throw error;
-        }
-      }
-    }
-
-    return this.languageProvider.queryLabelKeys(timeRange, match, limit);
-  };
-
-  queryLabelValues = async (
-    timeRange: TimeRange,
-    labelKey: string,
-    match?: string,
-    limit?: number,
-    searchTerm?: string
-  ): Promise<string[]> => {
-    const searchClient = this.languageProvider.getSearchApiClient?.();
-    if (searchClient && searchTerm) {
-      this.labelValueSearchAbortController?.abort();
-      this.labelValueSearchAbortController = new AbortController();
-
-      try {
-        const response = await searchClient.searchLabelValues(
-          timeRange,
-          removeQuotesIfExist(this.languageProvider.datasource.interpolateString(labelKey)),
-          removeQuotesIfExist(searchTerm),
-          {
-            limit: limit ?? DEFAULT_COMPLETION_LIMIT,
-            match: match ? this.languageProvider.datasource.interpolateString(match) : undefined,
-            signal: this.labelValueSearchAbortController.signal,
-          }
-        );
-        return response.results.map((result) => result.value);
-      } catch (error) {
-        if (!(error instanceof SearchApiUnavailableError)) {
-          throw error;
-        }
-      }
-    }
-
-    return this.languageProvider.queryLabelValues(timeRange, labelKey, match, limit);
-  };
-
-  dispose(): void {
-    this.metricSearchAbortController?.abort();
-    this.labelKeySearchAbortController?.abort();
-    this.labelValueSearchAbortController?.abort();
-  }
-
   getHistory(): string[] {
     return this.historyProvider.map((h) => h.query.expr).filter(Boolean);
   }
@@ -248,8 +180,4 @@ export class DataProvider {
 
     return result;
   }
-}
-
-function isAbortError(error: unknown): boolean {
-  return error instanceof Error && error.name === 'AbortError';
 }
