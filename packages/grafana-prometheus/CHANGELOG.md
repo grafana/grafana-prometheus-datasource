@@ -1,5 +1,11 @@
 # Changelog
 
+## 13.2.1
+
+🐛 Improve Search API ranking and bound streamed response memory
+
+🐛 Use the Search API for metric and label discovery
+
 ## 13.2.0
 
 🐛 Implement Search API toggle in configuration editor ([#350](https://github.com/grafana/grafana-prometheus-datasource/pull/350))
