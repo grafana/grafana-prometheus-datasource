@@ -81,8 +81,14 @@ function getTriggerType(
     return 'full';
   }
 
+  // An empty editor asks for every metric. A later refresh of that request
+  // has to stay full, or it replaces the metric batches with functions only.
+  if (!word || word.word.length === 0) {
+    return 'full';
+  }
+
   // For typed words of sufficient length, use full completions
-  if (word && word.word.length >= MIN_WORD_LENGTH_FOR_FULL_COMPLETIONS) {
+  if (word.word.length >= MIN_WORD_LENGTH_FOR_FULL_COMPLETIONS) {
     return 'full';
   }
 

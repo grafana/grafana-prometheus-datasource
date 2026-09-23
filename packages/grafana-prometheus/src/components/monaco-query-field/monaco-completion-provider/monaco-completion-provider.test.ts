@@ -170,6 +170,28 @@ describe('monaco-completion-provider', () => {
       );
     });
 
+    it('keeps the full metric search when the editor stays empty', async () => {
+      const model = createMockModel('', null);
+      const position = createMockPosition(1);
+      const { provider, state } = getCompletionProvider(monaco, dataProvider, timeRange);
+
+      state.isManualTriggerRequested = true;
+      await (provider.provideCompletionItems as Function)(model, position);
+
+      state.isManualTriggerRequested = false;
+      await (provider.provideCompletionItems as Function)(model, position);
+
+      expect(mockGetCompletions).toHaveBeenCalledTimes(1);
+      expect(mockGetCompletions).toHaveBeenCalledWith(
+        { type: 'EMPTY' },
+        dataProvider,
+        timeRange,
+        undefined,
+        'full',
+        expect.any(Function)
+      );
+    });
+
     it('should use partial trigger type for short words', async () => {
       const mockWord = { word: 'go', startColumn: 1, endColumn: 3 };
       const model = createMockModel('go', mockWord);
