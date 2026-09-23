@@ -43,7 +43,11 @@ export class DataProvider {
    * Queries metric names with optional filtering.
    * Safely constructs regex patterns and handles errors.
    */
-  queryMetricNames = async (timeRange: TimeRange, searchTerm: string | undefined): Promise<string[]> => {
+  queryMetricNames = async (
+    timeRange: TimeRange,
+    searchTerm: string | undefined,
+    onBatch?: (names: string[]) => void
+  ): Promise<string[]> => {
     try {
       const searchClient = this.languageProvider.getSearchApiClient?.();
       if (searchClient) {
@@ -54,6 +58,11 @@ export class DataProvider {
           const response = await searchClient.searchMetricNames(timeRange, searchTerm ?? '', {
             limit: DEFAULT_COMPLETION_LIMIT,
             signal: this.metricSearchAbortController.signal,
+            onBatch: onBatch
+              ? (batch) => {
+                  onBatch(batch.map((result) => result.name));
+                }
+              : undefined,
           });
           return response.results.map((result) => result.name);
         } catch (error) {
@@ -92,7 +101,8 @@ export class DataProvider {
     timeRange: TimeRange,
     match?: string,
     limit?: number,
-    searchTerm?: string
+    searchTerm?: string,
+    onBatch?: (names: string[]) => void
   ): Promise<string[]> => {
     const searchClient = this.languageProvider.getSearchApiClient?.();
     if (searchClient && searchTerm) {
@@ -104,6 +114,11 @@ export class DataProvider {
           limit: limit ?? DEFAULT_COMPLETION_LIMIT,
           match: match ? this.languageProvider.datasource.interpolateString(match) : undefined,
           signal: this.labelKeySearchAbortController.signal,
+          onBatch: onBatch
+            ? (batch) => {
+                onBatch(batch.map((result) => result.name));
+              }
+            : undefined,
         });
         return response.results.map((result) => result.name);
       } catch (error) {
@@ -124,7 +139,8 @@ export class DataProvider {
     labelKey: string,
     match?: string,
     limit?: number,
-    searchTerm?: string
+    searchTerm?: string,
+    onBatch?: (values: string[]) => void
   ): Promise<string[]> => {
     const searchClient = this.languageProvider.getSearchApiClient?.();
     if (searchClient && searchTerm) {
@@ -140,6 +156,11 @@ export class DataProvider {
             limit: limit ?? DEFAULT_COMPLETION_LIMIT,
             match: match ? this.languageProvider.datasource.interpolateString(match) : undefined,
             signal: this.labelValueSearchAbortController.signal,
+            onBatch: onBatch
+              ? (batch) => {
+                  onBatch(batch.map((result) => result.value));
+                }
+              : undefined,
           }
         );
         return response.results.map((result) => result.value);
