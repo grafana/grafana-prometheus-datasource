@@ -10,6 +10,8 @@ export type CompletionSnapshot<T> = {
 };
 
 export class ProgressiveCompletionSession<T> {
+  constructor(private readonly itemKey: (item: T) => string = (item) => String(item)) {}
+
   private key = '';
   private generation = 0;
   private items: T[] = [];
@@ -70,7 +72,22 @@ export class ProgressiveCompletionSession<T> {
       return;
     }
     const alreadyDelivered = this.delivered;
-    this.items = finalItems.slice();
+    if (!alreadyDelivered) {
+      this.items = finalItems.slice();
+    } else if (finalItems.length > 0) {
+      // The popup is already showing streamed rows. Keep that order and append
+      // only labels the stream did not send, such as static function names.
+      // Replacing the list would put those names in front of the batches.
+      const seen = new Set(this.items.map((item) => this.itemKey(item)));
+      for (const item of finalItems) {
+        const key = this.itemKey(item);
+        if (seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+        this.items.push(item);
+      }
+    }
     this.incomplete = false;
     this.flushWaiters();
     if (alreadyDelivered) {

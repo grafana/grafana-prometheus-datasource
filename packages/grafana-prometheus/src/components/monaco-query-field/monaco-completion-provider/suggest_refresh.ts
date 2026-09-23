@@ -12,11 +12,16 @@ type SuggestItem = {
 type SuggestWidgetLike = {
   getFocusedItem: () => { item?: SuggestItem; index: number } | undefined;
   _list: { scrollTop: number };
+  // Monaco SuggestWidget state. 0 is Hidden.
+  _state?: number;
 };
+
+type SuggestListener = { dispose: () => void };
 
 type SuggestControllerLike = {
   model?: {
     trigger: (context: { auto: boolean; shy: boolean; noSelect: boolean }, retrigger?: boolean) => void;
+    onDidSuggest?: (listener: () => void) => SuggestListener;
   };
   widget?: { value?: SuggestWidgetLike } | SuggestWidgetLike;
   registerSelector?: (selector: {
@@ -79,14 +84,44 @@ export function installSuggestSelectionPreserver(editor: SuggestRefreshEditor): 
   });
 }
 
+const refreshGates = new WeakMap<SuggestRefreshEditor, { waiting: boolean; followUp: boolean }>();
+
 export function refreshOpenSuggestions(editor: SuggestRefreshEditor): void {
   const controller = getController(editor);
   const widget = controller ? getWidget(controller) : undefined;
-  const focusedIndex = widget?.getFocusedItem()?.index ?? -1;
-  if (!controller?.model || focusedIndex < 0) {
+  if (!controller?.model || widget?._state === 0) {
     return;
   }
 
+  const gate = refreshGates.get(editor) ?? { waiting: false, followUp: false };
+  refreshGates.set(editor, gate);
+  if (gate.waiting) {
+    gate.followUp = true;
+    return;
+  }
+
+  gate.waiting = true;
+  let finished = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const finish = () => {
+    if (finished) {
+      return;
+    }
+    finished = true;
+    if (timer !== undefined) {
+      clearTimeout(timer);
+    }
+    listener?.dispose();
+    gate.waiting = false;
+    if (gate.followUp) {
+      gate.followUp = false;
+      refreshOpenSuggestions(editor);
+    }
+  };
+  const listener = controller.model.onDidSuggest?.(() => {
+    finish();
+  });
   // retrigger=true keeps the popup mounted. triggerSuggest passes false and hides it.
   controller.model.trigger({ auto: false, shy: false, noSelect: false }, true);
+  timer = setTimeout(finish, 50);
 }

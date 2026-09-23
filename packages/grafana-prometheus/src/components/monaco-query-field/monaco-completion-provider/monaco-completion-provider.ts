@@ -98,7 +98,7 @@ export function getCompletionProvider(
   const state: MonacoQueryFieldLocalState = {
     isManualTriggerRequested: false,
   };
-  const session = new ProgressiveCompletionSession<Completion>();
+  const session = new ProgressiveCompletionSession<Completion>((item) => `${item.type}\0${item.label}`);
 
   const provideCompletionItems = (
     model: monacoTypes.editor.ITextModel,

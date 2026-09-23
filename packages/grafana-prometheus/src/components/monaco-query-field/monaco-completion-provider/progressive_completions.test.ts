@@ -41,7 +41,7 @@ describe('ProgressiveCompletionSession', () => {
 
     const done = await session.load('metric:up', jest.fn(), appended);
     expect(done).toMatchObject({
-      items: ['rate', 'up', 'uptime', 'process_start_time'],
+      items: ['up', 'uptime', 'process_start_time', 'rate'],
       incomplete: false,
       stale: false,
     });

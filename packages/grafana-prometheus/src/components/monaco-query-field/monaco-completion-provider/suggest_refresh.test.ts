@@ -12,11 +12,15 @@ function createController(focusedIndex: number, focused?: SuggestItem) {
     | undefined;
   const dispose = jest.fn();
   const controller = {
-    model: { trigger },
+    model: {
+      trigger,
+      onDidSuggest: undefined as ((listener: () => void) => { dispose: () => void }) | undefined,
+    },
     widget: {
       value: {
         getFocusedItem: () => (focused ? { item: focused, index: focusedIndex } : undefined),
         _list: list,
+        _state: 3,
       },
     },
     registerSelector: jest.fn(
@@ -66,11 +70,35 @@ describe('suggest refresh', () => {
     expect(harness.trigger).toHaveBeenCalledWith({ auto: false, shy: false, noSelect: false }, true);
   });
 
-  it('does not retrigger when the suggest widget has no focused row', () => {
+  it('retriggers while the popup is open even when no row is focused yet', () => {
     const harness = createController(-1);
     refreshOpenSuggestions(harness.editor);
 
+    expect(harness.trigger).toHaveBeenCalledWith({ auto: false, shy: false, noSelect: false }, true);
+  });
+
+  it('does not retrigger after the popup is closed', () => {
+    const harness = createController(-1);
+    harness.controller.widget.value._state = 0;
+    refreshOpenSuggestions(harness.editor);
+
     expect(harness.trigger).not.toHaveBeenCalled();
+  });
+
+  it('runs a follow-up refresh when another batch arrives mid-update', () => {
+    const harness = createController(0, { textLabel: 'up', completion: { kind: 5 } });
+    let notify: (() => void) | undefined;
+    harness.controller.model.onDidSuggest = (listener: () => void) => {
+      notify = listener;
+      return { dispose: () => undefined };
+    };
+
+    refreshOpenSuggestions(harness.editor);
+    refreshOpenSuggestions(harness.editor);
+    expect(harness.trigger).toHaveBeenCalledTimes(1);
+
+    notify?.();
+    expect(harness.trigger).toHaveBeenCalledTimes(2);
   });
 
   it('disposes the selector registration', () => {
