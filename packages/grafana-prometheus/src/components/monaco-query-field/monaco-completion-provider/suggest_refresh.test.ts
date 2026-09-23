@@ -44,9 +44,10 @@ function items(): SuggestItem[] {
 }
 
 describe('suggest refresh', () => {
-  it('keeps the focused suggestion and restores the list scroll', async () => {
+  it('keeps the focused suggestion and restores the list scroll during our own refresh', async () => {
     const harness = createController(1, { textLabel: 'uptime', completion: { kind: 5 } });
     installSuggestSelectionPreserver(harness.editor);
+    refreshOpenSuggestions(harness.editor);
 
     const index = harness.select();
     harness.list.scrollTop = 0;
@@ -58,6 +59,14 @@ describe('suggest refresh', () => {
 
   it('leaves the default row when nothing is focused', () => {
     const harness = createController(-1);
+    installSuggestSelectionPreserver(harness.editor);
+    refreshOpenSuggestions(harness.editor);
+
+    expect(harness.select()).toBe(-1);
+  });
+
+  it('leaves the default row on an ordinary suggestion update outside our refresh', () => {
+    const harness = createController(1, { textLabel: 'uptime', completion: { kind: 5 } });
     installSuggestSelectionPreserver(harness.editor);
 
     expect(harness.select()).toBe(-1);

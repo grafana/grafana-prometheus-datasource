@@ -62,6 +62,10 @@ export function installSuggestSelectionPreserver(editor: SuggestRefreshEditor): 
   return controller.registerSelector({
     priority: 100,
     select: (_model, _position, items) => {
+      if (!isRefreshing(editor)) {
+        return -1;
+      }
+
       const widget = getWidget(controller);
       const focused = widget?.getFocusedItem()?.item;
       if (!widget || !focused) {
@@ -84,7 +88,13 @@ export function installSuggestSelectionPreserver(editor: SuggestRefreshEditor): 
   });
 }
 
-const refreshGates = new WeakMap<SuggestRefreshEditor, { waiting: boolean; followUp: boolean }>();
+const refreshGates = new WeakMap<SuggestRefreshEditor, { waiting: boolean; followUp: boolean; active: boolean }>();
+
+// True only while our own retrigger is in flight, so the selector below doesn't
+// also hijack the highlight on ordinary user-driven suggestion updates.
+function isRefreshing(editor: SuggestRefreshEditor): boolean {
+  return refreshGates.get(editor)?.active ?? false;
+}
 
 export function refreshOpenSuggestions(editor: SuggestRefreshEditor): void {
   const controller = getController(editor);
@@ -93,7 +103,7 @@ export function refreshOpenSuggestions(editor: SuggestRefreshEditor): void {
     return;
   }
 
-  const gate = refreshGates.get(editor) ?? { waiting: false, followUp: false };
+  const gate = refreshGates.get(editor) ?? { waiting: false, followUp: false, active: false };
   refreshGates.set(editor, gate);
   if (gate.waiting) {
     gate.followUp = true;
@@ -101,6 +111,7 @@ export function refreshOpenSuggestions(editor: SuggestRefreshEditor): void {
   }
 
   gate.waiting = true;
+  gate.active = true;
   let finished = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const finish = () => {
@@ -113,6 +124,7 @@ export function refreshOpenSuggestions(editor: SuggestRefreshEditor): void {
     }
     listener?.dispose();
     gate.waiting = false;
+    gate.active = false;
     if (gate.followUp) {
       gate.followUp = false;
       refreshOpenSuggestions(editor);
