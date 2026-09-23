@@ -124,19 +124,46 @@ describe('search batches', () => {
 
     const completions = await getCompletions({ type: 'AT_ROOT' }, dataProvider, timeRange, 'metric', 'full', onBatch);
 
+    const functionLabels = getFunctions().map((fn) => fn.label);
     expect(onBatch.mock.calls.map((call) => call[0].map((item: { label: string }) => item.label))).toEqual([
+      functionLabels,
       ['metric_a'],
       ['metric_b'],
     ]);
-    expect(onBatch.mock.calls.every((call) => call[0].every((item: { type: string }) => item.type === 'METRIC_NAME'))).toBe(
-      true
-    );
+    expect(onBatch.mock.calls[0][0].every((item: { type: string }) => item.type === 'FUNCTION')).toBe(true);
+    expect(
+      onBatch.mock.calls.slice(1).every((call) => call[0].every((item: { type: string }) => item.type === 'METRIC_NAME'))
+    ).toBe(true);
     const functionsCount = getFunctions().length;
     expect(completions).toHaveLength(functionsCount + 2);
+    expect(completions.slice(0, functionsCount).every((item) => item.type === 'FUNCTION')).toBe(true);
     expect(completions.filter((item) => item.type === 'METRIC_NAME').map((item) => item.label)).toEqual([
       'metric_a',
       'metric_b',
     ]);
+  });
+
+  it('publishes history and functions before metric batches when the editor is empty', async () => {
+    jest.spyOn(dataProvider, 'queryMetricNames').mockImplementation(async (_timeRange, _term, onBatch) => {
+      onBatch?.(['metric_a']);
+      return ['metric_a'];
+    });
+    const onBatch = jest.fn();
+
+    const completions = await getCompletions({ type: 'EMPTY' }, dataProvider, timeRange, undefined, 'full', onBatch);
+
+    const firstBatch = onBatch.mock.calls[0][0] as Array<{ type: string; label: string }>;
+    expect(firstBatch.slice(0, history.length).map((item) => item.label)).toEqual(history);
+    expect(firstBatch.slice(0, history.length).every((item) => item.type === 'HISTORY')).toBe(true);
+    expect(firstBatch.slice(history.length).every((item) => item.type === 'FUNCTION')).toBe(true);
+    expect(onBatch.mock.calls[1][0].map((item: { label: string }) => item.label)).toEqual(['metric_a']);
+    expect(completions.map((item) => item.type).slice(0, history.length + 1)).toEqual([
+      'HISTORY',
+      'HISTORY',
+      'HISTORY',
+      'FUNCTION',
+    ]);
+    expect(completions[completions.length - 1]).toMatchObject({ type: 'METRIC_NAME', label: 'metric_a' });
   });
 
   it('publishes label name batches without names already used in the selector', async () => {

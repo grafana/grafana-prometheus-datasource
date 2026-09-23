@@ -109,8 +109,11 @@ async function getAllFunctionsAndMetricNamesCompletions(
   timeRange: TimeRange,
   onBatch?: CompletionBatchListener
 ): Promise<Completion[]> {
+  const functions = getFunctionCompletions();
+  // Publish functions before the search starts so they stay above metric batches.
+  publishCompletions(onBatch, functions);
   const metricNames = await getAllMetricNamesCompletions(searchTerm, dataProvider, timeRange, onBatch);
-  return [...getFunctionCompletions(), ...metricNames];
+  return [...functions, ...metricNames];
 }
 
 const DURATION_COMPLETIONS: Completion[] = [
@@ -336,9 +339,10 @@ export async function getCompletions(
       if (triggerType === 'partial') {
         return Promise.resolve(getFunctionCompletions());
       }
+      const leading = [...getAllHistoryCompletions(dataProvider), ...getFunctionCompletions()];
+      publishCompletions(onBatch, leading);
       const metricNames = await getAllMetricNamesCompletions(searchTerm, dataProvider, timeRange, onBatch);
-      const historyCompletions = getAllHistoryCompletions(dataProvider);
-      return Promise.resolve([...historyCompletions, ...getFunctionCompletions(), ...metricNames]);
+      return Promise.resolve([...leading, ...metricNames]);
     }
     case 'IN_LABEL_SELECTOR_NO_LABEL_NAME':
       return getLabelNamesForSelectorCompletions(
