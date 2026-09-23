@@ -125,15 +125,19 @@ describe('search batches', () => {
     const completions = await getCompletions({ type: 'AT_ROOT' }, dataProvider, timeRange, 'metric', 'full', onBatch);
 
     const functionLabels = getFunctions().map((fn) => fn.label);
+    // Functions share the first metric batch. Opening on functions alone lets
+    // Monaco filter them out for a prefix like "cpu" and close the popup.
     expect(onBatch.mock.calls.map((call) => call[0].map((item: { label: string }) => item.label))).toEqual([
-      functionLabels,
-      ['metric_a'],
+      [...functionLabels, 'metric_a'],
       ['metric_b'],
     ]);
-    expect(onBatch.mock.calls[0][0].every((item: { type: string }) => item.type === 'FUNCTION')).toBe(true);
     expect(
-      onBatch.mock.calls.slice(1).every((call) => call[0].every((item: { type: string }) => item.type === 'METRIC_NAME'))
+      onBatch.mock.calls[0][0]
+        .slice(0, functionLabels.length)
+        .every((item: { type: string }) => item.type === 'FUNCTION')
     ).toBe(true);
+    expect(onBatch.mock.calls[0][0].at(-1)).toMatchObject({ type: 'METRIC_NAME', label: 'metric_a' });
+    expect(onBatch.mock.calls[1][0].every((item: { type: string }) => item.type === 'METRIC_NAME')).toBe(true);
     const functionsCount = getFunctions().length;
     expect(completions).toHaveLength(functionsCount + 2);
     expect(completions.slice(0, functionsCount).every((item) => item.type === 'FUNCTION')).toBe(true);

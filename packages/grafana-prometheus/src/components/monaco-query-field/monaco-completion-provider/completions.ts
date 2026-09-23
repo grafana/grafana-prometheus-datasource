@@ -110,9 +110,24 @@ async function getAllFunctionsAndMetricNamesCompletions(
   onBatch?: CompletionBatchListener
 ): Promise<Completion[]> {
   const functions = getFunctionCompletions();
-  // Publish functions before the search starts so they stay above metric batches.
-  publishCompletions(onBatch, functions);
-  const metricNames = await getAllMetricNamesCompletions(searchTerm, dataProvider, timeRange, onBatch);
+  let includedFunctions = false;
+  const metricNames = await getAllMetricNamesCompletions(
+    searchTerm,
+    dataProvider,
+    timeRange,
+    onBatch
+      ? (batch) => {
+          if (includedFunctions) {
+            publishCompletions(onBatch, batch);
+            return;
+          }
+          includedFunctions = true;
+          // The typed word filters the popup. Functions alone often match
+          // nothing, Monaco closes the list, and later batches never draw.
+          publishCompletions(onBatch, [...functions, ...batch]);
+        }
+      : undefined
+  );
   return [...functions, ...metricNames];
 }
 
