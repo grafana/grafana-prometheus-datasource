@@ -83,7 +83,7 @@ describe.each(metricNameCompletionSituations)('metric name completions in situat
 
     await getCompletions(situation, dataProvider, timeRange, 'node_cpu', 'full');
 
-    expect(spy).toHaveBeenCalledWith(timeRange, 'node_cpu');
+    expect(spy).toHaveBeenCalledWith(timeRange, 'node_cpu', undefined);
   });
 
   it('returns only functions and never queries metric names on a partial trigger', async () => {
@@ -251,7 +251,7 @@ describe('Label name completions', () => {
       'env'
     );
 
-    expect(queryLabelKeys).toHaveBeenCalledWith(timeRange, undefined, DEFAULT_COMPLETION_LIMIT, 'env');
+    expect(queryLabelKeys).toHaveBeenCalledWith(timeRange, undefined, DEFAULT_COMPLETION_LIMIT, 'env', undefined);
   });
 });
 
@@ -285,7 +285,8 @@ describe('Label value completions', () => {
       'environment',
       undefined,
       DEFAULT_COMPLETION_LIMIT,
-      'prod'
+      'prod',
+      undefined
     );
   });
 

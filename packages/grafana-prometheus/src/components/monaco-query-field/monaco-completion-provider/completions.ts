@@ -80,11 +80,15 @@ async function getAllMetricNamesCompletions(
   timeRange: TimeRange,
   onBatch?: CompletionBatchListener
 ): Promise<Completion[]> {
-  const metricNames = onBatch
-    ? await dataProvider.queryMetricNames(timeRange, searchTerm, (names) => {
-        publishCompletions(onBatch, metricNamesToCompletions(dataProvider, names));
-      })
-    : await dataProvider.queryMetricNames(timeRange, searchTerm);
+  const metricNames = await dataProvider.queryMetricNames(
+    timeRange,
+    searchTerm,
+    onBatch
+      ? (names) => {
+          publishCompletions(onBatch, metricNamesToCompletions(dataProvider, names));
+        }
+      : undefined
+  );
 
   return metricNamesToCompletions(dataProvider, metricNames);
 }
@@ -213,11 +217,20 @@ async function getLabelNames(
   triggerOnInsert: boolean
 ): Promise<string[]> {
   const selector = makeSelector(metric, otherLabels);
-  const labelNames = onBatch
-    ? await dataProvider.queryLabelKeys(timeRange, selector, DEFAULT_COMPLETION_LIMIT, searchTerm, (names) => {
-        publishCompletions(onBatch, labelNameCompletions(unusedLabelNames(names, otherLabels), suffix, triggerOnInsert));
-      })
-    : await dataProvider.queryLabelKeys(timeRange, selector, DEFAULT_COMPLETION_LIMIT, searchTerm);
+  const labelNames = await dataProvider.queryLabelKeys(
+    timeRange,
+    selector,
+    DEFAULT_COMPLETION_LIMIT,
+    searchTerm,
+    onBatch
+      ? (names) => {
+          publishCompletions(
+            onBatch,
+            labelNameCompletions(unusedLabelNames(names, otherLabels), suffix, triggerOnInsert)
+          );
+        }
+      : undefined
+  );
   // Exclude __name__ from output. Callers observe this mutation on the selector's label list.
   otherLabels.push({ name: '__name__', value: '', op: '!=' });
   return unusedLabelNames(labelNames, otherLabels);
@@ -287,12 +300,18 @@ async function getLabelValues(
   betweenQuotes: boolean
 ): Promise<string[]> {
   const selector = makeSelector(metric, otherLabels);
-  if (!onBatch) {
-    return dataProvider.queryLabelValues(timeRange, labelName, selector, DEFAULT_COMPLETION_LIMIT, searchTerm);
-  }
-  return dataProvider.queryLabelValues(timeRange, labelName, selector, DEFAULT_COMPLETION_LIMIT, searchTerm, (values) => {
-    publishCompletions(onBatch, labelValueCompletions(values, betweenQuotes));
-  });
+  return dataProvider.queryLabelValues(
+    timeRange,
+    labelName,
+    selector,
+    DEFAULT_COMPLETION_LIMIT,
+    searchTerm,
+    onBatch
+      ? (values) => {
+          publishCompletions(onBatch, labelValueCompletions(values, betweenQuotes));
+        }
+      : undefined
+  );
 }
 
 async function getLabelValuesForMetricCompletions(

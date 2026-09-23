@@ -40,6 +40,8 @@ describe('ProgressiveCompletionSession', () => {
     expect(appended).toHaveBeenCalledTimes(2);
 
     const done = await session.load('metric:up', jest.fn(), appended);
+    // "rate" stands for a metric that arrives only in the finished list,
+    // which is what the labels and series clients return.
     expect(done).toMatchObject({
       items: ['up', 'uptime', 'process_start_time', 'rate'],
       incomplete: false,

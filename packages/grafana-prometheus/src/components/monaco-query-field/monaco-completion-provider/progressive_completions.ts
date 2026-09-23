@@ -75,9 +75,9 @@ export class ProgressiveCompletionSession<T> {
     if (!alreadyDelivered) {
       this.items = finalItems.slice();
     } else if (finalItems.length > 0) {
-      // The popup is already showing streamed rows. Keep that order and append
-      // only labels the stream did not send, such as static function names.
-      // Replacing the list would put those names in front of the batches.
+      // Labels and series return every metric in this array and never call
+      // onBatch. The function rows are already on screen, so append only the
+      // names that were not part of that prefix.
       const seen = new Set(this.items.map((item) => this.itemKey(item)));
       for (const item of finalItems) {
         const key = this.itemKey(item);
