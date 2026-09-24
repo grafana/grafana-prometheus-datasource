@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import '@testing-library/jest-dom';
@@ -110,6 +110,46 @@ describe('MetricCombobox', () => {
       expect.objectContaining({ limit: DEFAULT_COMPLETION_LIMIT, signal: expect.any(AbortSignal) })
     );
     expect(mockOnGetMetrics).not.toHaveBeenCalled();
+  });
+
+  it('shows each search batch before the request finishes and drops a stale batch', async () => {
+    let emit: ((batch: Array<{ name: string }>) => void) | undefined;
+    let finish: ((value: { results: Array<{ name: string }>; warnings: []; hasMore: false }) => void) | undefined;
+    const searchMetricNames = jest.fn().mockImplementation((_timeRange, _term, options) => {
+      emit = options.onBatch;
+      return new Promise((resolve) => {
+        finish = resolve;
+      });
+    });
+    (mockLanguageProvider.getSearchApiClient as jest.Mock).mockReturnValue({ searchMetricNames });
+
+    render(<MetricCombobox {...defaultProps} />);
+    await userEvent.click(screen.getByRole('combobox'));
+    act(() => {
+      emit?.([{ name: 'up' }]);
+    });
+
+    expect(await screen.findByRole('option', { name: 'up' })).toBeInTheDocument();
+    expect(searchMetricNames).toHaveBeenCalledWith(
+      defaultProps.timeRange,
+      '',
+      expect.objectContaining({ retainResults: false })
+    );
+
+    const firstEmit = emit;
+    await userEvent.type(screen.getByRole('combobox'), 'node');
+    act(() => {
+      firstEmit?.([{ name: 'up' }]);
+    });
+    expect(screen.queryByRole('option', { name: 'up' })).not.toBeInTheDocument();
+
+    act(() => {
+      emit?.([{ name: 'node_cpu' }]);
+    });
+    expect(await screen.findByRole('option', { name: 'node_cpu' })).toBeInTheDocument();
+    await act(async () => {
+      finish?.({ results: [], warnings: [], hasMore: false });
+    });
   });
 
   it('fetches metrics for the users query', async () => {

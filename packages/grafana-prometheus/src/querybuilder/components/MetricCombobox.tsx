@@ -49,7 +49,7 @@ export function MetricCombobox({
    * Gets label_values response from prometheus API for current autocomplete query string and any existing labels filters
    */
   const getMetricLabels = useCallback(
-    async (query: string) => {
+    async (query: string, onBatch?: (options: Array<SelectableValue<string>>) => void) => {
       const searchClient = datasource.languageProvider.getSearchApiClient?.();
       if (searchClient) {
         searchAbortControllerRef.current?.abort();
@@ -63,6 +63,10 @@ export function MetricCombobox({
             limit: DEFAULT_COMPLETION_LIMIT,
             match,
             signal: abortController.signal,
+            retainResults: false,
+            onBatch: (batch) => {
+              onBatch?.(batch.map((result) => ({ label: result.name, value: result.name })));
+            },
           });
           return response.results.map((result) => ({
             label: result.name,
@@ -98,12 +102,27 @@ export function MetricCombobox({
     async (input: string) => {
       const requestId = ++requestIdRef.current;
       setIsLoading(true);
+      setOptions([]);
+      const useSearch = Boolean(datasource.languageProvider.getSearchApiClient?.()) || input.length > 0;
+      let streamed = false;
+      const collected: Array<SelectableValue<string>> = [];
       try {
-        const metrics =
-          datasource.languageProvider.getSearchApiClient?.() || input.length
-            ? await getMetricLabels(input)
-            : await onGetMetrics();
-        if (requestId !== requestIdRef.current) {
+        const metrics = useSearch
+          ? await getMetricLabels(input, (batch) => {
+              if (requestId !== requestIdRef.current) {
+                return;
+              }
+              streamed = true;
+              for (const option of batch) {
+                if (collected.length >= DEFAULT_COMPLETION_LIMIT) {
+                  break;
+                }
+                collected.push(option);
+              }
+              setOptions(collected.slice());
+            })
+          : await onGetMetrics();
+        if (requestId !== requestIdRef.current || streamed) {
           return;
         }
         setOptions(
