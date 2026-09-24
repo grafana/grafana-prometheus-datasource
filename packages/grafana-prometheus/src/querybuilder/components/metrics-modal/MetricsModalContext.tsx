@@ -22,7 +22,7 @@ import { regexifyLabelValuesQueryString } from '../../parsingUtils';
 import { type QueryBuilderLabelFilter } from '../../shared/types';
 import { formatLabelFiltersToString, formatPrometheusLabelFilters } from '../formatter';
 
-import { generateMetricData } from './helpers';
+import { generateMetricData, metricDataFromMetadata } from './helpers';
 import { type MetricData, type MetricsData } from './types';
 import { fuzzySearch } from './uFuzzy';
 
@@ -120,11 +120,7 @@ export const MetricsModalContextProvider: FC<PropsWithChildren<MetricsModalConte
   }, [filteredMetricsData.length, pagination.resultsPerPage, pagination.pageNum]);
 
   const toMetricData = useCallback(
-    (result: SearchMetricResult): MetricData => ({
-      value: result.name,
-      type: result.type,
-      description: result.help,
-    }),
+    (result: SearchMetricResult): MetricData => metricDataFromMetadata(result.name, result.type, result.help),
     []
   );
 
