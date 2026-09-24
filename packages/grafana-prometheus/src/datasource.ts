@@ -40,6 +40,11 @@ import { addLabelToQuery } from './add_label_to_query';
 import { applyModifyQuery } from './modify_query';
 import { PrometheusAnnotationSupport } from './annotations';
 import { DEFAULT_SERIES_LIMIT, GET_AND_POST_METADATA_ENDPOINTS, InstantQueryRefIdIndex } from './constants';
+import {
+  classifyDrilldownMigrationUsageForQuery,
+  type DrilldownMigrationUsage,
+  type DrilldownMigrationUsageOptions,
+} from './drilldownMigrationUsage';
 import { interpolateQueryExpr, prometheusRegularEscape } from './escaping';
 import {
   exportToAbstractQuery,
@@ -577,6 +582,14 @@ export class PrometheusDatasource
   // It delegates to getTagKeys
   async getGroupByKeys(options: DataSourceGetTagKeysOptions<PromQuery>): Promise<MetricFindValue[]> {
     return this.getTagKeys(options);
+  }
+
+  // Opts this datasource into the "migrate variables to filters" assistant suggestion (see the
+  // variable-migration-assistant-cta grafana spec) - classifies whether a template variable is
+  // used as a label-matcher value (filter), a by(...) grouping label (groupBy), or neither
+  // (unsafe), purely from the query's PromQL, no live request needed.
+  getDrilldownMigrationUsage(options: DrilldownMigrationUsageOptions): DrilldownMigrationUsage | undefined {
+    return classifyDrilldownMigrationUsageForQuery(options);
   }
 
   // By implementing getTagKeys and getTagValues we add ad-hoc filters functionality

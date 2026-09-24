@@ -1477,6 +1477,33 @@ describe('modifyQuery', () => {
   });
 });
 
+describe('getDrilldownMigrationUsage', () => {
+  const instanceSettings = { jsonData: {} } as unknown as DataSourceInstanceSettings<PromOptions>;
+  const ds = new PrometheusDatasource(instanceSettings, templateSrvStub);
+
+  it('classifies a filter usage from the query expr', () => {
+    const query: PromQuery = { refId: 'A', expr: 'up{job="$job"}' };
+
+    expect(ds.getDrilldownMigrationUsage({ variableName: 'job', query })).toEqual({
+      kind: 'filter',
+      key: 'job',
+      operator: '=',
+    });
+  });
+
+  it('classifies a groupBy usage from the query expr', () => {
+    const query: PromQuery = { refId: 'A', expr: 'sum by($groupby) (up)' };
+
+    expect(ds.getDrilldownMigrationUsage({ variableName: 'groupby', query })).toEqual({ kind: 'groupBy' });
+  });
+
+  it('returns undefined when the variable is not used in the query', () => {
+    const query: PromQuery = { refId: 'A', expr: 'up{job="grafana"}' };
+
+    expect(ds.getDrilldownMigrationUsage({ variableName: 'instance', query })).toBeUndefined();
+  });
+});
+
 describe('PrometheusDatasource incremental query logic', () => {
   let ds: PrometheusDatasource;
   let mockCache: {
