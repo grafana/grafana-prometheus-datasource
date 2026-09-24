@@ -1,5 +1,11 @@
 # grafana-prometheus-datasource
 
+## 13.2.2
+
+🐛 added datasource config schema ([#228](https://github.com/grafana/grafana-prometheus-datasource/pull/228))
+
+🐛 Fix security vulnerabilities (CVE-2026-84445) ([#366](https://github.com/grafana/grafana-prometheus-datasource/pull/366))
+
 ## 13.2.1
 
 🐛 Improve Search API ranking and bound streamed response memory
