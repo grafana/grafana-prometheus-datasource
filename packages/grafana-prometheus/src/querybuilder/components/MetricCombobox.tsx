@@ -6,7 +6,7 @@ import { selectors } from '@grafana/e2e-selectors';
 import { Trans, t } from '@grafana/i18n';
 import { EditorField, EditorFieldGroup } from '@grafana/plugin-ui';
 import { reportInteraction } from '@grafana/runtime';
-import { Button, InlineField, InlineFieldRow, Combobox, type ComboboxOption, useTheme2 } from '@grafana/ui';
+import { Button, InlineField, InlineFieldRow, Select, useTheme2 } from '@grafana/ui';
 
 import { DEFAULT_COMPLETION_LIMIT, METRIC_LABEL } from '../../constants';
 import { type PrometheusDatasource } from '../../datasource';
@@ -39,7 +39,10 @@ export function MetricCombobox({
   timeRange,
 }: Readonly<MetricComboboxProps>) {
   const [metricsModalOpen, setMetricsModalOpen] = useState(false);
+  const [options, setOptions] = useState<Array<SelectableValue<string>>>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const searchAbortControllerRef = useRef<AbortController>();
+  const requestIdRef = useRef(0);
   const styles = getStyles(useTheme2());
 
   /**
@@ -91,39 +94,68 @@ export function MetricCombobox({
 
   useEffect(() => () => searchAbortControllerRef.current?.abort(), []);
 
-  const onComboboxChange = useCallback(
-    (opt: ComboboxOption<string> | null) => {
+  const loadMetrics = useCallback(
+    async (input: string) => {
+      const requestId = ++requestIdRef.current;
+      setIsLoading(true);
+      try {
+        const metrics =
+          datasource.languageProvider.getSearchApiClient?.() || input.length
+            ? await getMetricLabels(input)
+            : await onGetMetrics();
+        if (requestId !== requestIdRef.current) {
+          return;
+        }
+        setOptions(
+          metrics.map((option) => ({
+            label: option.label ?? option.value,
+            value: option.value ?? '',
+          }))
+        );
+      } finally {
+        if (requestId === requestIdRef.current) {
+          setIsLoading(false);
+        }
+      }
+    },
+    [datasource.languageProvider, getMetricLabels, onGetMetrics]
+  );
+
+  const onMetricChange = useCallback(
+    (opt: SelectableValue<string> | null) => {
       onChange({ ...query, metric: opt?.value ?? '' });
     },
     [onChange, query]
   );
 
-  const loadOptions = useCallback(
-    async (input: string): Promise<ComboboxOption[]> => {
-      const metrics = input.length ? await getMetricLabels(input) : await onGetMetrics();
-
-      return metrics.map((option) => ({
-        label: option.label ?? option.value,
-        value: option.value,
-      }));
-    },
-    [getMetricLabels, onGetMetrics]
-  );
-
   const asyncSelect = () => {
     return (
       <div className={styles.wrapper}>
-        <Combobox
+        <Select
           placeholder={t(
             'grafana-prometheus.querybuilder.metric-combobox.async-select.placeholder-select-metric',
             'Select metric'
           )}
           width="auto"
-          minWidth={25}
-          options={loadOptions}
-          value={query.metric}
-          onChange={onComboboxChange}
-          createCustomValue
+          options={options}
+          value={query.metric ? { label: query.metric, value: query.metric } : null}
+          onChange={onMetricChange}
+          onOpenMenu={() => {
+            void loadMetrics('');
+          }}
+          onInputChange={(value, meta) => {
+            if (meta.action === 'input-change') {
+              void loadMetrics(value);
+            }
+          }}
+          onCloseMenu={() => {
+            searchAbortControllerRef.current?.abort();
+            requestIdRef.current += 1;
+            setIsLoading(false);
+          }}
+          isLoading={isLoading}
+          allowCustomValue
+          filterOption={() => true}
           data-testid={selectors.components.DataSource.Prometheus.queryEditor.builder.metricSelect}
         />
         <Button

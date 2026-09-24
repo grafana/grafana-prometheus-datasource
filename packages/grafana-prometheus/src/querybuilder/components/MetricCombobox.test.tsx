@@ -76,13 +76,13 @@ describe('MetricCombobox', () => {
 
   it('renders correctly', () => {
     render(<MetricCombobox {...defaultProps} />);
-    expect(screen.getByPlaceholderText('Select metric')).toBeInTheDocument();
+    expect(screen.getByRole('combobox')).toBeInTheDocument();
   });
 
   it('fetches top metrics when the combobox is opened ', async () => {
     render(<MetricCombobox {...defaultProps} />);
 
-    const combobox = screen.getByPlaceholderText('Select metric');
+    const combobox = screen.getByRole('combobox');
     await userEvent.click(combobox);
 
     const item = await screen.findByRole('option', { name: 'top_metric_one' });
@@ -92,13 +92,33 @@ describe('MetricCombobox', () => {
     expect(mockOnGetMetrics).toHaveBeenCalledTimes(1);
   });
 
+  it('loads an empty metric menu from the Search API', async () => {
+    const searchMetricNames = jest.fn().mockResolvedValue({
+      results: [{ name: 'up' }],
+      warnings: [],
+      hasMore: false,
+    });
+    (mockLanguageProvider.getSearchApiClient as jest.Mock).mockReturnValue({ searchMetricNames });
+
+    render(<MetricCombobox {...defaultProps} />);
+    await userEvent.click(screen.getByRole('combobox'));
+
+    expect(await screen.findByRole('option', { name: 'up' })).toBeInTheDocument();
+    expect(searchMetricNames).toHaveBeenCalledWith(
+      defaultProps.timeRange,
+      '',
+      expect.objectContaining({ limit: DEFAULT_COMPLETION_LIMIT, signal: expect.any(AbortSignal) })
+    );
+    expect(mockOnGetMetrics).not.toHaveBeenCalled();
+  });
+
   it('fetches metrics for the users query', async () => {
     // Mock the queryLabelValues to return the expected metric
     mockDatasource.languageProvider.queryLabelValues = jest.fn().mockResolvedValue(['unique_metric']);
 
     render(<MetricCombobox {...defaultProps} />);
 
-    const combobox = screen.getByPlaceholderText('Select metric');
+    const combobox = screen.getByRole('combobox');
     await userEvent.click(combobox);
     await userEvent.type(combobox, 'unique');
 
@@ -124,7 +144,7 @@ describe('MetricCombobox', () => {
 
     render(<MetricCombobox {...defaultProps} />);
 
-    const combobox = screen.getByPlaceholderText('Select metric');
+    const combobox = screen.getByRole('combobox');
     await userEvent.click(combobox);
     await userEvent.type(combobox, 'http   req');
 
@@ -158,7 +178,7 @@ describe('MetricCombobox', () => {
       />
     );
 
-    const combobox = screen.getByPlaceholderText('Select metric');
+    const combobox = screen.getByRole('combobox');
     await userEvent.click(combobox);
     await userEvent.type(combobox, 'http');
 
@@ -179,7 +199,7 @@ describe('MetricCombobox', () => {
 
     render(<MetricCombobox {...defaultProps} />);
 
-    const combobox = screen.getByPlaceholderText('Select metric');
+    const combobox = screen.getByRole('combobox');
     await userEvent.click(combobox);
     await userEvent.type(combobox, 'standard');
 
@@ -199,7 +219,7 @@ describe('MetricCombobox', () => {
 
     render(<MetricCombobox {...defaultProps} />);
 
-    const combobox = screen.getByPlaceholderText('Select metric');
+    const combobox = screen.getByRole('combobox');
     await userEvent.click(combobox);
     await userEvent.type(combobox, 'standard');
 
@@ -211,7 +231,7 @@ describe('MetricCombobox', () => {
   it('calls onChange with the correct value when a metric is selected', async () => {
     render(<MetricCombobox {...defaultProps} />);
 
-    const combobox = screen.getByPlaceholderText('Select metric');
+    const combobox = screen.getByRole('combobox');
     await userEvent.click(combobox);
 
     const item = await screen.findByRole('option', { name: 'top_metric_two' });
@@ -239,8 +259,7 @@ describe('MetricCombobox', () => {
     );
 
     // The Combobox should display the default metric value
-    const combobox = screen.getByPlaceholderText('Select metric');
-    expect(combobox).toHaveValue('default_metric_value');
+    expect(screen.getByText('default_metric_value')).toBeInTheDocument();
   });
 
   it('opens the metrics explorer when the button is clicked', async () => {
