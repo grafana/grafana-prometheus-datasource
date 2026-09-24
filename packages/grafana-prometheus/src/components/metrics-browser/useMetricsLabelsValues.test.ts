@@ -3,6 +3,8 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { type TimeRange } from '@grafana/data';
 
 import { DEFAULT_SERIES_LIMIT, EMPTY_SELECTOR, LAST_USED_LABELS_KEY, METRIC_LABEL } from '../../constants';
+import { DEFAULT_SEARCH_API_MAX_LIMIT } from '../../search_api_client';
+import { SearchApiUnavailableError } from '../../search_api_stream';
 import { type PrometheusDatasource } from '../../datasource';
 import { PrometheusLanguageProvider, type PrometheusLanguageProviderInterface } from '../../language_provider';
 import { getMockTimeRange } from '../../test/mocks/datasource';
@@ -932,6 +934,118 @@ describe('useMetricsLabelsValues', () => {
       expect(result.current.labelValues.instance).toContain('host1');
       expect(result.current.labelValues.instance).toContain('host2');
       expect(result.current.labelValues.instance).not.toContain('grafana-host1');
+    });
+  });
+
+  describe('Search API metric names', () => {
+    it('appends metric name batches and does not query __name__ values', async () => {
+      let emit: ((batch: Array<{ name: string }>) => void) | undefined;
+      let finish: (() => void) | undefined;
+      const searchMetricNames = jest.fn().mockImplementation((_timeRange, _term, options) => {
+        emit = options.onBatch;
+        return new Promise((resolve) => {
+          finish = () => resolve({ results: [], warnings: [], hasMore: false });
+        });
+      });
+      mocks.mockLanguageProvider.datasource.hasSearchApiSupport = () => true;
+      mocks.mockLanguageProvider.getSearchApiClient = jest.fn().mockReturnValue({ searchMetricNames });
+
+      const { result } = renderHook(() => useMetricsLabelsValues(mocks.mockTimeRange, mocks.mockLanguageProvider));
+      await waitFor(() => expect(searchMetricNames).toHaveBeenCalled());
+
+      expect(searchMetricNames).toHaveBeenCalledWith(
+        expect.anything(),
+        '',
+        expect.objectContaining({
+          limit: DEFAULT_SEARCH_API_MAX_LIMIT,
+          retainResults: false,
+          signal: expect.any(AbortSignal),
+        })
+      );
+      expect(mocks.mockLanguageProvider.queryLabelValues).not.toHaveBeenCalledWith(
+        expect.anything(),
+        METRIC_LABEL,
+        expect.anything(),
+        expect.anything()
+      );
+
+      act(() => {
+        emit?.([{ name: 'metric_a' }]);
+      });
+      await waitFor(() => expect(result.current.metrics.map((metric) => metric.name)).toEqual(['metric_a']));
+
+      act(() => {
+        emit?.([{ name: 'metric_b' }]);
+      });
+      await waitFor(() =>
+        expect(result.current.metrics.map((metric) => metric.name)).toEqual(['metric_a', 'metric_b'])
+      );
+
+      await act(async () => {
+        finish?.();
+      });
+      await waitFor(() => expect(mocks.mockLanguageProvider.queryLabelKeys).toHaveBeenCalled());
+    });
+
+    it('uses the smaller of the series limit and the Search API max', async () => {
+      mocks.mockLanguageProvider.datasource.seriesLimit = 25;
+      mocks.mockLanguageProvider.datasource.hasSearchApiSupport = () => true;
+      const searchMetricNames = jest.fn().mockResolvedValue({ results: [], warnings: [], hasMore: false });
+      mocks.mockLanguageProvider.getSearchApiClient = jest.fn().mockReturnValue({ searchMetricNames });
+
+      renderHook(() => useMetricsLabelsValues(mocks.mockTimeRange, mocks.mockLanguageProvider));
+      await waitFor(() =>
+        expect(searchMetricNames).toHaveBeenCalledWith(
+          expect.anything(),
+          '',
+          expect.objectContaining({ limit: 25 })
+        )
+      );
+    });
+
+    it('falls back to label values when the Search API is unavailable', async () => {
+      mocks.mockLanguageProvider.datasource.hasSearchApiSupport = () => true;
+      const searchMetricNames = jest.fn().mockRejectedValue(new SearchApiUnavailableError('disabled'));
+      mocks.mockLanguageProvider.getSearchApiClient = jest.fn().mockReturnValue({ searchMetricNames });
+
+      const { result } = renderHook(() => useMetricsLabelsValues(mocks.mockTimeRange, mocks.mockLanguageProvider));
+      await waitFor(() => expect(searchMetricNames).toHaveBeenCalled());
+      await waitFor(() => expect(result.current.metrics.map((metric) => metric.name)).toEqual(['metric1', 'metric2', 'metric3']));
+
+      expect(mocks.mockLanguageProvider.queryLabelValues).toHaveBeenCalledWith(
+        expect.anything(),
+        METRIC_LABEL,
+        undefined,
+        DEFAULT_SERIES_LIMIT
+      );
+    });
+
+    it('drops a batch from a search that a newer fetch replaced', async () => {
+      let firstEmit: ((batch: Array<{ name: string }>) => void) | undefined;
+      let firstSignal: AbortSignal | undefined;
+      const searchMetricNames = jest.fn().mockImplementation((_timeRange, _term, options) => {
+        if (!firstSignal) {
+          firstSignal = options.signal;
+          firstEmit = options.onBatch;
+        }
+        return new Promise(() => undefined);
+      });
+      mocks.mockLanguageProvider.datasource.hasSearchApiSupport = () => true;
+      mocks.mockLanguageProvider.getSearchApiClient = jest.fn().mockReturnValue({ searchMetricNames });
+
+      const { result } = renderHook(() => useMetricsLabelsValues(mocks.mockTimeRange, mocks.mockLanguageProvider));
+      await waitFor(() => expect(searchMetricNames).toHaveBeenCalledTimes(1));
+
+      act(() => {
+        void result.current.fetchMetrics('{job="grafana"}');
+      });
+      await waitFor(() => expect(searchMetricNames).toHaveBeenCalledTimes(2));
+      expect(firstSignal?.aborted).toBe(true);
+
+      act(() => {
+        firstEmit?.([{ name: 'stale_metric' }]);
+      });
+      expect(result.current.metrics.map((metric) => metric.name)).not.toContain('stale_metric');
     });
   });
 });
