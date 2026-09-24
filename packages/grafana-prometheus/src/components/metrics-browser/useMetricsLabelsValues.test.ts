@@ -3,7 +3,6 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { type TimeRange } from '@grafana/data';
 
 import { DEFAULT_SERIES_LIMIT, EMPTY_SELECTOR, LAST_USED_LABELS_KEY, METRIC_LABEL } from '../../constants';
-import { DEFAULT_SEARCH_API_MAX_LIMIT } from '../../search_api_client';
 import { SearchApiUnavailableError } from '../../search_api_stream';
 import { type PrometheusDatasource } from '../../datasource';
 import { PrometheusLanguageProvider, type PrometheusLanguageProviderInterface } from '../../language_provider';
@@ -957,7 +956,7 @@ describe('useMetricsLabelsValues', () => {
         expect.anything(),
         '',
         expect.objectContaining({
-          limit: DEFAULT_SEARCH_API_MAX_LIMIT,
+          limit: DEFAULT_SERIES_LIMIT,
           retainResults: false,
           signal: expect.any(AbortSignal),
         })
@@ -973,6 +972,8 @@ describe('useMetricsLabelsValues', () => {
         emit?.([{ name: 'metric_a' }]);
       });
       await waitFor(() => expect(result.current.metrics.map((metric) => metric.name)).toEqual(['metric_a']));
+      expect(result.current.metrics[0].details).toBeUndefined();
+      expect(mocks.mockLanguageProvider.retrieveMetricsMetadata).not.toHaveBeenCalled();
 
       act(() => {
         emit?.([{ name: 'metric_b' }]);
@@ -987,7 +988,7 @@ describe('useMetricsLabelsValues', () => {
       await waitFor(() => expect(mocks.mockLanguageProvider.queryLabelKeys).toHaveBeenCalled());
     });
 
-    it('uses the smaller of the series limit and the Search API max', async () => {
+    it('passes the metrics browser series limit to search', async () => {
       mocks.mockLanguageProvider.datasource.seriesLimit = 25;
       mocks.mockLanguageProvider.datasource.hasSearchApiSupport = () => true;
       const searchMetricNames = jest.fn().mockResolvedValue({ results: [], warnings: [], hasMore: false });

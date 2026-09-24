@@ -5,7 +5,6 @@ import { type TimeRange } from '@grafana/data';
 
 import { EMPTY_SELECTOR, LAST_USED_LABELS_KEY, METRIC_LABEL } from '../../constants';
 import { type PrometheusLanguageProviderInterface } from '../../language_provider';
-import { DEFAULT_SEARCH_API_MAX_LIMIT } from '../../search_api_client';
 import { isAbortError, SearchApiUnavailableError } from '../../search_api_stream';
 
 import { type Metric } from './MetricsBrowserContext';
@@ -97,16 +96,18 @@ export const useMetricsLabelsValues = (timeRange: TimeRange, languageProvider: P
     async (safeSelector?: string): Promise<Metric[] | null> => {
       const fetchId = ++fetchIdRef.current;
       searchAbortRef.current?.abort();
-      const searchClient = languageProvider.datasource.hasSearchApiSupport?.()
-        ? languageProvider.getSearchApiClient()
-        : undefined;
+      const getSearchApiClient = languageProvider.getSearchApiClient;
+      const searchClient =
+        languageProvider.datasource.hasSearchApiSupport?.() && getSearchApiClient
+          ? getSearchApiClient()
+          : undefined;
       if (searchClient) {
         const abortController = new AbortController();
         searchAbortRef.current = abortController;
         const collected: Metric[] = [];
         try {
           await searchClient.searchMetricNames(timeRangeRef.current, '', {
-            limit: Math.min(effectiveLimit, DEFAULT_SEARCH_API_MAX_LIMIT),
+            limit: effectiveLimit,
             match: safeSelector,
             retainResults: false,
             signal: abortController.signal,
@@ -115,10 +116,7 @@ export const useMetricsLabelsValues = (timeRange: TimeRange, languageProvider: P
                 return;
               }
               for (const result of batch) {
-                collected.push({
-                  name: result.name,
-                  details: getMetricDetails(result.name),
-                });
+                collected.push({ name: result.name });
               }
               setMetrics(collected.slice());
             },
