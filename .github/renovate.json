@@ -1,11 +1,4 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["github>grafana/grafana-renovate-config//presets/data-sources/base"],
-  "packageRules": [
-    {
-      "matchPackageNames": ["/^github\\.com\\/grafana\\/grafana(\\/.*)?$/"],
-      "allowedVersions": "!/^v?0\\.0\\.85-test$/",
-      "description": "Skip v0.0.85-test, a mistakenly published grafana/grafana version"
-    }
-  ]
+  "extends": ["github>grafana/grafana-renovate-config//presets/data-sources/base"]
 }
