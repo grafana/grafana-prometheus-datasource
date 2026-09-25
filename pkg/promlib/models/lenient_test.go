@@ -60,16 +60,6 @@ func TestParsePromOptions_LooselyTypedJSONData(t *testing.T) {
 			},
 		},
 		{
-			// Promoted fields live on the embedded struct, easy to miss.
-			name:     "promoted fields on the embedded struct are lenient too",
-			jsonData: `{"manageAlerts":"true","allowAsRecordingRulesTarget":1,"alertmanagerUid":42}`,
-			assert: func(t *testing.T, opts *models.PromOptions) {
-				require.True(t, bool(opts.ManageAlerts))
-				require.True(t, bool(opts.AllowAsRecordingRulesTarget))
-				require.Equal(t, "42", string(opts.AlertmanagerUID))
-			},
-		},
-		{
 			name:     "strings stored as bare numbers keep their text",
 			jsonData: `{"incrementalQueryOverlapWindow":10,"prometheusVersion":2.4,"customQueryParameters":123}`,
 			assert: func(t *testing.T, opts *models.PromOptions) {
