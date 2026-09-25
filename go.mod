@@ -1,20 +1,34 @@
 module github.com/grafana/grafana-prometheus-datasource
 
-go 1.26.7
+go 1.27.1
 
 require (
 	github.com/grafana/dsconfig/schema v0.0.13
 	github.com/grafana/grafana-plugin-sdk-go v0.296.5
+	github.com/grafana/grafana-prometheus-datasource/pkg/promlib v0.0.19
+	github.com/magefile/mage v1.17.2
 	github.com/stretchr/testify v1.12.1
 	k8s.io/kube-openapi v0.0.0-20260911184034-7970a1e230da
 )
 
 require (
 	github.com/AzureAD/microsoft-authentication-library-for-go v1.9.0 // indirect
+	github.com/BurntSushi/toml v1.6.0 // indirect
 	github.com/andybalholm/brotli v1.2.4 // indirect
+	github.com/apache/arrow-go/v18 v18.8.0 // indirect
+	github.com/beorn7/perks v1.0.1 // indirect
+	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
+	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+	github.com/cheekybits/genny v1.0.0 // indirect
+	github.com/clipperhouse/displaywidth v0.11.0 // indirect
+	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
+	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
 	github.com/dennwc/varint v1.0.0 // indirect
 	github.com/emicklei/go-restful/v3 v3.13.0 // indirect
+	github.com/fatih/color v1.19.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.4 // indirect
+	github.com/go-logr/logr v1.4.4 // indirect
+	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-openapi/jsonpointer v1.0.1 // indirect
 	github.com/go-openapi/jsonreference v1.0.2 // indirect
 	github.com/go-openapi/swag v0.29.2 // indirect
@@ -29,51 +43,21 @@ require (
 	github.com/go-openapi/swag/stringutils v0.29.2 // indirect
 	github.com/go-openapi/swag/typeutils v0.29.2 // indirect
 	github.com/go-openapi/swag/yamlutils v0.29.2 // indirect
-	github.com/google/gnostic-models v0.7.1 // indirect
-	github.com/grafana/dsconfig/dsconfig v0.0.13 // indirect
-	github.com/grafana/dskit v0.0.0-20260427162712-0457a92dacc3 // indirect
-	github.com/grafana/grafana/apps/scope v0.0.85-test // indirect
-	github.com/grafana/grafana/pkg/apimachinery v0.0.85-test // indirect
-	github.com/grafana/regexp v0.0.0-20250905093917-f7b3be9d1853 // indirect
-	github.com/jszwedko/go-datemath v0.1.1-0.20260113213115-7f666eef0523 // indirect
-	github.com/prometheus/prometheus v0.314.0 // indirect
-	github.com/stretchr/objx v0.5.3 // indirect
-	github.com/x448/float16 v0.8.4 // indirect
-	go.uber.org/atomic v1.12.0 // indirect
-	go.yaml.in/yaml/v3 v3.0.5 // indirect
-	gopkg.in/inf.v0 v0.9.1 // indirect
-	k8s.io/apimachinery v0.37.0 // indirect
-	k8s.io/klog/v2 v2.140.0 // indirect
-	k8s.io/utils v0.0.0-20260707023825-cf1189d6abe3 // indirect
-	sigs.k8s.io/json v0.0.0-20260909141634-11ed52e25bc5 // indirect
-	sigs.k8s.io/randfill v1.0.0 // indirect
-	sigs.k8s.io/structured-merge-diff/v6 v6.4.2 // indirect
-	sigs.k8s.io/yaml v1.6.0 // indirect
-)
-
-require (
-	github.com/BurntSushi/toml v1.6.0 // indirect
-	github.com/apache/arrow-go/v18 v18.8.0 // indirect
-	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
-	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/cheekybits/genny v1.0.0 // indirect
-	github.com/clipperhouse/displaywidth v0.11.0 // indirect
-	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
-	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
-	github.com/fatih/color v1.19.0 // indirect
-	github.com/go-logr/logr v1.4.4 // indirect
-	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/goccy/go-json v0.10.6 // indirect
 	github.com/gogo/googleapis v1.4.1 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/flatbuffers v25.12.19+incompatible // indirect
+	github.com/google/gnostic-models v0.7.1 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/grafana/grafana-prometheus-datasource/pkg/promlib v0.0.19
+	github.com/grafana/dsconfig/dsconfig v0.0.13 // indirect
+	github.com/grafana/dskit v0.0.0-20260427162712-0457a92dacc3 // indirect
+	github.com/grafana/grafana/apps/scope v0.0.0-20260427171703-d4f46decefcb // indirect
+	github.com/grafana/grafana/pkg/apimachinery v0.0.0-20260118065639-60cb766a97d6 // indirect
 	github.com/grafana/otel-profiling-go v0.6.0 // indirect
 	github.com/grafana/pyroscope-go/godeltaprof v0.1.12 // indirect
+	github.com/grafana/regexp v0.0.0-20250905093917-f7b3be9d1853 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus v1.1.0 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.3.4 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0 // indirect
@@ -82,9 +66,9 @@ require (
 	github.com/hashicorp/yamux v0.1.2 // indirect
 	github.com/jaegertracing/jaeger-idl v0.12.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
+	github.com/jszwedko/go-datemath v0.1.1-0.20260113213115-7f666eef0523 // indirect
 	github.com/klauspost/compress v1.20.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.4.0 // indirect
-	github.com/magefile/mage v1.17.2
 	github.com/mattetti/filebuffer v1.0.1 // indirect
 	github.com/mattn/go-colorable v0.1.15 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
@@ -103,11 +87,14 @@ require (
 	github.com/prometheus/client_model v0.6.3 // indirect
 	github.com/prometheus/common v0.71.0 // indirect
 	github.com/prometheus/procfs v0.22.0 // indirect
+	github.com/prometheus/prometheus v0.314.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
+	github.com/stretchr/objx v0.5.3 // indirect
 	github.com/unknwon/bra v0.0.0-20200517080246-1e3013ecaff8 // indirect
 	github.com/unknwon/com v1.0.1 // indirect
 	github.com/unknwon/log v0.0.0-20200308114134-929b1006e34a // indirect
 	github.com/urfave/cli v1.22.17 // indirect
+	github.com/x448/float16 v0.8.4 // indirect
 	github.com/zeebo/xxh3 v1.1.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.71.0 // indirect
@@ -121,16 +108,27 @@ require (
 	go.opentelemetry.io/otel/sdk v1.46.0 // indirect
 	go.opentelemetry.io/otel/trace v1.46.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.11.0 // indirect
+	go.uber.org/atomic v1.12.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
+	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/exp v0.0.0-20260908205506-85c1c2202aba // indirect
 	golang.org/x/net v0.59.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
-	google.golang.org/genproto v0.0.0-20260921155816-b14227669459 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20260921155816-b14227669459 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260921155816-b14227669459 // indirect
 	google.golang.org/grpc v1.84.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
 	gopkg.in/fsnotify/fsnotify.v1 v1.4.7 // indirect
+	gopkg.in/inf.v0 v0.9.1 // indirect
+	k8s.io/apimachinery v0.37.0 // indirect
+	k8s.io/klog/v2 v2.140.0 // indirect
+	k8s.io/utils v0.0.0-20260707023825-cf1189d6abe3 // indirect
+	sigs.k8s.io/json v0.0.0-20260909141634-11ed52e25bc5 // indirect
+	sigs.k8s.io/randfill v1.0.0 // indirect
+	sigs.k8s.io/structured-merge-diff/v6 v6.4.2 // indirect
+	sigs.k8s.io/yaml v1.6.0 // indirect
 )
 
 replace github.com/grafana/grafana-prometheus-datasource/pkg/promlib => ./pkg/promlib
