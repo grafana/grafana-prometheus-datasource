@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import '@testing-library/jest-dom';
@@ -76,13 +76,13 @@ describe('MetricCombobox', () => {
 
   it('renders correctly', () => {
     render(<MetricCombobox {...defaultProps} />);
-    expect(screen.getByPlaceholderText('Select metric')).toBeInTheDocument();
+    expect(screen.getByRole('combobox')).toBeInTheDocument();
   });
 
   it('fetches top metrics when the combobox is opened ', async () => {
     render(<MetricCombobox {...defaultProps} />);
 
-    const combobox = screen.getByPlaceholderText('Select metric');
+    const combobox = screen.getByRole('combobox');
     await userEvent.click(combobox);
 
     const item = await screen.findByRole('option', { name: 'top_metric_one' });
@@ -92,13 +92,73 @@ describe('MetricCombobox', () => {
     expect(mockOnGetMetrics).toHaveBeenCalledTimes(1);
   });
 
+  it('loads an empty metric menu from the Search API', async () => {
+    const searchMetricNames = jest.fn().mockResolvedValue({
+      results: [{ name: 'up' }],
+      warnings: [],
+      hasMore: false,
+    });
+    (mockLanguageProvider.getSearchApiClient as jest.Mock).mockReturnValue({ searchMetricNames });
+
+    render(<MetricCombobox {...defaultProps} />);
+    await userEvent.click(screen.getByRole('combobox'));
+
+    expect(await screen.findByRole('option', { name: 'up' })).toBeInTheDocument();
+    expect(searchMetricNames).toHaveBeenCalledWith(
+      defaultProps.timeRange,
+      '',
+      expect.objectContaining({ limit: DEFAULT_COMPLETION_LIMIT, signal: expect.any(AbortSignal) })
+    );
+    expect(mockOnGetMetrics).not.toHaveBeenCalled();
+  });
+
+  it('shows each search batch before the request finishes and drops a stale batch', async () => {
+    let emit: ((batch: Array<{ name: string }>) => void) | undefined;
+    let finish: ((value: { results: Array<{ name: string }>; warnings: []; hasMore: false }) => void) | undefined;
+    const searchMetricNames = jest.fn().mockImplementation((_timeRange, _term, options) => {
+      emit = options.onBatch;
+      return new Promise((resolve) => {
+        finish = resolve;
+      });
+    });
+    (mockLanguageProvider.getSearchApiClient as jest.Mock).mockReturnValue({ searchMetricNames });
+
+    render(<MetricCombobox {...defaultProps} />);
+    await userEvent.click(screen.getByRole('combobox'));
+    act(() => {
+      emit?.([{ name: 'up' }]);
+    });
+
+    expect(await screen.findByRole('option', { name: 'up' })).toBeInTheDocument();
+    expect(searchMetricNames).toHaveBeenCalledWith(
+      defaultProps.timeRange,
+      '',
+      expect.objectContaining({ retainResults: false })
+    );
+
+    const firstEmit = emit;
+    await userEvent.type(screen.getByRole('combobox'), 'node');
+    act(() => {
+      firstEmit?.([{ name: 'up' }]);
+    });
+    expect(screen.queryByRole('option', { name: 'up' })).not.toBeInTheDocument();
+
+    act(() => {
+      emit?.([{ name: 'node_cpu' }]);
+    });
+    expect(await screen.findByRole('option', { name: 'node_cpu' })).toBeInTheDocument();
+    await act(async () => {
+      finish?.({ results: [], warnings: [], hasMore: false });
+    });
+  });
+
   it('fetches metrics for the users query', async () => {
     // Mock the queryLabelValues to return the expected metric
     mockDatasource.languageProvider.queryLabelValues = jest.fn().mockResolvedValue(['unique_metric']);
 
     render(<MetricCombobox {...defaultProps} />);
 
-    const combobox = screen.getByPlaceholderText('Select metric');
+    const combobox = screen.getByRole('combobox');
     await userEvent.click(combobox);
     await userEvent.type(combobox, 'unique');
 
@@ -124,7 +184,7 @@ describe('MetricCombobox', () => {
 
     render(<MetricCombobox {...defaultProps} />);
 
-    const combobox = screen.getByPlaceholderText('Select metric');
+    const combobox = screen.getByRole('combobox');
     await userEvent.click(combobox);
     await userEvent.type(combobox, 'http   req');
 
@@ -138,6 +198,29 @@ describe('MetricCombobox', () => {
       })
     );
     expect(mockDatasource.languageProvider.queryLabelValues).not.toHaveBeenCalled();
+  });
+
+  it('keeps a typed search when opening the menu replaces it', async () => {
+    const searchMetricNames = jest.fn().mockImplementation((_timeRange: unknown, term: string) =>
+      Promise.resolve({
+        results: [{ name: term ? `match_${term}` : 'all_metric' }],
+        warnings: [],
+        hasMore: false,
+      })
+    );
+    (mockLanguageProvider.getSearchApiClient as jest.Mock).mockReturnValue({ searchMetricNames });
+
+    render(<MetricCombobox {...defaultProps} />);
+    const combobox = screen.getByRole('combobox');
+    await act(async () => {
+      combobox.focus();
+    });
+    await userEvent.paste('up');
+
+    await waitFor(() => expect(searchMetricNames).toHaveBeenCalled());
+    const terms = searchMetricNames.mock.calls.map((call) => call[1]);
+    expect(terms.at(-1)).toBe('up');
+    expect(terms).not.toContain('');
   });
 
   it('preserves label operators in the Search API matcher', async () => {
@@ -158,7 +241,7 @@ describe('MetricCombobox', () => {
       />
     );
 
-    const combobox = screen.getByPlaceholderText('Select metric');
+    const combobox = screen.getByRole('combobox');
     await userEvent.click(combobox);
     await userEvent.type(combobox, 'http');
 
@@ -179,7 +262,7 @@ describe('MetricCombobox', () => {
 
     render(<MetricCombobox {...defaultProps} />);
 
-    const combobox = screen.getByPlaceholderText('Select metric');
+    const combobox = screen.getByRole('combobox');
     await userEvent.click(combobox);
     await userEvent.type(combobox, 'standard');
 
@@ -199,7 +282,7 @@ describe('MetricCombobox', () => {
 
     render(<MetricCombobox {...defaultProps} />);
 
-    const combobox = screen.getByPlaceholderText('Select metric');
+    const combobox = screen.getByRole('combobox');
     await userEvent.click(combobox);
     await userEvent.type(combobox, 'standard');
 
@@ -211,7 +294,7 @@ describe('MetricCombobox', () => {
   it('calls onChange with the correct value when a metric is selected', async () => {
     render(<MetricCombobox {...defaultProps} />);
 
-    const combobox = screen.getByPlaceholderText('Select metric');
+    const combobox = screen.getByRole('combobox');
     await userEvent.click(combobox);
 
     const item = await screen.findByRole('option', { name: 'top_metric_two' });
@@ -239,8 +322,7 @@ describe('MetricCombobox', () => {
     );
 
     // The Combobox should display the default metric value
-    const combobox = screen.getByPlaceholderText('Select metric');
-    expect(combobox).toHaveValue('default_metric_value');
+    expect(screen.getByText('default_metric_value')).toBeInTheDocument();
   });
 
   it('opens the metrics explorer when the button is clicked', async () => {

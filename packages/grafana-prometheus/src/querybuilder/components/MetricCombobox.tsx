@@ -6,7 +6,7 @@ import { selectors } from '@grafana/e2e-selectors';
 import { Trans, t } from '@grafana/i18n';
 import { EditorField, EditorFieldGroup } from '@grafana/plugin-ui';
 import { reportInteraction } from '@grafana/runtime';
-import { Button, InlineField, InlineFieldRow, Combobox, type ComboboxOption, useTheme2 } from '@grafana/ui';
+import { Button, InlineField, InlineFieldRow, Select, useTheme2 } from '@grafana/ui';
 
 import { DEFAULT_COMPLETION_LIMIT, METRIC_LABEL } from '../../constants';
 import { type PrometheusDatasource } from '../../datasource';
@@ -39,14 +39,18 @@ export function MetricCombobox({
   timeRange,
 }: Readonly<MetricComboboxProps>) {
   const [metricsModalOpen, setMetricsModalOpen] = useState(false);
+  const [options, setOptions] = useState<Array<SelectableValue<string>>>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const searchAbortControllerRef = useRef<AbortController>();
+  const requestIdRef = useRef(0);
+  const typedInputRef = useRef('');
   const styles = getStyles(useTheme2());
 
   /**
    * Gets label_values response from prometheus API for current autocomplete query string and any existing labels filters
    */
   const getMetricLabels = useCallback(
-    async (query: string) => {
+    async (query: string, onBatch?: (options: Array<SelectableValue<string>>) => void) => {
       const searchClient = datasource.languageProvider.getSearchApiClient?.();
       if (searchClient) {
         searchAbortControllerRef.current?.abort();
@@ -60,6 +64,10 @@ export function MetricCombobox({
             limit: DEFAULT_COMPLETION_LIMIT,
             match,
             signal: abortController.signal,
+            retainResults: false,
+            onBatch: (batch) => {
+              onBatch?.(batch.map((result) => ({ label: result.name, value: result.name })));
+            },
           });
           return response.results.map((result) => ({
             label: result.name,
@@ -91,39 +99,94 @@ export function MetricCombobox({
 
   useEffect(() => () => searchAbortControllerRef.current?.abort(), []);
 
-  const onComboboxChange = useCallback(
-    (opt: ComboboxOption<string> | null) => {
+  const loadMetrics = useCallback(
+    async (input: string) => {
+      const requestId = ++requestIdRef.current;
+      setIsLoading(true);
+      setOptions([]);
+      const useSearch = Boolean(datasource.languageProvider.getSearchApiClient?.()) || input.length > 0;
+      let streamed = false;
+      const collected: Array<SelectableValue<string>> = [];
+      try {
+        const metrics = useSearch
+          ? await getMetricLabels(input, (batch) => {
+              if (requestId !== requestIdRef.current) {
+                return;
+              }
+              streamed = true;
+              for (const option of batch) {
+                if (collected.length >= DEFAULT_COMPLETION_LIMIT) {
+                  break;
+                }
+                collected.push(option);
+              }
+              setOptions(collected.slice());
+            })
+          : await onGetMetrics();
+        if (requestId !== requestIdRef.current || streamed) {
+          return;
+        }
+        setOptions(
+          metrics.map((option) => ({
+            label: option.label ?? option.value,
+            value: option.value ?? '',
+          }))
+        );
+      } finally {
+        if (requestId === requestIdRef.current) {
+          setIsLoading(false);
+        }
+      }
+    },
+    [datasource.languageProvider, getMetricLabels, onGetMetrics]
+  );
+
+  const onMetricChange = useCallback(
+    (opt: SelectableValue<string> | null) => {
       onChange({ ...query, metric: opt?.value ?? '' });
     },
     [onChange, query]
   );
 
-  const loadOptions = useCallback(
-    async (input: string): Promise<ComboboxOption[]> => {
-      const metrics = input.length ? await getMetricLabels(input) : await onGetMetrics();
-
-      return metrics.map((option) => ({
-        label: option.label ?? option.value,
-        value: option.value,
-      }));
-    },
-    [getMetricLabels, onGetMetrics]
-  );
-
   const asyncSelect = () => {
     return (
       <div className={styles.wrapper}>
-        <Combobox
+        <Select
           placeholder={t(
             'grafana-prometheus.querybuilder.metric-combobox.async-select.placeholder-select-metric',
             'Select metric'
           )}
           width="auto"
-          minWidth={25}
-          options={loadOptions}
-          value={query.metric}
-          onChange={onComboboxChange}
-          createCustomValue
+          options={options}
+          value={query.metric ? { label: query.metric, value: query.metric } : null}
+          onChange={onMetricChange}
+          onOpenMenu={() => {
+            // Typing into a closed menu already called onInputChange. Opening
+            // the menu right after that must not replace it with an empty search.
+            if (typedInputRef.current.length > 0) {
+              return;
+            }
+            void loadMetrics('');
+          }}
+          onInputChange={(value, meta) => {
+            if (meta.action === 'input-change') {
+              typedInputRef.current = value;
+              void loadMetrics(value);
+              return;
+            }
+            if (meta.action === 'menu-close' || meta.action === 'input-blur' || meta.action === 'set-value') {
+              typedInputRef.current = '';
+            }
+          }}
+          onCloseMenu={() => {
+            typedInputRef.current = '';
+            searchAbortControllerRef.current?.abort();
+            requestIdRef.current += 1;
+            setIsLoading(false);
+          }}
+          isLoading={isLoading}
+          allowCustomValue
+          filterOption={() => true}
           data-testid={selectors.components.DataSource.Prometheus.queryEditor.builder.metricSelect}
         />
         <Button
