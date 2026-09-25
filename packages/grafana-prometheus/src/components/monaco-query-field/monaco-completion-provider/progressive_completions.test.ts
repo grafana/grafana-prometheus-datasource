@@ -101,4 +101,37 @@ describe('ProgressiveCompletionSession', () => {
     emitSecond(['go_goroutines']);
     await expect(second).resolves.toMatchObject({ items: ['go_goroutines'], stale: false, incomplete: true });
   });
+
+  it('starts a new search after a failed load and keeps a finished empty result', async () => {
+    const session = new ProgressiveCompletionSession<string>();
+    const failed = jest.fn().mockRejectedValue(new Error('network down'));
+
+    await expect(session.load('metric:up', failed, jest.fn())).resolves.toMatchObject({
+      items: [],
+      incomplete: false,
+      stale: false,
+    });
+
+    let emit: (batch: string[]) => void = () => undefined;
+    const retry = session.load(
+      'metric:up',
+      (onBatch) => {
+        emit = onBatch;
+        return new Promise(() => undefined);
+      },
+      jest.fn()
+    );
+    emit(['up']);
+    await expect(retry).resolves.toMatchObject({ items: ['up'], incomplete: true, stale: false });
+    expect(failed).toHaveBeenCalledTimes(1);
+
+    const empty = new ProgressiveCompletionSession<string>();
+    await empty.load('metric:none', async () => [], jest.fn());
+    const again = jest.fn().mockResolvedValue(['up']);
+    await expect(empty.load('metric:none', again, jest.fn())).resolves.toMatchObject({
+      items: [],
+      incomplete: false,
+    });
+    expect(again).not.toHaveBeenCalled();
+  });
 });

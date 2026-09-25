@@ -95,15 +95,14 @@ describe('DataProvider', () => {
       );
     });
 
-    it('returns an empty array when the language provider rejects', async () => {
+    it('rejects when the language provider rejects', async () => {
       const languageProvider = createLanguageProviderMock();
       languageProvider.queryLabelValues.mockRejectedValue(new Error('network down'));
       const dataProvider = createDataProvider(languageProvider);
       const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
-      const result = await dataProvider.queryMetricNames(timeRange, 'up');
+      await expect(dataProvider.queryMetricNames(timeRange, 'up')).rejects.toThrow('network down');
 
-      expect(result).toEqual([]);
       expect(warnSpy).toHaveBeenCalled();
       warnSpy.mockRestore();
     });

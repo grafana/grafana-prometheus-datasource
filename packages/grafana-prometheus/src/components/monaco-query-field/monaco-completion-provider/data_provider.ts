@@ -90,10 +90,11 @@ export class DataProvider {
 
       return Array.isArray(result) ? result : [];
     } catch (error) {
-      if (!isAbortError(error)) {
-        console.warn('Failed to query metric names:', error);
+      if (isAbortError(error)) {
+        return [];
       }
-      return [];
+      console.warn('Failed to query metric names:', error);
+      throw error;
     }
   };
 

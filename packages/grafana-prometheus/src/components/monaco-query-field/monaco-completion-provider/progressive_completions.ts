@@ -17,6 +17,7 @@ export class ProgressiveCompletionSession<T> {
   private items: T[] = [];
   private incomplete = false;
   private delivered = false;
+  private failed = false;
   private waiters: Array<() => void> = [];
 
   load(
@@ -24,7 +25,8 @@ export class ProgressiveCompletionSession<T> {
     produce: (onBatch: (batch: T[]) => void) => Promise<T[]>,
     onAppended: () => void
   ): Promise<CompletionSnapshot<T>> {
-    if (key !== this.key) {
+    if (key !== this.key || this.failed) {
+      this.failed = false;
       this.key = key;
       const generation = ++this.generation;
       this.items = [];
@@ -39,7 +41,12 @@ export class ProgressiveCompletionSession<T> {
           this.settle(generation, finalItems, onAppended);
         },
         () => {
-          this.settle(generation, this.items, onAppended);
+          // Skip the refresh callback. A failure must not start another search
+          // through the widget update that settle would otherwise trigger.
+          this.settle(generation, this.items, () => undefined);
+          if (generation === this.generation) {
+            this.failed = true;
+          }
         }
       );
     }
