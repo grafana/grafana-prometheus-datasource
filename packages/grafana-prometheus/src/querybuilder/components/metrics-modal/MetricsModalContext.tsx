@@ -22,7 +22,7 @@ import { regexifyLabelValuesQueryString } from '../../parsingUtils';
 import { type QueryBuilderLabelFilter } from '../../shared/types';
 import { formatLabelFiltersToString, formatPrometheusLabelFilters } from '../formatter';
 
-import { generateMetricData } from './helpers';
+import { generateMetricData, metricDataFromMetadata } from './helpers';
 import { type MetricData, type MetricsData } from './types';
 import { fuzzySearch } from './uFuzzy';
 
@@ -49,6 +49,7 @@ type MetricsModalContextValue = {
   setSelectedTypes: (val: Array<SelectableValue<string>>) => void;
   searchedText: string;
   setSearchedText: (val: string) => void;
+  resultsIncomplete: boolean;
 };
 
 const MetricsModalContext = createContext<MetricsModalContextValue | undefined>(undefined);
@@ -74,6 +75,7 @@ export const MetricsModalContextProvider: FC<PropsWithChildren<MetricsModalConte
   });
   const [selectedTypes, setSelectedTypes] = useState<Array<SelectableValue<string>>>([]);
   const [searchedText, setSearchedTextState] = useState('');
+  const [resultsIncomplete, setResultsIncomplete] = useState(false);
   const latestSearchIdRef = useRef<number>(0);
   const searchAbortControllerRef = useRef<AbortController>();
   const setSearchedText = useCallback((value: string) => {
@@ -118,11 +120,7 @@ export const MetricsModalContextProvider: FC<PropsWithChildren<MetricsModalConte
   }, [filteredMetricsData.length, pagination.resultsPerPage, pagination.pageNum]);
 
   const toMetricData = useCallback(
-    (result: SearchMetricResult): MetricData => ({
-      value: result.name,
-      type: result.type,
-      description: result.help,
-    }),
+    (result: SearchMetricResult): MetricData => metricDataFromMetadata(result.name, result.type, result.help),
     []
   );
 
@@ -146,22 +144,37 @@ export const MetricsModalContextProvider: FC<PropsWithChildren<MetricsModalConte
 
       setIsLoading(true);
       setMetricsData([]);
+      setResultsIncomplete(false);
       let resultsCount = 0;
 
       try {
-        await searchClient.searchMetricNames(searchTimeRange, metricText, {
+        const response = await searchClient.searchMetricNames(searchTimeRange, metricText, {
           includeMetadata: true,
           limit: PROMETHEUS_QUERY_BUILDER_MAX_RESULTS,
           match,
           retainResults: false,
           signal: abortController.signal,
           onBatch: (batch) => {
-            resultsCount += batch.length;
-            if (searchId === latestSearchIdRef.current) {
-              setMetricsData((current) => [...current, ...batch.map(toMetricData)]);
+            if (searchId !== latestSearchIdRef.current || resultsCount >= PROMETHEUS_QUERY_BUILDER_MAX_RESULTS) {
+              return;
+            }
+
+            const room = PROMETHEUS_QUERY_BUILDER_MAX_RESULTS - resultsCount;
+            const accepted = batch.length > room ? batch.slice(0, room) : batch;
+            resultsCount += accepted.length;
+            setMetricsData((current) => [...current, ...accepted.map(toMetricData)]);
+            if (resultsCount >= PROMETHEUS_QUERY_BUILDER_MAX_RESULTS) {
+              setResultsIncomplete(true);
             }
           },
         });
+
+        if (
+          searchId === latestSearchIdRef.current &&
+          (response.hasMore || resultsCount >= PROMETHEUS_QUERY_BUILDER_MAX_RESULTS)
+        ) {
+          setResultsIncomplete(true);
+        }
       } catch (error) {
         if (isAbortError(error)) {
           return true;
@@ -319,6 +332,7 @@ export const MetricsModalContextProvider: FC<PropsWithChildren<MetricsModalConte
         setSelectedTypes,
         searchedText,
         setSearchedText,
+        resultsIncomplete,
       }}
     >
       {children}
