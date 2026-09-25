@@ -83,7 +83,7 @@ describe.each(metricNameCompletionSituations)('metric name completions in situat
 
     await getCompletions(situation, dataProvider, timeRange, 'node_cpu', 'full');
 
-    expect(spy).toHaveBeenCalledWith(timeRange, 'node_cpu');
+    expect(spy).toHaveBeenCalledWith(timeRange, 'node_cpu', undefined);
   });
 
   it('returns only functions and never queries metric names on a partial trigger', async () => {
@@ -111,6 +111,134 @@ describe('metric name completions (utf8)', () => {
   });
 });
 
+describe('search batches', () => {
+  const timeRange = getMockTimeRange();
+
+  it('publishes metric batches and still resolves history, functions, and metrics', async () => {
+    jest.spyOn(dataProvider, 'queryMetricNames').mockImplementation(async (_timeRange, _term, onBatch) => {
+      onBatch?.(['metric_a']);
+      onBatch?.(['metric_b']);
+      return ['metric_a', 'metric_b'];
+    });
+    const onBatch = jest.fn();
+
+    const completions = await getCompletions({ type: 'AT_ROOT' }, dataProvider, timeRange, 'metric', 'full', onBatch);
+
+    const functionLabels = getFunctions().map((fn) => fn.label);
+    // Functions share the first metric batch. Opening on functions alone lets
+    // Monaco filter them out for a prefix like "cpu" and close the popup.
+    expect(onBatch.mock.calls.map((call) => call[0].map((item: { label: string }) => item.label))).toEqual([
+      [...functionLabels, 'metric_a'],
+      ['metric_b'],
+    ]);
+    expect(
+      onBatch.mock.calls[0][0]
+        .slice(0, functionLabels.length)
+        .every((item: { type: string }) => item.type === 'FUNCTION')
+    ).toBe(true);
+    expect(onBatch.mock.calls[0][0].at(-1)).toMatchObject({ type: 'METRIC_NAME', label: 'metric_a' });
+    expect(onBatch.mock.calls[1][0].every((item: { type: string }) => item.type === 'METRIC_NAME')).toBe(true);
+    const functionsCount = getFunctions().length;
+    expect(completions).toHaveLength(functionsCount + 2);
+    expect(completions.slice(0, functionsCount).every((item) => item.type === 'FUNCTION')).toBe(true);
+    expect(completions.filter((item) => item.type === 'METRIC_NAME').map((item) => item.label)).toEqual([
+      'metric_a',
+      'metric_b',
+    ]);
+  });
+
+  it('publishes history and functions before metric batches when the editor is empty', async () => {
+    jest.spyOn(dataProvider, 'queryMetricNames').mockImplementation(async (_timeRange, _term, onBatch) => {
+      onBatch?.(['metric_a']);
+      return ['metric_a'];
+    });
+    const onBatch = jest.fn();
+
+    const completions = await getCompletions({ type: 'EMPTY' }, dataProvider, timeRange, undefined, 'full', onBatch);
+
+    const firstBatch = onBatch.mock.calls[0][0] as Array<{ type: string; label: string }>;
+    expect(firstBatch.slice(0, history.length).map((item) => item.label)).toEqual(history);
+    expect(firstBatch.slice(0, history.length).every((item) => item.type === 'HISTORY')).toBe(true);
+    expect(firstBatch.slice(history.length).every((item) => item.type === 'FUNCTION')).toBe(true);
+    expect(onBatch.mock.calls[1][0].map((item: { label: string }) => item.label)).toEqual(['metric_a']);
+    expect(completions.map((item) => item.type).slice(0, history.length + 1)).toEqual([
+      'HISTORY',
+      'HISTORY',
+      'HISTORY',
+      'FUNCTION',
+    ]);
+    expect(completions[completions.length - 1]).toMatchObject({ type: 'METRIC_NAME', label: 'metric_a' });
+  });
+
+  it('publishes label name batches without names already used in the selector', async () => {
+    jest.spyOn(dataProvider, 'queryLabelKeys').mockImplementation(async (...args) => {
+      const onBatch = args[4] as ((names: string[]) => void) | undefined;
+      onBatch?.(['job', '__name__']);
+      onBatch?.(['instance']);
+      return ['job', '__name__', 'instance'];
+    });
+    const onBatch = jest.fn();
+
+    const completions = await getCompletions(
+      { type: 'IN_LABEL_SELECTOR_NO_LABEL_NAME', otherLabels: [], betweenQuotes: false },
+      dataProvider,
+      timeRange,
+      'j',
+      'full',
+      onBatch
+    );
+
+    expect(onBatch.mock.calls.map((call) => call[0].map((item: { label: string }) => item.label))).toEqual([
+      ['job'],
+      ['instance'],
+    ]);
+    expect(completions.map((item) => item.label)).toEqual(['job', 'instance']);
+  });
+
+  it('publishes label value batches', async () => {
+    jest.spyOn(dataProvider, 'queryLabelValues').mockImplementation(async (...args) => {
+      const onBatch = args[5] as ((values: string[]) => void) | undefined;
+      onBatch?.(['api']);
+      onBatch?.(['db']);
+      return ['api', 'db'];
+    });
+    const onBatch = jest.fn();
+
+    const completions = await getCompletions(
+      {
+        type: 'IN_LABEL_SELECTOR_WITH_LABEL_NAME',
+        labelName: 'job',
+        betweenQuotes: false,
+        otherLabels: [],
+      },
+      dataProvider,
+      timeRange,
+      'a',
+      'full',
+      onBatch
+    );
+
+    expect(onBatch.mock.calls.map((call) => call[0].map((item: { label: string }) => item.label))).toEqual([
+      ['api'],
+      ['db'],
+    ]);
+    expect(completions.map((item) => item.insertText)).toEqual(['"api"', '"db"']);
+  });
+
+  it('does not publish batches for duration or function-only completions', async () => {
+    const onBatch = jest.fn();
+    const queryMetricNames = jest.spyOn(dataProvider, 'queryMetricNames').mockResolvedValue(['metric_a']);
+
+    const durations = await getCompletions({ type: 'IN_DURATION' }, dataProvider, timeRange, undefined, 'full', onBatch);
+    const functions = await getCompletions({ type: 'AT_ROOT' }, dataProvider, timeRange, 'me', 'partial', onBatch);
+
+    expect(durations.length).toBeGreaterThan(0);
+    expect(functions.every((item) => item.type === 'FUNCTION')).toBe(true);
+    expect(queryMetricNames).not.toHaveBeenCalled();
+    expect(onBatch).not.toHaveBeenCalled();
+  });
+});
+
 describe('Label name completions', () => {
   it('passes the typed term to label name search', async () => {
     const queryLabelKeys = jest.spyOn(dataProvider, 'queryLabelKeys').mockResolvedValue(['environment']);
@@ -123,7 +251,7 @@ describe('Label name completions', () => {
       'env'
     );
 
-    expect(queryLabelKeys).toHaveBeenCalledWith(timeRange, undefined, DEFAULT_COMPLETION_LIMIT, 'env');
+    expect(queryLabelKeys).toHaveBeenCalledWith(timeRange, undefined, DEFAULT_COMPLETION_LIMIT, 'env', undefined);
   });
 });
 
@@ -157,7 +285,8 @@ describe('Label value completions', () => {
       'environment',
       undefined,
       DEFAULT_COMPLETION_LIMIT,
-      'prod'
+      'prod',
+      undefined
     );
   });
 

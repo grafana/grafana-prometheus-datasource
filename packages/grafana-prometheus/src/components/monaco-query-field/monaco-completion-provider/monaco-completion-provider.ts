@@ -2,8 +2,9 @@
 import { type TimeRange } from '@grafana/data';
 import type { Monaco, monacoTypes } from '@grafana/ui';
 
-import { type CompletionType, getCompletions } from './completions';
+import { type Completion, type CompletionType, getCompletions } from './completions';
 import { type DataProvider } from './data_provider';
+import { ProgressiveCompletionSession } from './progressive_completions';
 import { getSituation } from './situation';
 import { NeverCaseError } from './util';
 
@@ -80,8 +81,14 @@ function getTriggerType(
     return 'full';
   }
 
+  // An empty editor asks for every metric. A later refresh of that request
+  // has to stay full, or it replaces the metric batches with functions only.
+  if (!word || word.word.length === 0) {
+    return 'full';
+  }
+
   // For typed words of sufficient length, use full completions
-  if (word && word.word.length >= MIN_WORD_LENGTH_FOR_FULL_COMPLETIONS) {
+  if (word.word.length >= MIN_WORD_LENGTH_FOR_FULL_COMPLETIONS) {
     return 'full';
   }
 
@@ -91,11 +98,13 @@ function getTriggerType(
 export function getCompletionProvider(
   monaco: Monaco,
   dataProvider: DataProvider,
-  timeRange: TimeRange
+  timeRange: TimeRange,
+  onListAppended?: () => void
 ): { provider: monacoTypes.languages.CompletionItemProvider; state: MonacoQueryFieldLocalState } {
   const state: MonacoQueryFieldLocalState = {
     isManualTriggerRequested: false,
   };
+  const session = new ProgressiveCompletionSession<Completion>((item) => `${item.type}\0${item.label}`);
 
   const provideCompletionItems = (
     model: monacoTypes.editor.ITextModel,
@@ -123,31 +132,56 @@ export function getCompletionProvider(
     }
 
     const triggerType: TriggerType = getTriggerType(word, model, position, state);
-
-    return getCompletions(situation, dataProvider, timeRange, word?.word, triggerType).then((items) => {
-      // Monaco by-default alphabetically orders the items.
-      // We use a number-as-string sortkey to maintain our custom order
-      const maxIndexDigits = items.length > 0 ? items.length.toString().length : 1;
-      const suggestions: monacoTypes.languages.CompletionItem[] = items.map((item, index) => ({
-        kind: getMonacoCompletionItemKind(item.type, monaco),
-        label: item.label,
-        insertText: item.insertText,
-        insertTextRules: item.insertTextRules,
-        detail: item.detail,
-        documentation: item.documentation,
-        sortText: index.toString().padStart(maxIndexDigits, '0'), // to force the order we have
-        range,
-        command: item.triggerOnInsert
-          ? {
-              id: 'editor.action.triggerSuggest',
-              title: '',
-            }
-          : undefined,
-      }));
-
-      return { suggestions };
+    const sessionKey = JSON.stringify({
+      situation,
+      searchTerm: word?.word ?? '',
+      triggerType,
+      from: timeRange.from.valueOf(),
+      to: timeRange.to.valueOf(),
     });
+
+    return session
+      .load(
+        sessionKey,
+        (onBatch) => getCompletions(situation, dataProvider, timeRange, word?.word, triggerType, onBatch),
+        () => {
+          onListAppended?.();
+        }
+      )
+      .then((snapshot) => {
+        if (snapshot.stale) {
+          return { suggestions: [], incomplete: true };
+        }
+        session.markDelivered(snapshot.generation);
+        return { suggestions: toSuggestions(monaco, snapshot.items, range), incomplete: snapshot.incomplete };
+      });
   };
+
+  function toSuggestions(
+    monaco: Monaco,
+    items: Completion[],
+    range: monacoTypes.IRange
+  ): monacoTypes.languages.CompletionItem[] {
+    // Monaco by-default alphabetically orders the items.
+    // We use a number-as-string sortkey to maintain our custom order
+    const maxIndexDigits = items.length > 0 ? items.length.toString().length : 1;
+    return items.map((item, index) => ({
+      kind: getMonacoCompletionItemKind(item.type, monaco),
+      label: item.label,
+      insertText: item.insertText,
+      insertTextRules: item.insertTextRules,
+      detail: item.detail,
+      documentation: item.documentation,
+      sortText: index.toString().padStart(maxIndexDigits, '0'),
+      range,
+      command: item.triggerOnInsert
+        ? {
+            id: 'editor.action.triggerSuggest',
+            title: '',
+          }
+        : undefined,
+    }));
+  }
 
   // Helper function to handle position adjustment for selection
   function getAdjustedPosition(position: monacoTypes.Position): { column: number; lineNumber: number } {

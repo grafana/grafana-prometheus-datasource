@@ -1,0 +1,139 @@
+// Monaco hides the suggest widget when editor.action.triggerSuggest runs, then
+// focuses row 0. A batch update retriggers the open session and points the
+// selector back at the row that was already focused.
+
+const SUGGEST_CONTROLLER_ID = 'editor.contrib.suggestController';
+
+type SuggestItem = {
+  textLabel: string;
+  completion: { kind: number };
+};
+
+type SuggestWidgetLike = {
+  getFocusedItem: () => { item?: SuggestItem; index: number } | undefined;
+  _list: { scrollTop: number };
+  // Monaco SuggestWidget state. 0 is Hidden.
+  _state?: number;
+};
+
+type SuggestListener = { dispose: () => void };
+
+type SuggestControllerLike = {
+  model?: {
+    trigger: (context: { auto: boolean; shy: boolean; noSelect: boolean }, retrigger?: boolean) => void;
+    onDidSuggest?: (listener: () => void) => SuggestListener;
+  };
+  widget?: { value?: SuggestWidgetLike } | SuggestWidgetLike;
+  registerSelector?: (selector: {
+    priority: number;
+    select: (model: unknown, position: unknown, items: SuggestItem[]) => number;
+  }) => { dispose: () => void };
+};
+
+export type SuggestRefreshEditor = {
+  getContribution?: (id: string) => unknown;
+};
+
+function getController(editor: SuggestRefreshEditor): SuggestControllerLike | undefined {
+  const controller = editor.getContribution?.(SUGGEST_CONTROLLER_ID) as SuggestControllerLike | null | undefined;
+  return controller ?? undefined;
+}
+
+function getWidget(controller: SuggestControllerLike): SuggestWidgetLike | undefined {
+  const widget = controller.widget;
+  if (!widget) {
+    return undefined;
+  }
+  if ('value' in widget && widget.value && typeof widget.value.getFocusedItem === 'function') {
+    return widget.value;
+  }
+  if (typeof (widget as SuggestWidgetLike).getFocusedItem === 'function') {
+    return widget as SuggestWidgetLike;
+  }
+  return undefined;
+}
+
+export function installSuggestSelectionPreserver(editor: SuggestRefreshEditor): { dispose: () => void } {
+  const controller = getController(editor);
+  if (!controller?.registerSelector) {
+    return { dispose: () => undefined };
+  }
+
+  return controller.registerSelector({
+    priority: 100,
+    select: (_model, _position, items) => {
+      if (!isRefreshing(editor)) {
+        return -1;
+      }
+
+      const widget = getWidget(controller);
+      const focused = widget?.getFocusedItem()?.item;
+      if (!widget || !focused) {
+        return -1;
+      }
+
+      const scrollTop = widget._list.scrollTop;
+      const index = items.findIndex(
+        (item) => item.textLabel === focused.textLabel && item.completion.kind === focused.completion.kind
+      );
+      if (index < 0) {
+        return -1;
+      }
+
+      queueMicrotask(() => {
+        widget._list.scrollTop = scrollTop;
+      });
+      return index;
+    },
+  });
+}
+
+const refreshGates = new WeakMap<SuggestRefreshEditor, { waiting: boolean; followUp: boolean; active: boolean }>();
+
+// True only while our own retrigger is in flight, so the selector below doesn't
+// also hijack the highlight on ordinary user-driven suggestion updates.
+function isRefreshing(editor: SuggestRefreshEditor): boolean {
+  return refreshGates.get(editor)?.active ?? false;
+}
+
+export function refreshOpenSuggestions(editor: SuggestRefreshEditor): void {
+  const controller = getController(editor);
+  const widget = controller ? getWidget(controller) : undefined;
+  if (!controller?.model || widget?._state === 0) {
+    return;
+  }
+
+  const gate = refreshGates.get(editor) ?? { waiting: false, followUp: false, active: false };
+  refreshGates.set(editor, gate);
+  if (gate.waiting) {
+    gate.followUp = true;
+    return;
+  }
+
+  gate.waiting = true;
+  gate.active = true;
+  let finished = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const finish = () => {
+    if (finished) {
+      return;
+    }
+    finished = true;
+    if (timer !== undefined) {
+      clearTimeout(timer);
+    }
+    listener?.dispose();
+    gate.waiting = false;
+    gate.active = false;
+    if (gate.followUp) {
+      gate.followUp = false;
+      refreshOpenSuggestions(editor);
+    }
+  };
+  const listener = controller.model.onDidSuggest?.(() => {
+    finish();
+  });
+  // retrigger=true keeps the popup mounted. triggerSuggest passes false and hides it.
+  controller.model.trigger({ auto: false, shy: false, noSelect: false }, true);
+  timer = setTimeout(finish, 50);
+}
