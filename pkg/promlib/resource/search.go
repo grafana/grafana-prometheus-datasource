@@ -1,15 +1,15 @@
 package resource
 
 import (
-	"compress/gzip"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
+
+	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/utils"
 )
 
 const searchStreamBufferSize = 16 * 1024
@@ -28,8 +28,7 @@ func (r *Resource) ExecuteSearch(
 	r.log.FromContext(ctx).Debug("Sending search resource query", "URL", req.URL)
 
 	// QueryResource pins the upstream Accept-Encoding to gzip, which keeps the
-	// wire compressed while letting us decode it with a streaming gzip.Reader
-	// below.
+	// wire compressed while letting us decode it with a streaming reader below.
 	resp, err := r.promClient.QueryResource(ctx, req)
 	if err != nil {
 		return fmt.Errorf("error querying search resource: %v", err)
@@ -52,16 +51,24 @@ func (r *Resource) ExecuteSearch(
 
 	// We requested gzip explicitly, so Go's transport does not auto-decompress.
 	// Decode it here with a streaming reader that yields plaintext without
-	// buffering the whole body. Error responses are gzipped too when the
-	// upstream honors Accept-Encoding. Any other encoding is forwarded as-is.
-	body := io.Reader(resp.Body)
-	if strings.EqualFold(resp.Header.Get("Content-Encoding"), "gzip") {
-		gzReader, err := gzip.NewReader(resp.Body)
-		if err != nil {
-			return fmt.Errorf("error creating gzip reader for search response: %v", err)
-		}
-		defer gzReader.Close()
-		body = gzReader
+	// buffering the whole body. Error responses are compressed too when the
+	// upstream honors Accept-Encoding.
+	//
+	// The framing headers were stripped above, so what we forward advertises
+	// plaintext. An encoding we cannot decode therefore has to fail here: passing
+	// it through would hand the browser compressed bytes labelled as plaintext
+	// NDJSON, which is harder to diagnose than an error. utils.NewDecodingReader
+	// applies the same policy as the buffered resource path in resource.go.
+	body, err := utils.NewDecodingReader(resp.Header.Get("Content-Encoding"), resp.Body)
+	if err != nil {
+		return err
+	}
+	if closer, ok := body.(io.Closer); ok {
+		defer func() {
+			if err := closer.Close(); err != nil {
+				r.log.FromContext(ctx).Warn("Failed to close search response reader", "err", err)
+			}
+		}()
 	}
 
 	if resp.StatusCode != http.StatusOK {
