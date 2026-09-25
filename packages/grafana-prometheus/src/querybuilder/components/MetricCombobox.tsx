@@ -43,6 +43,7 @@ export function MetricCombobox({
   const [isLoading, setIsLoading] = useState(false);
   const searchAbortControllerRef = useRef<AbortController>();
   const requestIdRef = useRef(0);
+  const typedInputRef = useRef('');
   const styles = getStyles(useTheme2());
 
   /**
@@ -160,14 +161,25 @@ export function MetricCombobox({
           value={query.metric ? { label: query.metric, value: query.metric } : null}
           onChange={onMetricChange}
           onOpenMenu={() => {
+            // Typing into a closed menu already called onInputChange. Opening
+            // the menu right after that must not replace it with an empty search.
+            if (typedInputRef.current.length > 0) {
+              return;
+            }
             void loadMetrics('');
           }}
           onInputChange={(value, meta) => {
             if (meta.action === 'input-change') {
+              typedInputRef.current = value;
               void loadMetrics(value);
+              return;
+            }
+            if (meta.action === 'menu-close' || meta.action === 'input-blur' || meta.action === 'set-value') {
+              typedInputRef.current = '';
             }
           }}
           onCloseMenu={() => {
+            typedInputRef.current = '';
             searchAbortControllerRef.current?.abort();
             requestIdRef.current += 1;
             setIsLoading(false);

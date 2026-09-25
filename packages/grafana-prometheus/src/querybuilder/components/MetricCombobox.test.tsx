@@ -200,6 +200,29 @@ describe('MetricCombobox', () => {
     expect(mockDatasource.languageProvider.queryLabelValues).not.toHaveBeenCalled();
   });
 
+  it('keeps a typed search when opening the menu replaces it', async () => {
+    const searchMetricNames = jest.fn().mockImplementation((_timeRange: unknown, term: string) =>
+      Promise.resolve({
+        results: [{ name: term ? `match_${term}` : 'all_metric' }],
+        warnings: [],
+        hasMore: false,
+      })
+    );
+    (mockLanguageProvider.getSearchApiClient as jest.Mock).mockReturnValue({ searchMetricNames });
+
+    render(<MetricCombobox {...defaultProps} />);
+    const combobox = screen.getByRole('combobox');
+    await act(async () => {
+      combobox.focus();
+    });
+    await userEvent.paste('up');
+
+    await waitFor(() => expect(searchMetricNames).toHaveBeenCalled());
+    const terms = searchMetricNames.mock.calls.map((call) => call[1]);
+    expect(terms.at(-1)).toBe('up');
+    expect(terms).not.toContain('');
+  });
+
   it('preserves label operators in the Search API matcher', async () => {
     const searchMetricNames = jest.fn().mockResolvedValue({
       results: [{ name: 'http_requests_total' }],
