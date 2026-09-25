@@ -1,4 +1,5 @@
 import { expect, test } from '@grafana/plugin-e2e';
+import { isCloudRun } from './env';
 
 // These tests exercise the datasource *resource* path (labels, label values)
 // end-to-end through Grafana's externalized-plugin proxy. This is the
@@ -23,6 +24,10 @@ const resourcePath = (p: string) => `/api/datasources/uid/${DATASOURCE_UID}/reso
 // header-framing bug regresses, the proxy returns a 500 or the body fails to
 // decode into JSON here regardless of whether any series exist yet.
 test.describe('Resource calls (externalized plugin, gzip upstream)', () => {
+  test.beforeEach(() => {
+    test.skip(isCloudRun, 'Requires the local gzip-forcing proxy and its provisioned data source.');
+  });
+
   test('label names resource call returns 200 with a decoded JSON body', { tag: '@plugins' }, async ({ request }) => {
     const res = await request.get(resourcePath('/api/v1/labels'));
 
