@@ -61,11 +61,11 @@ describe('classifyDrilldownMigrationUsage', () => {
       });
     });
 
-    it('rejects negative matcher operators', () => {
-      expect(classifyDrilldownMigrationUsage('job', 'up{job!="$job"}')).toEqual({
-        kind: 'unsafe',
-        reason: expect.any(String),
-      });
+    it.each([
+      ['up{job!="$job"}', '!='],
+      ['up{job!~"$job"}', '!~'],
+    ])('classifies negative matcher %s as a filter with operator %s', (expr, operator) => {
+      expect(classifyDrilldownMigrationUsage('job', expr)).toEqual({ kind: 'filter', key: 'job', operator });
     });
 
     it('rejects a matcher value that combines the variable with other text', () => {

@@ -144,7 +144,8 @@ function treeHasError(tree: Tree): boolean {
  * (lezer parse, no regex guessing): the value of a label matcher (`{key=~"$var"}`) on a
  * selector with a metric name -> `filterValue`; a grouping label in a `by(...)` aggregation
  * modifier -> `groupByLabel`; anything else (metric name, function arg, `without(...)`,
- * partial matcher value, negative matcher, on/ignoring, ...) -> `other`.
+ * partial matcher value, on/ignoring, ...) -> `other`. All four matcher operators
+ * (`=`, `!=`, `=~`, `!~`) map to ad hoc filter operators, so none of them disqualifies.
  */
 function classifyVariableUsagesInExpr(
   expr: string,
@@ -197,10 +198,10 @@ function classifyStringLiteralOccurrence(
   }
 
   const opNode = matcher.getChild(MatchOp);
-  const operator = opNode ? expr.substring(opNode.from, opNode.to) : undefined;
-  if (operator !== '=' && operator !== '=~') {
-    return { position: 'other', context: `unsupported matcher operator "${operator}"` };
+  if (!opNode) {
+    return { position: 'other', context: 'label matcher without operator' };
   }
+  const operator = expr.substring(opNode.from, opNode.to);
 
   // Removing the matcher must not leave an empty selector, so the selector needs a metric
   // name - either a plain identifier or a quoted (utf8) metric inside the braces.
