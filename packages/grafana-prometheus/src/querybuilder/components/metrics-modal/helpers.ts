@@ -22,28 +22,32 @@ export const generateMetricData = (
   languageProvider: PrometheusLanguageProviderInterface
 ): MetricData => {
   const metadata = languageProvider.retrieveMetricsMetadata();
+  return metricDataFromMetadata(metric, metadata[metric]?.type, metadata[metric]?.help);
+};
 
-  let type = metadata[metric]?.type;
-  const description = metadata[metric]?.help;
+export function metricDataFromMetadata(
+  name: string,
+  type: string | undefined,
+  description: string | undefined
+): MetricData {
+  let displayType = type;
 
-  HISTOGRAM_TYPES.forEach((t) => {
-    if (description?.toLowerCase().includes(t) && type !== t) {
-      type = type ? `${type} (${t})` : t;
+  HISTOGRAM_TYPES.forEach((histogramType) => {
+    if (description?.toLowerCase().includes(histogramType) && displayType !== histogramType) {
+      displayType = displayType ? `${displayType} (${histogramType})` : histogramType;
     }
   });
 
-  const oldHistogramMatch = metric.match(OLD_HISTOGRAM_PATTERN);
-
-  if (type === HISTOGRAM_TYPE && !oldHistogramMatch) {
-    type = NATIVE_HISTOGRAM_TYPE;
+  if (displayType === HISTOGRAM_TYPE && !name.match(OLD_HISTOGRAM_PATTERN)) {
+    displayType = NATIVE_HISTOGRAM_TYPE;
   }
 
   return {
-    value: metric,
-    type: type,
-    description: description,
+    value: name,
+    type: displayType,
+    description,
   };
-};
+}
 
 export function calculatePageList(metricsData: MetricsData, resultsPerPage: number): number[] {
   if (!Array.isArray(metricsData) || metricsData.length === 0) {
