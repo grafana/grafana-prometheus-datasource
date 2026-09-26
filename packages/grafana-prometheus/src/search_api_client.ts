@@ -50,8 +50,11 @@ export interface SearchOptions<T> {
   caseSensitive?: boolean;
 }
 
+export type SearchMetricSort = 'score' | 'alpha';
+
 export interface SearchMetricOptions extends SearchOptions<SearchMetricResult> {
   includeMetadata?: boolean;
+  sortBy?: SearchMetricSort;
 }
 
 type SearchEndpoint = 'metric_names' | 'label_names' | 'label_values';
@@ -183,7 +186,8 @@ export class SearchApiClient extends BaseResourceClient implements ResourceApiCl
   ): Promise<SearchStreamResult<SearchMetricResult>> => {
     return this.trackAvailability(
       this.search('metric_names', timeRange, term, options, {
-        include_metadata: options.includeMetadata ? 'true' : undefined,
+        include_metadata: options.includeMetadata === undefined ? undefined : String(options.includeMetadata),
+        sort_by: options.sortBy,
       })
     );
   };
