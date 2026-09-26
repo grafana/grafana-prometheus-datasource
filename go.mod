@@ -5,7 +5,7 @@ go 1.27.1
 require (
 	github.com/grafana/dsconfig/schema v0.0.13
 	github.com/grafana/grafana-plugin-sdk-go v0.296.5
-	github.com/grafana/grafana-prometheus-datasource/pkg/promlib v0.0.19
+	github.com/grafana/grafana-prometheus-datasource/pkg/promlib v0.0.20
 	github.com/magefile/mage v1.17.2
 	github.com/stretchr/testify v1.12.1
 	k8s.io/kube-openapi v0.0.0-20260911184034-7970a1e230da
@@ -53,8 +53,8 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grafana/dsconfig/dsconfig v0.0.13 // indirect
 	github.com/grafana/dskit v0.0.0-20260427162712-0457a92dacc3 // indirect
-	github.com/grafana/grafana/apps/scope v0.0.0-20260427171703-d4f46decefcb // indirect
-	github.com/grafana/grafana/pkg/apimachinery v0.0.0-20260118065639-60cb766a97d6 // indirect
+	github.com/grafana/grafana/apps/scope v0.0.1-test // indirect
+	github.com/grafana/grafana/pkg/apimachinery v0.0.1-test // indirect
 	github.com/grafana/otel-profiling-go v0.6.0 // indirect
 	github.com/grafana/pyroscope-go/godeltaprof v0.1.12 // indirect
 	github.com/grafana/regexp v0.0.0-20250905093917-f7b3be9d1853 // indirect
@@ -122,7 +122,7 @@ require (
 	google.golang.org/protobuf v1.36.12 // indirect
 	gopkg.in/fsnotify/fsnotify.v1 v1.4.7 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
-	k8s.io/apimachinery v0.37.0 // indirect
+	k8s.io/apimachinery v0.37.1 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
 	k8s.io/utils v0.0.0-20260707023825-cf1189d6abe3 // indirect
 	sigs.k8s.io/json v0.0.0-20260909141634-11ed52e25bc5 // indirect
