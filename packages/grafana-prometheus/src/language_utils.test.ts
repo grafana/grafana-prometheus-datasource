@@ -12,7 +12,11 @@ import {
 // on the moment package directly
 type Moment = ReturnType<typeof dateTimeAsMoment>;
 
-import { escapeLabelValueInExactSelector, escapeLabelValueInRegexSelector } from './escaping';
+import {
+  decodePromQLStringLiteral,
+  escapeLabelValueInExactSelector,
+  escapeLabelValueInRegexSelector,
+} from './escaping';
 import {
   expandRecordingRules,
   fixSummariesMetadata,
@@ -252,6 +256,17 @@ describe('escapeLabelValueInRegexSelector()', () => {
     expect(escapeLabelValueInRegexSelector('t\\e"s+t\nl\n$ab"e\\l')).toBe(
       't\\\\\\\\e\\"s\\\\+t\\nl\\n\\\\$ab\\"e\\\\\\\\l'
     );
+  });
+});
+
+describe('decodePromQLStringLiteral()', () => {
+  it('decodes UTF-8 byte escapes', () => {
+    expect(decodePromQLStringLiteral(String.raw`"\xc3\xa9"`)).toBe('é');
+    expect(decodePromQLStringLiteral(String.raw`"\303\251"`)).toBe('é');
+  });
+
+  it('rejects invalid UTF-8 byte escapes', () => {
+    expect(decodePromQLStringLiteral(String.raw`"\xff"`)).toBeUndefined();
   });
 });
 
