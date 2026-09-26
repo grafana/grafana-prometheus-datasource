@@ -107,9 +107,15 @@ describe('MetricCombobox', () => {
     expect(searchMetricNames).toHaveBeenCalledWith(
       defaultProps.timeRange,
       '',
-      expect.objectContaining({ limit: DEFAULT_COMPLETION_LIMIT, signal: expect.any(AbortSignal) })
+      expect.objectContaining({
+        limit: DEFAULT_COMPLETION_LIMIT,
+        signal: expect.any(AbortSignal),
+        includeMetadata: false,
+        sortBy: 'alpha',
+      })
     );
     expect(mockOnGetMetrics).not.toHaveBeenCalled();
+    expect(mockDatasource.languageProvider.queryLabelValues).not.toHaveBeenCalled();
   });
 
   it('shows each search batch before the request finishes and drops a stale batch', async () => {
@@ -195,6 +201,8 @@ describe('MetricCombobox', () => {
       expect.objectContaining({
         limit: DEFAULT_COMPLETION_LIMIT,
         signal: expect.any(AbortSignal),
+        includeMetadata: false,
+        sortBy: 'alpha',
       })
     );
     expect(mockDatasource.languageProvider.queryLabelValues).not.toHaveBeenCalled();
