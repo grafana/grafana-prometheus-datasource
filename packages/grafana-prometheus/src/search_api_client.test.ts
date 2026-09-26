@@ -230,7 +230,7 @@ describe('SearchApiClient', () => {
         url: expect.stringMatching(/\/metric_names$/),
         params: expect.objectContaining({
           sort_by: 'alpha',
-          include_metadata: 'false',
+          include_metadata: false,
         }),
       })
     );
@@ -241,7 +241,7 @@ describe('SearchApiClient', () => {
         params: expect.objectContaining({
           'search[]': 'httpreq',
           sort_by: 'alpha',
-          include_metadata: 'false',
+          include_metadata: false,
         }),
       })
     );
@@ -275,7 +275,7 @@ describe('SearchApiClient', () => {
         fuzz_alg: 'jarowinkler',
         case_sensitive: 'false',
         batch_size: '100',
-        include_metadata: 'true',
+        include_metadata: true,
       },
       headers: {},
     });

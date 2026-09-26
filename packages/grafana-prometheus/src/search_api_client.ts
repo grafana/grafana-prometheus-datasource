@@ -186,7 +186,7 @@ export class SearchApiClient extends BaseResourceClient implements ResourceApiCl
   ): Promise<SearchStreamResult<SearchMetricResult>> => {
     return this.trackAvailability(
       this.search('metric_names', timeRange, term, options, {
-        include_metadata: options.includeMetadata === undefined ? undefined : String(options.includeMetadata),
+        include_metadata: options.includeMetadata,
         sort_by: options.sortBy,
       })
     );
@@ -265,13 +265,13 @@ export class SearchApiClient extends BaseResourceClient implements ResourceApiCl
     timeRange: TimeRange,
     term: string,
     options: SearchOptions<T>,
-    extraParams: Record<string, string | undefined> = {}
+    extraParams: Record<string, string | boolean | undefined> = {}
   ): Promise<SearchStreamResult<T>> {
     const timeParams =
       endpoint === 'label_names'
         ? getRangeSnapInterval(this.datasource.cacheLevel, timeRange)
         : this.datasource.getAdjustedInterval(timeRange);
-    const params: Record<string, string> = {
+    const params: Record<string, string | boolean> = {
       start: String(timeParams.start),
       end: String(timeParams.end),
       limit: String(this.getEffectiveSearchLimit(options.limit)),
