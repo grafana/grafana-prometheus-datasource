@@ -146,6 +146,30 @@
             "description": "When set, Grafana appends this value to Prometheus query requests as the max_samples_processed_warning_threshold URL parameter. Not exposed in the Prometheus config editor (the PromSettings component only renders this input when its showQuerySamplesProcessedThresholdFields prop is true — the plugin never passes it), but the field is parsed by the backend (pkg/promlib/models/settings.go:41).",
             "type": "number"
           },
+          "oauth2ClientCredentialsEnabled": {
+            "type": "boolean",
+            "default": false
+          },
+          "oauth2ClientId": {
+            "description": "The OAuth2 client ID used for the client credentials grant",
+            "type": "string",
+            "x-dsconfig-depends-on": "virtual_authMethod == 'OAuth2ClientCredentials'",
+            "x-dsconfig-required-when": "jsonData_oauth2ClientCredentialsEnabled == true"
+          },
+          "oauth2Scopes": {
+            "description": "OAuth2 scopes to request with the access token",
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "x-dsconfig-depends-on": "virtual_authMethod == 'OAuth2ClientCredentials'"
+          },
+          "oauth2TokenUrl": {
+            "description": "The OAuth2 token endpoint that client credentials are exchanged at for an access token",
+            "type": "string",
+            "x-dsconfig-depends-on": "virtual_authMethod == 'OAuth2ClientCredentials'",
+            "x-dsconfig-required-when": "jsonData_oauth2ClientCredentialsEnabled == true"
+          },
           "oauthPassThru": {
             "type": "boolean",
             "default": false
@@ -224,6 +248,10 @@
     {
       "key": "basicAuthPassword",
       "description": "The password of the data source account"
+    },
+    {
+      "key": "oauth2ClientSecret",
+      "description": "The OAuth2 client secret used for the client credentials grant"
     },
     {
       "key": "tlsCACert",
