@@ -1,6 +1,6 @@
 # grafana-prometheus-datasource
 
-## 13.2.3
+## 13.3.0
 
 🐛 Cap Metrics Explorer search results and show when the list is incomplete. ([#365](https://github.com/grafana/grafana-prometheus-datasource/pull/365))
 
