@@ -1,0 +1,5 @@
+---
+'grafana-prometheus-datasource': patch
+---
+
+Preserve label values when switching between Prometheus Builder and Code modes

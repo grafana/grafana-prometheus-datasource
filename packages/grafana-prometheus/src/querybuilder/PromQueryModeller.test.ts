@@ -1,9 +1,16 @@
 // Core Grafana history https://github.com/grafana/grafana/blob/v11.0.0-preview/public/app/plugins/datasource/prometheus/querybuilder/PromQueryModeller.test.ts
+import { config } from '@grafana/runtime';
+
+import { buildVisualQueryFromString } from './parsing';
 import { PromQueryModeller } from './PromQueryModeller';
-import { PromOperationId } from './types';
+import { PromOperationId, type PromVisualQuery } from './types';
 
 describe('PromQueryModeller', () => {
   const modeller = new PromQueryModeller();
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
 
   it('Can render query with metric only', () => {
     expect(
@@ -26,6 +33,170 @@ describe('PromQueryModeller', () => {
         operations: [],
       })
     ).toBe('my_totals{cluster="us-east", job=~"abc"}');
+  });
+
+  it('Can render regex label values containing PromQL string escapes', () => {
+    jest.replaceProperty(config, 'featureToggles', {
+      ...config.featureToggles,
+      prometheusSpecialCharsInLabelValues: true,
+    });
+
+    expect(
+      modeller.renderQuery({
+        metric: 'http_request_duration_seconds',
+        labels: [
+          {
+            label: 'http_route',
+            op: '=~',
+            value: String.raw`/\{api_version:(2|\d{4}-\d{2}-\d{2})\}/users`,
+          },
+        ],
+        operations: [],
+      })
+    ).toBe(String.raw`http_request_duration_seconds{http_route=~"/\\{api_version:(2|\\d{4}-\\d{2}-\\d{2})\\}/users"}`);
+  });
+
+  describe('Builder and Code mode conversions', () => {
+    const builderQuery: PromVisualQuery = {
+      metric: 'http_request_duration_seconds',
+      labels: [
+        {
+          label: 'http_route',
+          op: '=~',
+          value: String.raw`/\{api_version:(2|\d{4}-\d{2}-\d{2})\}/users`,
+        },
+        { label: 'instance', op: '=', value: String.raw`\some\host` },
+      ],
+      operations: [],
+    };
+    const codeQuery = String.raw`http_request_duration_seconds{http_route=~"/\\{api_version:(2|\\d{4}-\\d{2}-\\d{2})\\}/users", instance="\\some\\host"}`;
+
+    beforeEach(() => {
+      jest.replaceProperty(config, 'featureToggles', {
+        ...config.featureToggles,
+        prometheusSpecialCharsInLabelValues: true,
+      });
+    });
+
+    it('preserves escaped label values from Builder to Code and back', () => {
+      const renderedQuery = modeller.renderQuery(builderQuery);
+
+      expect(renderedQuery).toBe(codeQuery);
+      expect(buildVisualQueryFromString(renderedQuery)).toEqual({
+        query: builderQuery,
+        errors: [],
+      });
+    });
+
+    it('preserves escaped label values from Code to Builder and back', () => {
+      const parsedQuery = buildVisualQueryFromString(codeQuery);
+
+      expect(parsedQuery).toEqual({ query: builderQuery, errors: [] });
+      expect(modeller.renderQuery(parsedQuery.query)).toBe(codeQuery);
+    });
+
+    it('preserves bracketed label values when converting from Code to Builder and back', () => {
+      const codeQuery =
+        'sum by(status) (increase(example_requests_total{route="/public/{version:2|[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]}/items/{itemId}"}[$__rate_interval]))';
+      const parsedQuery = buildVisualQueryFromString(codeQuery);
+
+      expect(parsedQuery).toEqual({
+        query: {
+          metric: 'example_requests_total',
+          labels: [
+            {
+              label: 'route',
+              op: '=',
+              value: '/public/{version:2|[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]}/items/{itemId}',
+            },
+          ],
+          operations: [
+            { id: 'increase', params: ['$__rate_interval'] },
+            { id: '__sum_by', params: ['status'] },
+          ],
+        },
+        errors: [],
+      });
+      expect(modeller.renderQuery(parsedQuery.query)).toBe(codeQuery);
+    });
+
+    it('reads the range after an unmatched opening bracket inside a label value', () => {
+      const codeQuery = 'increase(example_metric{label="pod[abc"}[5m])';
+      const parsedQuery = buildVisualQueryFromString(codeQuery);
+
+      expect(parsedQuery).toEqual({
+        query: {
+          metric: 'example_metric',
+          labels: [{ label: 'label', op: '=', value: 'pod[abc' }],
+          operations: [{ id: 'increase', params: ['5m'] }],
+        },
+        errors: [],
+      });
+      expect(modeller.renderQuery(parsedQuery.query)).toBe(codeQuery);
+    });
+
+    it('keeps Code mode when a scalar expression cannot be represented as a Builder parameter', () => {
+      const codeQuery = 'quantile_over_time(scalar(example_quantile), example_metric[5m])';
+      const parsedQuery = buildVisualQueryFromString(codeQuery);
+
+      expect(parsedQuery.errors.length).toBeGreaterThan(0);
+      expect(parsedQuery.query.operations).toContainEqual({ id: 'quantile_over_time', params: ['5m'] });
+    });
+
+    it.each([
+      'rate(example_metric[5m] offset 1h)',
+      'rate(example_metric[5m] @ 1234)',
+      'rate(example_metric[5m:1m])',
+      'quantile_over_time(0.9, example_metric[5m] offset 1h)',
+      'quantile_over_time(0.9, example_metric[5m] @ 1234)',
+      'quantile_over_time(0.9, example_metric[5m:1m])',
+    ])('keeps Code mode for a range selector modifier: %s', (codeQuery) => {
+      expect(buildVisualQueryFromString(codeQuery).errors.length).toBeGreaterThan(0);
+    });
+
+    it('preserves all PromQL string escapes through the public parser and modeller', () => {
+      const codeQuery = String.raw`example_metric{label="\a\b\f\n\r\t\v\\\"\x2f\141\u263a\U0001f600"}`;
+      const parsedQuery = buildVisualQueryFromString(codeQuery);
+
+      expect(parsedQuery).toEqual({
+        query: {
+          metric: 'example_metric',
+          labels: [{ label: 'label', op: '=', value: '\x07\b\f\n\r\t\v\\"/a☺😀' }],
+          operations: [],
+        },
+        errors: [],
+      });
+      const renderedQuery = modeller.renderQuery(parsedQuery.query);
+      expect(renderedQuery).toBe(String.raw`example_metric{label="\a\b\f\n\r\t\v\\\"/a☺😀"}`);
+      expect(buildVisualQueryFromString(renderedQuery)).toEqual(parsedQuery);
+    });
+
+    it('preserves UTF-8 encoded with hex and octal byte escapes', () => {
+      const codeQuery = String.raw`example_metric{hex="\xc3\xa9", octal="\303\251"}`;
+      const parsedQuery = buildVisualQueryFromString(codeQuery);
+
+      expect(parsedQuery).toEqual({
+        query: {
+          metric: 'example_metric',
+          labels: [
+            { label: 'hex', op: '=', value: 'é' },
+            { label: 'octal', op: '=', value: 'é' },
+          ],
+          operations: [],
+        },
+        errors: [],
+      });
+      const renderedQuery = modeller.renderQuery(parsedQuery.query);
+      expect(renderedQuery).toBe('example_metric{hex="é", octal="é"}');
+      expect(buildVisualQueryFromString(renderedQuery)).toEqual(parsedQuery);
+    });
+
+    it('reports byte escapes that are not valid UTF-8', () => {
+      const parsedQuery = buildVisualQueryFromString(String.raw`example_metric{label="\xff"}`);
+
+      expect(parsedQuery.errors).toHaveLength(1);
+      expect(parsedQuery.query.labels).toEqual([{ label: 'label', op: '=', value: String.raw`\xff` }]);
+    });
   });
 
   it('Can render query with function', () => {
