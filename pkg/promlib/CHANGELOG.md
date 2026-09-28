@@ -1,5 +1,9 @@
 # promlib
 
+## 0.0.22
+
+🐛 Fix security vulnerabilities (CVE-2026-84445)
+
 ## 0.0.21
 
 🐛 added datasource config schema ([#228](https://github.com/grafana/grafana-prometheus-datasource/pull/228))

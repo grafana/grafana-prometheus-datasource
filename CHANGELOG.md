@@ -1,5 +1,17 @@
 # grafana-prometheus-datasource
 
+## 13.2.3
+
+🐛 Cap Metrics Explorer search results and show when the list is incomplete. ([#365](https://github.com/grafana/grafana-prometheus-datasource/pull/365))
+
+🐛 Show metric names as each search batch arrives. ([#363](https://github.com/grafana/grafana-prometheus-datasource/pull/363))
+
+🐛 Fix security vulnerabilities (CVE-2026-84445)
+
+🐛 Stream Metrics Browser metric names from the Search API. ([#367](https://github.com/grafana/grafana-prometheus-datasource/pull/367))
+
+🐛 Show suggestion batches as they arrive. ([#363](https://github.com/grafana/grafana-prometheus-datasource/pull/363))
+
 ## 13.2.2
 
 🐛 added datasource config schema ([#228](https://github.com/grafana/grafana-prometheus-datasource/pull/228))
