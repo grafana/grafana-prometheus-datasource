@@ -179,7 +179,7 @@ func TestPromOptions_ApplyDefaults_DoesNotMutateUnrelatedFields(t *testing.T) {
 	opts := models.PromOptions{
 		TimeInterval:   "30s",
 		QueryTimeout:   "60s",
-		PrometheusType: "Prometheus",
+		PrometheusType: models.LenientString(models.PromApplicationPrometheus),
 		SeriesLimit:    &seriesLimit,
 	}
 	opts.ApplyDefaults()

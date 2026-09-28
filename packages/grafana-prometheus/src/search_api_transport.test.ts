@@ -34,6 +34,77 @@ describe('bridgeChunkedResponse', () => {
     expect(source).toMatchObject({ ok: true, status: 200, statusText: 'OK' });
   });
 
+  it('tracks current and peak queue usage', async () => {
+    chunkedMock.mockReturnValue(chunkedStream(['one', 'second']));
+
+    const { source, stats } = await bridgeChunkedResponse(request);
+
+    expect(stats).toEqual({
+      queuedBytes: 9,
+      queuedChunks: 2,
+      peakQueuedBytes: 9,
+      peakQueuedChunks: 2,
+    });
+
+    await source.read();
+    expect(stats).toMatchObject({ queuedBytes: 6, queuedChunks: 1 });
+
+    await readAll(source);
+    expect(stats).toMatchObject({ queuedBytes: 0, queuedChunks: 0 });
+  });
+
+  it('unsubscribes and fails when queued bytes exceed the high-water mark', async () => {
+    const subject = manualStream();
+    chunkedMock.mockReturnValue(subject.observable);
+
+    const bridged = bridgeChunkedResponse(request, undefined, { maxQueuedBytes: 5 });
+    subject.emit('1234');
+    const { source, stats } = await bridged;
+    subject.emit('56');
+
+    await expect(source.read()).rejects.toThrow(/queue exceeded its limit/i);
+    expect(subject.unsubscribe).toHaveBeenCalled();
+    expect(stats).toMatchObject({ queuedBytes: 0, queuedChunks: 0, peakQueuedBytes: 4 });
+  });
+
+  it('preserves an overflow error when the stream emits synchronously', async () => {
+    chunkedMock.mockReturnValue(chunkedStream(['1234', '56']));
+
+    const { source, stats } = await bridgeChunkedResponse(request, undefined, { maxQueuedBytes: 5 });
+
+    await expect(source.read()).rejects.toThrow(/queue exceeded its limit/i);
+    expect(stats).toMatchObject({ queuedBytes: 0, queuedChunks: 0, peakQueuedBytes: 4 });
+  });
+
+  it('unsubscribes and fails when queued chunks exceed the high-water mark', async () => {
+    const subject = manualStream();
+    chunkedMock.mockReturnValue(subject.observable);
+
+    const bridged = bridgeChunkedResponse(request, undefined, { maxQueuedChunks: 1 });
+    subject.emit('first');
+    const { source } = await bridged;
+    subject.emit('second');
+
+    await expect(source.read()).rejects.toThrow(/queue exceeded its limit/i);
+    expect(subject.unsubscribe).toHaveBeenCalled();
+  });
+
+  it('accepts queue usage exactly at both high-water marks', async () => {
+    const subject = manualStream();
+    chunkedMock.mockReturnValue(subject.observable);
+
+    const bridged = bridgeChunkedResponse(request, undefined, { maxQueuedBytes: 6, maxQueuedChunks: 2 });
+    subject.emit('1234');
+    const { source, stats } = await bridged;
+    subject.emit('56');
+
+    expect(stats).toMatchObject({ queuedBytes: 6, queuedChunks: 2 });
+    await source.read();
+    await source.read();
+    expect(stats).toMatchObject({ queuedBytes: 0, queuedChunks: 0 });
+    expect(subject.unsubscribe).not.toHaveBeenCalled();
+  });
+
   it('resolves a pending read once the next chunk is pushed', async () => {
     const subject = manualStream();
     chunkedMock.mockReturnValue(subject.observable);
@@ -98,6 +169,34 @@ describe('bridgeChunkedResponse', () => {
     expect(unsubscribe).toHaveBeenCalled();
   });
 
+  it('clears queued data when the signal aborts', async () => {
+    const subject = manualStream();
+    chunkedMock.mockReturnValue(subject.observable);
+    const controller = new AbortController();
+
+    const bridged = bridgeChunkedResponse(request, controller.signal);
+    subject.emit('queued');
+    const { source, stats } = await bridged;
+    expect(stats).toMatchObject({ queuedBytes: 6, queuedChunks: 1 });
+
+    controller.abort();
+
+    await expect(source.read()).rejects.toThrow(/aborted/i);
+    expect(stats).toMatchObject({ queuedBytes: 0, queuedChunks: 0 });
+    expect(subject.unsubscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a synchronous stream when the signal is already aborted', async () => {
+    chunkedMock.mockReturnValue(chunkedStream(['queued']));
+    const controller = new AbortController();
+    controller.abort();
+
+    const { source, stats } = await bridgeChunkedResponse(request, controller.signal);
+
+    await expect(source.read()).rejects.toThrow(/aborted/i);
+    expect(stats).toMatchObject({ queuedBytes: 0, queuedChunks: 0 });
+  });
+
   it('assembles the error body through the same read path', async () => {
     chunkedMock.mockReturnValue(
       chunkedStream(['{"status":"error","errorType":"unav', 'ailable","error":"search API disabled"}'], {
@@ -141,13 +240,16 @@ async function readAll(source: { read: () => Promise<{ done: boolean; value?: Ui
 // left pending across an emission or a mid-stream error.
 function manualStream() {
   const encoder = new TextEncoder();
+  const unsubscribe = jest.fn();
   let subscriber: { next: (value: FetchResponse<Uint8Array | undefined>) => void; error: (err: unknown) => void };
   const observable = new Observable<FetchResponse<Uint8Array | undefined>>((sub) => {
     subscriber = sub;
+    return unsubscribe;
   });
   return {
     observable,
     emit: (chunk: string) => subscriber.next({ ...chunkedResponseBase(), data: encoder.encode(chunk) }),
     fail: (err: unknown) => subscriber.error(err),
+    unsubscribe,
   };
 }

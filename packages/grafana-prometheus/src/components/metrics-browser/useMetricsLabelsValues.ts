@@ -5,6 +5,7 @@ import { type TimeRange } from '@grafana/data';
 
 import { EMPTY_SELECTOR, LAST_USED_LABELS_KEY, METRIC_LABEL } from '../../constants';
 import { type PrometheusLanguageProviderInterface } from '../../language_provider';
+import { isAbortError, SearchApiUnavailableError } from '../../search_api_stream';
 
 import { type Metric } from './MetricsBrowserContext';
 import { buildSelector } from './selectorBuilder';
@@ -13,6 +14,8 @@ export const useMetricsLabelsValues = (timeRange: TimeRange, languageProvider: P
   const timeRangeRef = useRef<TimeRange>(timeRange);
   const lastSeriesLimitRef = useRef(languageProvider.datasource.seriesLimit);
   const isInitializedRef = useRef(false);
+  const searchAbortRef = useRef<AbortController | undefined>(undefined);
+  const fetchIdRef = useRef(0);
 
   const [seriesLimit, setSeriesLimit] = useState(languageProvider.datasource.seriesLimit);
   const [err, setErr] = useState('');
@@ -87,10 +90,49 @@ export const useMetricsLabelsValues = (timeRange: TimeRange, languageProvider: P
     [handleError]
   );
 
-  // Fetches metrics that match the given selector
-  // Transforms raw metric strings into Metric objects with metadata
+  // Fetches metrics that match the given selector.
+  // Search streams names into state. A null return means a newer fetch replaced this one.
   const fetchMetrics = useCallback(
-    async (safeSelector?: string) => {
+    async (safeSelector?: string): Promise<Metric[] | null> => {
+      const fetchId = ++fetchIdRef.current;
+      searchAbortRef.current?.abort();
+      const getSearchApiClient = languageProvider.getSearchApiClient;
+      const searchClient =
+        languageProvider.datasource.hasSearchApiSupport?.() && getSearchApiClient
+          ? getSearchApiClient()
+          : undefined;
+      if (searchClient) {
+        const abortController = new AbortController();
+        searchAbortRef.current = abortController;
+        const collected: Metric[] = [];
+        try {
+          await searchClient.searchMetricNames(timeRangeRef.current, '', {
+            limit: effectiveLimit,
+            match: safeSelector,
+            retainResults: false,
+            signal: abortController.signal,
+            onBatch: (batch) => {
+              if (fetchId !== fetchIdRef.current) {
+                return;
+              }
+              for (const result of batch) {
+                collected.push({ name: result.name });
+              }
+              setMetrics(collected.slice());
+            },
+          });
+          return fetchId === fetchIdRef.current ? collected.slice() : null;
+        } catch (error) {
+          if (isAbortError(error) || fetchId !== fetchIdRef.current) {
+            return null;
+          }
+          if (!(error instanceof SearchApiUnavailableError)) {
+            handleError(error, 'Error fetching metrics');
+            return [];
+          }
+        }
+      }
+
       try {
         const fetchedMetrics = await languageProvider.queryLabelValues(
           timeRangeRef.current,
@@ -98,11 +140,17 @@ export const useMetricsLabelsValues = (timeRange: TimeRange, languageProvider: P
           safeSelector,
           effectiveLimit
         );
+        if (fetchId !== fetchIdRef.current) {
+          return null;
+        }
         return fetchedMetrics.map((m) => ({
           name: m,
           details: getMetricDetails(m),
         }));
       } catch (e) {
+        if (fetchId !== fetchIdRef.current) {
+          return null;
+        }
         handleError(e, 'Error fetching metrics');
         return [];
       }
@@ -162,7 +210,7 @@ export const useMetricsLabelsValues = (timeRange: TimeRange, languageProvider: P
       const safeSelector = selector === EMPTY_SELECTOR ? undefined : selector;
 
       // Metrics
-      const transformedMetrics: Metric[] = await fetchMetrics(safeSelector);
+      const transformedMetrics = await fetchMetrics(safeSelector);
 
       // Labels
       setIsLoadingLabelKeys(true);
@@ -175,7 +223,9 @@ export const useMetricsLabelsValues = (timeRange: TimeRange, languageProvider: P
       // Selected Labels' Values
       const [transformedLabelValues] = await fetchLabelValues(labelKeysInLocalStorage, safeSelector);
 
-      setMetrics(transformedMetrics);
+      if (transformedMetrics) {
+        setMetrics(transformedMetrics);
+      }
       setLabelKeys(transformedLabelKeys);
       setIsLoadingLabelKeys(false);
       setSelectedLabelKeys(labelKeysInLocalStorage);
@@ -185,10 +235,14 @@ export const useMetricsLabelsValues = (timeRange: TimeRange, languageProvider: P
     [fetchLabelKeys, fetchLabelValues, fetchMetrics, loadSelectedLabelsFromStorage]
   );
 
-  // Initialize the hook
+  // Initialize the hook. A later fetch or unmount aborts the in-flight search.
   useEffect(() => {
     initialize(selectedMetric, selectedLabelValues);
     isInitializedRef.current = true;
+    return () => {
+      fetchIdRef.current += 1;
+      searchAbortRef.current?.abort();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -225,7 +279,9 @@ export const useMetricsLabelsValues = (timeRange: TimeRange, languageProvider: P
         newSelectedMetric === '' ? undefined : selector
       );
 
-      setMetrics(fetchedMetrics);
+      if (fetchedMetrics) {
+        setMetrics(fetchedMetrics);
+      }
       setSelectedMetric(newSelectedMetric);
       setLabelKeys(fetchedLabelKeys);
       setIsLoadingLabelKeys(false);
@@ -335,8 +391,12 @@ export const useMetricsLabelsValues = (timeRange: TimeRange, languageProvider: P
     // rebuild the selector based on the new selected label values
     safeSelector = buildSafeSelector(selectedMetric, newSelectedLabelValues);
 
-    // Fetch metrics
-    const newMetrics: Metric[] = await fetchMetrics(safeSelector);
+    // Fetch metrics. A replaced search owns the list, so this click stops here.
+    const newMetrics = await fetchMetrics(safeSelector);
+    if (!newMetrics) {
+      setIsLoadingLabelValues(false);
+      return;
+    }
 
     // Fetch label keys
     // If there is no metric or label value selected fetch all the keys instead of creating a selector
@@ -350,7 +410,9 @@ export const useMetricsLabelsValues = (timeRange: TimeRange, languageProvider: P
     }
     const newSelectedLabelKeys: string[] = loadSelectedLabelsFromStorage(newLabelKeys);
 
-    setMetrics(newMetrics);
+    if (newMetrics) {
+      setMetrics(newMetrics);
+    }
     setLabelKeys(newLabelKeys);
     setIsLoadingLabelKeys(false);
     setSelectedLabelKeys(newSelectedLabelKeys);

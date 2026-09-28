@@ -1,7 +1,7 @@
 import { type HistoryItem, type TimeRange } from '@grafana/data';
 
 import { DEFAULT_COMPLETION_LIMIT, METRIC_LABEL } from '../../../constants';
-import type { PrometheusLanguageProvider } from '../../../language_provider';
+import { SearchApiUnavailableError } from '../../../search_api_stream';
 import { type PromQuery } from '../../../types';
 
 import { DataProvider, type DataProviderParams } from './data_provider';
@@ -12,13 +12,17 @@ const createLanguageProviderMock = (existingMetadata: Record<string, unknown> = 
   queryMetricsMetadata: jest.fn().mockResolvedValue({}),
   retrieveMetrics: jest.fn().mockReturnValue([]),
   retrieveMetricsMetadata: jest.fn().mockReturnValue(existingMetadata),
+  getSearchApiClient: jest.fn().mockReturnValue(undefined),
+  datasource: {
+    interpolateString: (value: string) => value,
+  },
 });
 
 const createDataProvider = (
-  languageProvider: Partial<PrometheusLanguageProvider>,
+  languageProvider: ReturnType<typeof createLanguageProviderMock>,
   historyProvider: Array<HistoryItem<PromQuery>> = []
 ) => {
-  return new DataProvider({ languageProvider, historyProvider } as DataProviderParams);
+  return new DataProvider({ languageProvider, historyProvider } as unknown as DataProviderParams);
 };
 
 // queryMetricNames forwards a TimeRange to the language provider untouched; its concrete
@@ -91,15 +95,14 @@ describe('DataProvider', () => {
       );
     });
 
-    it('returns an empty array when the language provider rejects', async () => {
+    it('rejects when the language provider rejects', async () => {
       const languageProvider = createLanguageProviderMock();
       languageProvider.queryLabelValues.mockRejectedValue(new Error('network down'));
       const dataProvider = createDataProvider(languageProvider);
       const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
-      const result = await dataProvider.queryMetricNames(timeRange, 'up');
+      await expect(dataProvider.queryMetricNames(timeRange, 'up')).rejects.toThrow('network down');
 
-      expect(result).toEqual([]);
       expect(warnSpy).toHaveBeenCalled();
       warnSpy.mockRestore();
     });
@@ -112,6 +115,235 @@ describe('DataProvider', () => {
       const result = await dataProvider.queryMetricNames(timeRange, undefined);
 
       expect(result).toEqual([]);
+    });
+
+    it('uses fuzzy search and aborts the superseded metric request', async () => {
+      const languageProvider = createLanguageProviderMock();
+      const searchMetricNames = jest
+        .fn()
+        .mockResolvedValue({ results: [{ name: 'http_requests_total' }], warnings: [], hasMore: false });
+      languageProvider.getSearchApiClient.mockReturnValue({ searchMetricNames });
+      const dataProvider = createDataProvider(languageProvider);
+
+      await expect(dataProvider.queryMetricNames(timeRange, 'http   req')).resolves.toEqual(['http_requests_total']);
+      const firstSignal = searchMetricNames.mock.calls[0][2].signal as AbortSignal;
+      await dataProvider.queryMetricNames(timeRange, 'http requ');
+
+      expect(searchMetricNames).toHaveBeenNthCalledWith(
+        1,
+        timeRange,
+        'http   req',
+        expect.objectContaining({ limit: DEFAULT_COMPLETION_LIMIT, signal: expect.any(AbortSignal) })
+      );
+      expect(searchMetricNames).toHaveBeenLastCalledWith(
+        timeRange,
+        'http requ',
+        expect.objectContaining({ limit: DEFAULT_COMPLETION_LIMIT, signal: expect.any(AbortSignal) })
+      );
+      expect(firstSignal.aborted).toBe(true);
+      expect(languageProvider.queryLabelValues).not.toHaveBeenCalled();
+    });
+
+    it('forwards search batches and still resolves the full metric list', async () => {
+      const languageProvider = createLanguageProviderMock();
+      const onBatch = jest.fn();
+      const searchMetricNames = jest.fn().mockImplementation((_timeRange, _term, options) => {
+        options.onBatch?.([{ name: 'up' }]);
+        options.onBatch?.([{ name: 'go_goroutines' }]);
+        return Promise.resolve({
+          results: [{ name: 'up' }, { name: 'go_goroutines' }],
+          warnings: [],
+          hasMore: false,
+        });
+      });
+      languageProvider.getSearchApiClient.mockReturnValue({ searchMetricNames });
+      const dataProvider = createDataProvider(languageProvider);
+
+      await expect(dataProvider.queryMetricNames(timeRange, 'up', onBatch)).resolves.toEqual(['up', 'go_goroutines']);
+      expect(onBatch).toHaveBeenNthCalledWith(1, ['up']);
+      expect(onBatch).toHaveBeenNthCalledWith(2, ['go_goroutines']);
+    });
+
+    it('does not emit batches when metric lookup falls back to series discovery', async () => {
+      const languageProvider = createLanguageProviderMock();
+      languageProvider.queryLabelValues.mockResolvedValue(['standard_metric']);
+      const dataProvider = createDataProvider(languageProvider);
+      const onBatch = jest.fn();
+
+      await expect(dataProvider.queryMetricNames(timeRange, 'metric', onBatch)).resolves.toEqual(['standard_metric']);
+      expect(onBatch).not.toHaveBeenCalled();
+    });
+
+    it('falls back to standard discovery when fuzzy search is unavailable', async () => {
+      const languageProvider = createLanguageProviderMock();
+      languageProvider.queryLabelValues.mockResolvedValue(['standard_metric']);
+      languageProvider.getSearchApiClient.mockReturnValue({
+        searchMetricNames: jest.fn().mockRejectedValue(new SearchApiUnavailableError('disabled')),
+      });
+      const dataProvider = createDataProvider(languageProvider);
+
+      await expect(dataProvider.queryMetricNames(timeRange, 'metric')).resolves.toEqual(['standard_metric']);
+
+      expect(languageProvider.queryLabelValues).toHaveBeenCalledWith(
+        timeRange,
+        METRIC_LABEL,
+        '{__name__=~".*metric.*"}',
+        DEFAULT_COMPLETION_LIMIT
+      );
+    });
+  });
+
+  describe('fuzzy label search', () => {
+    it('searches label values using the typed term', async () => {
+      const languageProvider = createLanguageProviderMock();
+      const searchLabelValues = jest
+        .fn()
+        .mockResolvedValue({ results: [{ value: 'production' }], warnings: [], hasMore: false });
+      languageProvider.getSearchApiClient.mockReturnValue({ searchLabelValues });
+      const dataProvider = createDataProvider(languageProvider);
+
+      await expect(
+        dataProvider.queryLabelValues(
+          timeRange,
+          'environment',
+          '{job="api"}',
+          DEFAULT_COMPLETION_LIMIT,
+          'datasource uid'
+        )
+      ).resolves.toEqual(['production']);
+
+      expect(searchLabelValues).toHaveBeenCalledWith(
+        timeRange,
+        'environment',
+        'datasource uid',
+        expect.objectContaining({
+          match: '{job="api"}',
+          limit: DEFAULT_COMPLETION_LIMIT,
+          signal: expect.any(AbortSignal),
+        })
+      );
+      expect(languageProvider.queryLabelValues).not.toHaveBeenCalled();
+    });
+
+    it('forwards label name and label value batches', async () => {
+      const languageProvider = createLanguageProviderMock();
+      const labelNames = jest.fn();
+      const labelValues = jest.fn();
+      const searchLabelNames = jest.fn().mockImplementation((_timeRange, _term, options) => {
+        options.onBatch?.([{ name: 'job' }]);
+        options.onBatch?.([{ name: 'instance' }]);
+        return Promise.resolve({
+          results: [{ name: 'job' }, { name: 'instance' }],
+          warnings: [],
+          hasMore: false,
+        });
+      });
+      const searchLabelValues = jest.fn().mockImplementation((_timeRange, _label, _term, options) => {
+        options.onBatch?.([{ value: 'api' }]);
+        options.onBatch?.([{ value: 'db' }]);
+        return Promise.resolve({
+          results: [{ value: 'api' }, { value: 'db' }],
+          warnings: [],
+          hasMore: false,
+        });
+      });
+      languageProvider.getSearchApiClient.mockReturnValue({ searchLabelNames, searchLabelValues });
+      const dataProvider = createDataProvider(languageProvider);
+
+      await expect(
+        dataProvider.queryLabelKeys(timeRange, '{__name__="up"}', DEFAULT_COMPLETION_LIMIT, 'jo', labelNames)
+      ).resolves.toEqual(['job', 'instance']);
+      await expect(
+        dataProvider.queryLabelValues(timeRange, 'job', '{__name__="up"}', DEFAULT_COMPLETION_LIMIT, 'a', labelValues)
+      ).resolves.toEqual(['api', 'db']);
+
+      expect(labelNames).toHaveBeenNthCalledWith(1, ['job']);
+      expect(labelNames).toHaveBeenNthCalledWith(2, ['instance']);
+      expect(labelValues).toHaveBeenNthCalledWith(1, ['api']);
+      expect(labelValues).toHaveBeenNthCalledWith(2, ['db']);
+    });
+
+    it('does not emit batches when label lookup uses the series endpoints', async () => {
+      const languageProvider = createLanguageProviderMock();
+      languageProvider.queryLabelKeys.mockResolvedValue(['job']);
+      languageProvider.queryLabelValues.mockResolvedValue(['api']);
+      const dataProvider = createDataProvider(languageProvider);
+      const onBatch = jest.fn();
+
+      await dataProvider.queryLabelKeys(timeRange, undefined, DEFAULT_COMPLETION_LIMIT, undefined, onBatch);
+      await dataProvider.queryLabelValues(timeRange, 'job', undefined, DEFAULT_COMPLETION_LIMIT, undefined, onBatch);
+
+      expect(onBatch).not.toHaveBeenCalled();
+    });
+
+    it('returns an empty list when a search is aborted and does not fall back', async () => {
+      const languageProvider = createLanguageProviderMock();
+      const abortError = Object.assign(new Error('The user aborted a request.'), { name: 'AbortError' });
+      languageProvider.getSearchApiClient.mockReturnValue({
+        searchMetricNames: jest.fn().mockRejectedValue(abortError),
+        searchLabelNames: jest.fn().mockRejectedValue(abortError),
+        searchLabelValues: jest.fn().mockRejectedValue(abortError),
+      });
+      const dataProvider = createDataProvider(languageProvider);
+
+      await expect(dataProvider.queryMetricNames(timeRange, 'up')).resolves.toEqual([]);
+      await expect(
+        dataProvider.queryLabelKeys(timeRange, undefined, DEFAULT_COMPLETION_LIMIT, 'job')
+      ).resolves.toEqual([]);
+      await expect(
+        dataProvider.queryLabelValues(timeRange, 'job', undefined, DEFAULT_COMPLETION_LIMIT, 'api')
+      ).resolves.toEqual([]);
+
+      expect(languageProvider.queryLabelKeys).not.toHaveBeenCalled();
+      expect(languageProvider.queryLabelValues).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('search lifecycle', () => {
+    it('does not cancel a metric search when a label search starts', async () => {
+      const languageProvider = createLanguageProviderMock();
+      const searchMetricNames = jest
+        .fn()
+        .mockResolvedValue({ results: [{ name: 'up' }], warnings: [], hasMore: false });
+      const searchLabelNames = jest
+        .fn()
+        .mockResolvedValue({ results: [{ name: 'job' }], warnings: [], hasMore: false });
+      languageProvider.getSearchApiClient.mockReturnValue({ searchMetricNames, searchLabelNames });
+      const dataProvider = createDataProvider(languageProvider);
+
+      await dataProvider.queryMetricNames(timeRange, 'up');
+      const metricSignal = searchMetricNames.mock.calls[0][2].signal as AbortSignal;
+      await dataProvider.queryLabelKeys(timeRange, undefined, DEFAULT_COMPLETION_LIMIT, 'job');
+
+      expect(metricSignal.aborted).toBe(false);
+    });
+
+    it('aborts every active search when disposed', () => {
+      const languageProvider = createLanguageProviderMock();
+      const never = new Promise(() => {});
+      const searchMetricNames = jest.fn().mockReturnValue(never);
+      const searchLabelNames = jest.fn().mockReturnValue(never);
+      const searchLabelValues = jest.fn().mockReturnValue(never);
+      languageProvider.getSearchApiClient.mockReturnValue({
+        searchMetricNames,
+        searchLabelNames,
+        searchLabelValues,
+      });
+      const dataProvider = createDataProvider(languageProvider);
+
+      void dataProvider.queryMetricNames(timeRange, 'up');
+      void dataProvider.queryLabelKeys(timeRange, undefined, DEFAULT_COMPLETION_LIMIT, 'job');
+      void dataProvider.queryLabelValues(timeRange, 'job', undefined, DEFAULT_COMPLETION_LIMIT, 'api');
+
+      const metricSignal = searchMetricNames.mock.calls[0][2].signal as AbortSignal;
+      const labelKeySignal = searchLabelNames.mock.calls[0][2].signal as AbortSignal;
+      const labelValueSignal = searchLabelValues.mock.calls[0][3].signal as AbortSignal;
+
+      dataProvider.dispose();
+
+      expect(metricSignal.aborted).toBe(true);
+      expect(labelKeySignal.aborted).toBe(true);
+      expect(labelValueSignal.aborted).toBe(true);
     });
   });
 

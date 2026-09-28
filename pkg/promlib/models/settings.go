@@ -9,34 +9,16 @@ import (
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 )
 
-// DataSourceJsonData mirrors the base @grafana/data DataSourceJsonData interface
-// that all Grafana datasource jsonData types extend.
-//
-// All unknown fields before #220, so all lenient. See lenient.go.
-type DataSourceJsonData struct {
-	AuthType                    LenientString `json:"authType"`
-	DefaultRegion               LenientString `json:"defaultRegion"`
-	Profile                     LenientString `json:"profile"`
-	ManageAlerts                LenientBool   `json:"manageAlerts"`
-	AllowAsRecordingRulesTarget LenientBool   `json:"allowAsRecordingRulesTarget"`
-	AlertmanagerUID             LenientString `json:"alertmanagerUid"`
-	DisableGrafanaCache         LenientBool   `json:"disableGrafanaCache"`
-}
-
 // PromOptions holds the typed datasource configuration stored in jsonData.
-// It mirrors the frontend PromOptions interface (packages/grafana-prometheus/src/types.ts)
-// which extends DataSourceJsonData.
 type PromOptions struct {
-	// PromOptions extends DataSourceJsonData.
-	// Even though it is not directly consumed by the prom datasource, it is consumed via plugin-sdk.
-	DataSourceJsonData
-
 	// Strict: httpMethod is validated below, and timeInterval/queryTimeout were already
 	// strict before #220. See lenient.go.
 	HTTPMethod   string `json:"httpMethod"`
 	TimeInterval string `json:"timeInterval"`
 	QueryTimeout string `json:"queryTimeout"`
-
+	// Following fields are parsed for schema completeness but not yet consumed directly
+	// by the backend. They are currently read via opts.CustomOptions["grafanaData"]
+	// managed by the Grafana plugin SDK. TODO: migrate in a follow-up PR.
 	CustomQueryParameters               LenientString  `json:"customQueryParameters"`
 	MaxSamplesProcessedWarningThreshold LenientFloat64 `json:"maxSamplesProcessedWarningThreshold"`
 	MaxSamplesProcessedErrorThreshold   LenientFloat64 `json:"maxSamplesProcessedErrorThreshold"`
@@ -55,6 +37,18 @@ type PromOptions struct {
 	SeriesEndpoint                LenientBool                        `json:"seriesEndpoint"`
 	SeriesLimit                   *LenientFloat64                    `json:"seriesLimit"`
 	ExemplarTraceIDDestinations   LenientExemplarTraceIDDestinations `json:"exemplarTraceIdDestinations"`
+	ManageAlerts                  LenientBool                        `json:"manageAlerts"`
+	AllowAsRecordingRulesTarget   LenientBool                        `json:"allowAsRecordingRulesTarget"`
+
+	// Following fields are not directly used by prom datasource.
+	// These fields are managed by the Grafana plugin SDK.
+	TimeOut                LenientFloat64     `json:"timeout"`
+	KeepCookies            LenientStringSlice `json:"keepCookies"`
+	TLSAuth                LenientBool        `json:"tlsAuth"`
+	ServerName             LenientString      `json:"serverName"`
+	TLSAuthWithCACert      LenientBool        `json:"tlsAuthWithCACert"`
+	TLSSkipVerify          LenientBool        `json:"tlsSkipVerify"`
+	EnableSecureSocksProxy LenientBool        `json:"enableSecureSocksProxy"`
 }
 
 // ExemplarTraceIDDestination mirrors the frontend ExemplarTraceIdDestination type.
@@ -64,6 +58,26 @@ type ExemplarTraceIDDestination struct {
 	URLDisplayLabel string `json:"urlDisplayLabel,omitempty"`
 	DatasourceUID   string `json:"datasourceUid,omitempty"`
 }
+
+// PromApplication mirrors the frontend PromApplication enum
+type PromApplication string
+
+const (
+	PromApplicationPrometheus PromApplication = "Prometheus"
+	PromApplicationCortex     PromApplication = "Cortex"
+	PromApplicationMimir      PromApplication = "Mimir"
+	PromApplicationThanos     PromApplication = "Thanos"
+)
+
+// PrometheusCacheLevel mirrors the frontend PrometheusCacheLevel enum
+type PrometheusCacheLevel string
+
+const (
+	PrometheusCacheLevelLow    PrometheusCacheLevel = "Low"
+	PrometheusCacheLevelMedium PrometheusCacheLevel = "Medium"
+	PrometheusCacheLevelHigh   PrometheusCacheLevel = "High"
+	PrometheusCacheLevelNone   PrometheusCacheLevel = "None"
+)
 
 // ParsePromOptions deserialises the datasource jsonData blob into a typed PromOptions
 // struct and validates the fields that are actively used by the backend.

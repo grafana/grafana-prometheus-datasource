@@ -395,6 +395,7 @@
       "metrics-modal": {
         "aria-label-browse-metrics": "Browse metrics",
         "currently-selected": "Currently selected: {{selected}}",
+        "incomplete-results": "Showing the first 1,000 results. Refine your search to find other metrics.",
         "metrics-pre-filtered": "These metrics have been pre-filtered by labels chosen in the label filters.",
         "title-metrics-explorer": "Metrics explorer"
       },

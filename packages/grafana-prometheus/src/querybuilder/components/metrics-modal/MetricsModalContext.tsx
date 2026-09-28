@@ -16,11 +16,13 @@ import { reportInteraction } from '@grafana/runtime';
 
 import { METRIC_LABEL, PROMETHEUS_QUERY_BUILDER_MAX_RESULTS } from '../../../constants';
 import { type PrometheusLanguageProviderInterface } from '../../../language_provider';
+import { type SearchMetricResult } from '../../../search_api_client';
+import { isAbortError, SearchApiUnavailableError } from '../../../search_api_stream';
 import { regexifyLabelValuesQueryString } from '../../parsingUtils';
 import { type QueryBuilderLabelFilter } from '../../shared/types';
-import { formatPrometheusLabelFilters } from '../formatter';
+import { formatLabelFiltersToString, formatPrometheusLabelFilters } from '../formatter';
 
-import { generateMetricData } from './helpers';
+import { generateMetricData, metricDataFromMetadata } from './helpers';
 import { type MetricData, type MetricsData } from './types';
 import { fuzzySearch } from './uFuzzy';
 
@@ -47,6 +49,7 @@ type MetricsModalContextValue = {
   setSelectedTypes: (val: Array<SelectableValue<string>>) => void;
   searchedText: string;
   setSearchedText: (val: string) => void;
+  resultsIncomplete: boolean;
 };
 
 const MetricsModalContext = createContext<MetricsModalContextValue | undefined>(undefined);
@@ -54,11 +57,13 @@ const MetricsModalContext = createContext<MetricsModalContextValue | undefined>(
 type MetricsModalContextProviderProps = {
   languageProvider: PrometheusLanguageProviderInterface;
   timeRange: TimeRange;
+  queryLabels?: QueryBuilderLabelFilter[];
 };
 
 export const MetricsModalContextProvider: FC<PropsWithChildren<MetricsModalContextProviderProps>> = ({
   children,
   languageProvider,
+  queryLabels,
   timeRange,
 }) => {
   const [isLoading, setIsLoading] = useState(true);
@@ -69,7 +74,15 @@ export const MetricsModalContextProvider: FC<PropsWithChildren<MetricsModalConte
     resultsPerPage: DEFAULT_RESULTS_PER_PAGE,
   });
   const [selectedTypes, setSelectedTypes] = useState<Array<SelectableValue<string>>>([]);
-  const [searchedText, setSearchedText] = useState('');
+  const [searchedText, setSearchedTextState] = useState('');
+  const [resultsIncomplete, setResultsIncomplete] = useState(false);
+  const latestSearchIdRef = useRef<number>(0);
+  const searchAbortControllerRef = useRef<AbortController>();
+  const setSearchedText = useCallback((value: string) => {
+    latestSearchIdRef.current++;
+    searchAbortControllerRef.current?.abort();
+    setSearchedTextState(value);
+  }, []);
 
   const filteredMetricsData = useMemo(() => {
     if (selectedTypes.length === 0) {
@@ -106,87 +119,205 @@ export const MetricsModalContextProvider: FC<PropsWithChildren<MetricsModalConte
     }));
   }, [filteredMetricsData.length, pagination.resultsPerPage, pagination.pageNum]);
 
-  // Track the latest search ID to handle race conditions
-  const latestSearchIdRef = useRef<number>(0);
+  const toMetricData = useCallback(
+    (result: SearchMetricResult): MetricData => metricDataFromMetadata(result.name, result.type, result.help),
+    []
+  );
 
-  const fetchMetadata = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      const metadata = await languageProvider.queryMetricsMetadata(PROMETHEUS_QUERY_BUILDER_MAX_RESULTS);
-
-      // We receive ALERTS metadata in any case
-      if (Object.keys(metadata).length <= 1) {
-        const fetchedMetrics = await languageProvider.queryLabelValues(
-          timeRange,
-          METRIC_LABEL,
-          undefined,
-          PROMETHEUS_QUERY_BUILDER_MAX_RESULTS
-        );
-        const processedData = fetchedMetrics.map((m) => generateMetricData(m, languageProvider));
-        setMetricsData(processedData);
-      } else {
-        const processedData = Object.keys(metadata).map((m) => generateMetricData(m, languageProvider));
-        setMetricsData(processedData);
+  const streamSearch = useCallback(
+    async (
+      searchId: number,
+      searchTimeRange: TimeRange,
+      metricText: string,
+      queryLabels?: QueryBuilderLabelFilter[]
+    ): Promise<boolean> => {
+      const searchClient = languageProvider.getSearchApiClient?.();
+      if (!searchClient) {
+        return false;
       }
-    } catch (error) {
+
+      searchAbortControllerRef.current?.abort();
+      const abortController = new AbortController();
+      searchAbortControllerRef.current = abortController;
+      const rawMatch = formatLabelFiltersToString(queryLabels) || undefined;
+      const match = rawMatch ? languageProvider.datasource.interpolateString(rawMatch) : undefined;
+
+      setIsLoading(true);
       setMetricsData([]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [languageProvider, timeRange]);
+      setResultsIncomplete(false);
+      let resultsCount = 0;
 
-  const debouncedBackendSearch = useMemo(
-    () =>
-      debounce(async (timeRange: TimeRange, metricText: string, queryLabels?: QueryBuilderLabelFilter[]) => {
-        // Generate unique search ID to handle race conditions
-        const searchId = ++latestSearchIdRef.current;
+      try {
+        const response = await searchClient.searchMetricNames(searchTimeRange, metricText, {
+          includeMetadata: true,
+          limit: PROMETHEUS_QUERY_BUILDER_MAX_RESULTS,
+          match,
+          retainResults: false,
+          signal: abortController.signal,
+          onBatch: (batch) => {
+            if (searchId !== latestSearchIdRef.current || resultsCount >= PROMETHEUS_QUERY_BUILDER_MAX_RESULTS) {
+              return;
+            }
 
-        try {
-          if (metricText === '') {
-            await fetchMetadata();
-            return;
-          }
+            const room = PROMETHEUS_QUERY_BUILDER_MAX_RESULTS - resultsCount;
+            const accepted = batch.length > room ? batch.slice(0, room) : batch;
+            resultsCount += accepted.length;
+            setMetricsData((current) => [...current, ...accepted.map(toMetricData)]);
+            if (resultsCount >= PROMETHEUS_QUERY_BUILDER_MAX_RESULTS) {
+              setResultsIncomplete(true);
+            }
+          },
+        });
 
-          setIsLoading(true);
+        if (
+          searchId === latestSearchIdRef.current &&
+          (response.hasMore || resultsCount >= PROMETHEUS_QUERY_BUILDER_MAX_RESULTS)
+        ) {
+          setResultsIncomplete(true);
+        }
+      } catch (error) {
+        if (isAbortError(error)) {
+          return true;
+        }
+        if (error instanceof SearchApiUnavailableError) {
+          return false;
+        }
+        throw error;
+      }
 
-          const queryString = regexifyLabelValuesQueryString(metricText);
-          const filterArray = queryLabels ? formatPrometheusLabelFilters(queryLabels) : [];
-          const match = `{__name__=~"(?i).*${queryString}"${filterArray ? filterArray.join('') : ''}}`;
-
-          const results = await languageProvider.queryLabelValues(timeRange, METRIC_LABEL, match);
-
-          // Check if this is still the most recent search
-          if (searchId !== latestSearchIdRef.current) {
-            return; // Ignore outdated results
-          }
-
-          const [fuzzyOrderedMetrics] = fuzzySearch(results, queryString);
-          const resultsOptions: MetricsData = fuzzyOrderedMetrics.map((m) => generateMetricData(m, languageProvider));
-
+      if (searchId === latestSearchIdRef.current) {
+        if (metricText) {
           reportInteraction('grafana_prometheus_metrics_explorer_search_performed', {
             searchQuery: metricText,
-            resultsCount: resultsOptions.length,
+            resultsCount,
+            discoveryApi: 'search',
           });
-
-          setMetricsData(resultsOptions);
-          setIsLoading(false);
-        } catch (error) {
-          // Only update state if this is still the latest search
-          if (searchId === latestSearchIdRef.current) {
-            console.error('Backend search failed:', error);
-            setMetricsData([]); // Clear results on error
-            setIsLoading(false);
-          }
         }
-      }, 300),
-    [fetchMetadata, languageProvider]
+        setIsLoading(false);
+      }
+      return true;
+    },
+    [languageProvider, toMetricData]
+  );
+
+  const fetchMetadata = useCallback(
+    async (searchId = ++latestSearchIdRef.current) => {
+      try {
+        setIsLoading(true);
+        if (await streamSearch(searchId, timeRange, '', queryLabels)) {
+          return;
+        }
+
+        const metadata = await languageProvider.queryMetricsMetadata(PROMETHEUS_QUERY_BUILDER_MAX_RESULTS);
+
+        // We receive ALERTS metadata in any case
+        if (queryLabels?.length || Object.keys(metadata).length <= 1) {
+          const rawMatch = formatLabelFiltersToString(queryLabels) || undefined;
+          const match = rawMatch ? languageProvider.datasource.interpolateString(rawMatch) : undefined;
+          const fetchedMetrics = await languageProvider.queryLabelValues(
+            timeRange,
+            METRIC_LABEL,
+            match,
+            PROMETHEUS_QUERY_BUILDER_MAX_RESULTS
+          );
+          const processedData = fetchedMetrics.map((m) => generateMetricData(m, languageProvider));
+          setMetricsData(processedData);
+        } else {
+          const processedData = Object.keys(metadata).map((m) => generateMetricData(m, languageProvider));
+          setMetricsData(processedData);
+        }
+      } catch (error) {
+        if (!languageProvider.hasSearchSupport?.()) {
+          setMetricsData([]);
+        }
+      } finally {
+        if (searchId === latestSearchIdRef.current) {
+          setIsLoading(false);
+        }
+      }
+    },
+    [languageProvider, queryLabels, streamSearch, timeRange]
+  );
+
+  const runDebouncedBackendSearch = useMemo(
+    () =>
+      debounce(
+        async (
+          timeRange: TimeRange,
+          metricText: string,
+          queryLabels: QueryBuilderLabelFilter[] | undefined,
+          searchId: number
+        ) => {
+          if (searchId !== latestSearchIdRef.current) {
+            return;
+          }
+          try {
+            if (metricText === '') {
+              await fetchMetadata(searchId);
+              return;
+            }
+
+            if (await streamSearch(searchId, timeRange, metricText, queryLabels)) {
+              return;
+            }
+
+            setIsLoading(true);
+
+            const queryString = regexifyLabelValuesQueryString(metricText);
+            const filterArray = queryLabels ? formatPrometheusLabelFilters(queryLabels) : [];
+            const match = `{__name__=~"(?i).*${queryString}"${filterArray ? filterArray.join('') : ''}}`;
+
+            const results = await languageProvider.queryLabelValues(timeRange, METRIC_LABEL, match);
+
+            // Check if this is still the most recent search
+            if (searchId !== latestSearchIdRef.current) {
+              return; // Ignore outdated results
+            }
+
+            const [fuzzyOrderedMetrics] = fuzzySearch(results, queryString);
+            const resultsOptions: MetricsData = fuzzyOrderedMetrics.map((m) => generateMetricData(m, languageProvider));
+
+            reportInteraction('grafana_prometheus_metrics_explorer_search_performed', {
+              searchQuery: metricText,
+              resultsCount: resultsOptions.length,
+              discoveryApi: 'standard',
+            });
+
+            setMetricsData(resultsOptions);
+            setIsLoading(false);
+          } catch (error) {
+            // Only update state if this is still the latest search
+            if (searchId === latestSearchIdRef.current) {
+              console.error('Backend search failed:', error);
+              if (!languageProvider.hasSearchSupport?.()) {
+                setMetricsData([]);
+              }
+              setIsLoading(false);
+            }
+          }
+        },
+        300
+      ),
+    [fetchMetadata, languageProvider, streamSearch]
+  );
+
+  const debouncedBackendSearch = useCallback(
+    (timeRange: TimeRange, metricText: string, queryLabels?: QueryBuilderLabelFilter[]) => {
+      const searchId = ++latestSearchIdRef.current;
+      searchAbortControllerRef.current?.abort();
+      return runDebouncedBackendSearch(timeRange, metricText, queryLabels, searchId);
+    },
+    [runDebouncedBackendSearch]
   );
 
   useEffect(() => {
     fetchMetadata();
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    return () => {
+      latestSearchIdRef.current++;
+      searchAbortControllerRef.current?.abort();
+    };
+  }, [fetchMetadata]);
 
   return (
     <MetricsModalContext.Provider
@@ -201,6 +332,7 @@ export const MetricsModalContextProvider: FC<PropsWithChildren<MetricsModalConte
         setSelectedTypes,
         searchedText,
         setSearchedText,
+        resultsIncomplete,
       }}
     >
       {children}

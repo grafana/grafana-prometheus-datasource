@@ -1,5 +1,5 @@
 // Core Grafana history https://github.com/grafana/grafana/blob/v11.0.0-preview/public/app/plugins/datasource/prometheus/components/VariableQueryEditor.test.tsx
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { select } from 'react-select-event';
 
@@ -139,6 +139,8 @@ describe('PromVariableQueryEditor', () => {
           start: () => Promise.resolve([]),
           queryLabelKeys: jest.fn().mockResolvedValue(['those']),
           queryLabelValues: jest.fn().mockResolvedValue(['that']),
+          retrieveMetricsMetadata: jest.fn().mockReturnValue({}),
+          queryMetricsMetadata: jest.fn().mockResolvedValue(undefined),
         } as Partial<PrometheusLanguageProviderInterface>,
         getTagKeys: jest.fn().mockResolvedValue([{ text: 'this', value: 'this', label: 'this' }]),
         getVariables: jest.fn().mockReturnValue([]),
@@ -296,7 +298,9 @@ describe('PromVariableQueryEditor', () => {
     await userEvent.type(labelSelect, 'this');
     await waitFor(() => select(labelSelect, 'this', { container: document.body }));
 
-    const combobox = screen.getByPlaceholderText('Select metric');
+    const combobox = within(
+      screen.getByTestId(selectors.components.DataSource.Prometheus.queryEditor.builder.metricSelect)
+    ).getByRole('combobox');
     await userEvent.type(combobox, 'that');
     await userEvent.keyboard('{Enter}');
 

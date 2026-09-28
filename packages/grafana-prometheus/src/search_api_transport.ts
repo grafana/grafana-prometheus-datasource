@@ -1,6 +1,21 @@
 import { type BackendSrvRequest, getBackendSrv } from '@grafana/runtime';
 
-import { type SearchChunkSource, SearchApiUnavailableError } from './search_api_stream';
+import { type SearchChunkSource, SearchApiError, SearchApiUnavailableError } from './search_api_stream';
+
+export const MAX_SEARCH_QUEUE_BYTES = 64 * 1024 * 1024;
+export const MAX_SEARCH_QUEUE_CHUNKS = 1_024;
+
+export interface SearchTransportStats {
+  queuedBytes: number;
+  queuedChunks: number;
+  peakQueuedBytes: number;
+  peakQueuedChunks: number;
+}
+
+export interface SearchQueueLimits {
+  maxQueuedBytes?: number;
+  maxQueuedChunks?: number;
+}
 
 interface QueuedChunk {
   done: boolean;
@@ -16,8 +31,9 @@ interface QueuedChunk {
 // single pending waiter is enough (no queue of readers needed).
 export async function bridgeChunkedResponse(
   request: BackendSrvRequest,
-  signal?: AbortSignal
-): Promise<{ source: SearchChunkSource; cancel: () => void }> {
+  signal?: AbortSignal,
+  limits: SearchQueueLimits = {}
+): Promise<{ source: SearchChunkSource; cancel: () => void; stats: SearchTransportStats }> {
   const backendSrv = getBackendSrv();
   // chunked() arrived in Grafana 11.6.0. On an older host the Search API
   // cannot be reached at all, which is a capability signal rather than a
@@ -27,13 +43,35 @@ export async function bridgeChunkedResponse(
   }
 
   const queue: QueuedChunk[] = [];
+  const stats: SearchTransportStats = {
+    queuedBytes: 0,
+    queuedChunks: 0,
+    peakQueuedBytes: 0,
+    peakQueuedChunks: 0,
+  };
+  const maxQueuedBytes = limits.maxQueuedBytes ?? MAX_SEARCH_QUEUE_BYTES;
+  const maxQueuedChunks = limits.maxQueuedChunks ?? MAX_SEARCH_QUEUE_CHUNKS;
   let waiting: { resolve: (chunk: QueuedChunk) => void; reject: (err: unknown) => void } | undefined;
   let terminalError: unknown;
   let hasTerminalError = false;
+  let subscription: { unsubscribe: () => void } | undefined;
+  let unsubscribeRequested = false;
+  let terminal = false;
+
+  const unsubscribe = () => {
+    if (subscription) {
+      subscription.unsubscribe();
+    } else {
+      unsubscribeRequested = true;
+    }
+  };
 
   const read = (): Promise<QueuedChunk> => {
     if (queue.length > 0) {
-      return Promise.resolve(queue.shift()!);
+      const chunk = queue.shift()!;
+      stats.queuedBytes -= chunk.value?.byteLength ?? 0;
+      stats.queuedChunks -= chunk.done ? 0 : 1;
+      return Promise.resolve(chunk);
     }
     if (hasTerminalError) {
       hasTerminalError = false;
@@ -62,16 +100,6 @@ export async function bridgeChunkedResponse(
     return JSON.parse(text + decoder.decode());
   };
 
-  const deliver = (chunk: QueuedChunk) => {
-    if (waiting) {
-      const pending = waiting;
-      waiting = undefined;
-      pending.resolve(chunk);
-    } else {
-      queue.push(chunk);
-    }
-  };
-
   const fail = (err: unknown) => {
     if (waiting) {
       const pending = waiting;
@@ -83,18 +111,55 @@ export async function bridgeChunkedResponse(
     }
   };
 
+  const deliver = (chunk: QueuedChunk) => {
+    if (terminal) {
+      return;
+    }
+    if (waiting) {
+      const pending = waiting;
+      waiting = undefined;
+      pending.resolve(chunk);
+    } else {
+      const chunkBytes = chunk.value?.byteLength ?? 0;
+      const chunkCount = chunk.done ? 0 : 1;
+      const queuedBytes = stats.queuedBytes + chunkBytes;
+      const queuedChunks = stats.queuedChunks + chunkCount;
+      if (queuedBytes > maxQueuedBytes || queuedChunks > maxQueuedChunks) {
+        terminal = true;
+        queue.length = 0;
+        stats.queuedBytes = 0;
+        stats.queuedChunks = 0;
+        unsubscribe();
+        fail(
+          new SearchApiError(
+            `Search stream queue exceeded its limit (${queuedBytes} bytes, ${queuedChunks} chunks)`
+          )
+        );
+        return;
+      }
+      queue.push(chunk);
+      stats.queuedBytes = queuedBytes;
+      stats.queuedChunks = queuedChunks;
+      stats.peakQueuedBytes = Math.max(stats.peakQueuedBytes, queuedBytes);
+      stats.peakQueuedChunks = Math.max(stats.peakQueuedChunks, queuedChunks);
+    }
+  };
+
   return new Promise((resolve, reject) => {
     let settled = false;
+    let sawDone = false;
 
-    const subscription = backendSrv.chunked(request).subscribe({
+    subscription = backendSrv.chunked(request).subscribe({
       next: (response) => {
         if (!settled) {
           settled = true;
           resolve({
             source: { ok: response.ok, status: response.status, statusText: response.statusText, read, json },
-            cancel: () => subscription.unsubscribe(),
+            cancel: unsubscribe,
+            stats,
           });
         }
+        sawDone ||= response.data === undefined;
         deliver({ done: response.data === undefined, value: response.data });
       },
       error: (err) => {
@@ -110,22 +175,32 @@ export async function bridgeChunkedResponse(
           settled = true;
           resolve({
             source: { ok: true, status: 200, statusText: 'OK', read, json },
-            cancel: () => subscription.unsubscribe(),
+            cancel: unsubscribe,
+            stats,
           });
         }
         // Defensive: chunked() always emits a final `data: undefined` chunk
         // before completing, but any Observable meeting the same contract
         // (e.g. a test double) may complete without one.
-        deliver({ done: true });
+        if (!sawDone) {
+          deliver({ done: true });
+        }
       },
     });
+    if (unsubscribeRequested) {
+      subscription.unsubscribe();
+    }
 
     if (!signal) {
       return;
     }
 
     const onAbort = () => {
-      subscription.unsubscribe();
+      terminal = true;
+      queue.length = 0;
+      stats.queuedBytes = 0;
+      stats.queuedChunks = 0;
+      unsubscribe();
       const abortError = Object.assign(new Error('The user aborted a request.'), { name: 'AbortError' });
       if (!settled) {
         settled = true;

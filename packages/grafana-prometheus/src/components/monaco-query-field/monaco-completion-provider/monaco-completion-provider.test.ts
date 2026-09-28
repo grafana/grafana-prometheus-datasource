@@ -165,7 +165,30 @@ describe('monaco-completion-provider', () => {
         dataProvider,
         timeRange,
         'grafana',
-        'full' // Should be 'full' because word length >= 3
+        'full', // Should be 'full' because word length >= 3
+        expect.any(Function)
+      );
+    });
+
+    it('keeps the full metric search when the editor stays empty', async () => {
+      const model = createMockModel('', null);
+      const position = createMockPosition(1);
+      const { provider, state } = getCompletionProvider(monaco, dataProvider, timeRange);
+
+      state.isManualTriggerRequested = true;
+      await (provider.provideCompletionItems as Function)(model, position);
+
+      state.isManualTriggerRequested = false;
+      await (provider.provideCompletionItems as Function)(model, position);
+
+      expect(mockGetCompletions).toHaveBeenCalledTimes(1);
+      expect(mockGetCompletions).toHaveBeenCalledWith(
+        { type: 'EMPTY' },
+        dataProvider,
+        timeRange,
+        undefined,
+        'full',
+        expect.any(Function)
       );
     });
 
@@ -183,7 +206,8 @@ describe('monaco-completion-provider', () => {
         dataProvider,
         timeRange,
         'go',
-        'partial' // Should be 'partial' because word length < 3
+        'partial', // Should be 'partial' because word length < 3
+        expect.any(Function)
       );
     });
 
@@ -220,6 +244,73 @@ describe('monaco-completion-provider', () => {
         sortText: '0',
         command: undefined,
       });
+    });
+
+    it('returns the first search batch and refreshes as later batches arrive', async () => {
+      const metric = (label: string) => ({
+        label,
+        insertText: label,
+        type: 'METRIC_NAME' as const,
+      });
+      let emit: (batch: Array<ReturnType<typeof metric>>) => void = () => undefined;
+      let finish: (items: Array<ReturnType<typeof metric>>) => void = () => undefined;
+      mockGetCompletions.mockImplementation((_situation, _provider, _range, _term, _trigger, onBatch) => {
+        emit = onBatch;
+        return new Promise((resolve) => {
+          finish = resolve;
+        });
+      });
+      const onListAppended = jest.fn();
+      const { provider } = getCompletionProvider(monaco, dataProvider, timeRange, onListAppended);
+      const model = createMockModel('metric', { word: 'metric', startColumn: 1, endColumn: 7 });
+      const position = createMockPosition(7);
+
+      const opening = (provider.provideCompletionItems as Function)(model, position);
+      emit([metric('metric_one')]);
+      const first = await opening;
+
+      expect(first.incomplete).toBe(true);
+      expect(first.suggestions.map((item: { label: string }) => item.label)).toEqual(['metric_one']);
+      expect(onListAppended).not.toHaveBeenCalled();
+      expect(mockGetCompletions).toHaveBeenCalledTimes(1);
+
+      emit([metric('metric_two')]);
+      expect(onListAppended).toHaveBeenCalledTimes(1);
+
+      const refreshed = await (provider.provideCompletionItems as Function)(model, position);
+      expect(refreshed.incomplete).toBe(true);
+      expect(refreshed.suggestions.map((item: { label: string }) => item.label)).toEqual(['metric_one', 'metric_two']);
+      expect(mockGetCompletions).toHaveBeenCalledTimes(1);
+
+      finish([metric('metric_one'), metric('metric_two')]);
+      await Promise.resolve();
+      expect(onListAppended).toHaveBeenCalledTimes(2);
+
+      const done = await (provider.provideCompletionItems as Function)(model, position);
+      expect(done.incomplete).toBe(false);
+      expect(done.suggestions.map((item: { label: string }) => item.label)).toEqual(['metric_one', 'metric_two']);
+      expect(mockGetCompletions).toHaveBeenCalledTimes(1);
+    });
+
+    it('returns a series result when the lookup resolves and does not refresh early', async () => {
+      let finish: (items: Array<{ label: string; insertText: string; type: 'LABEL_NAME' }>) => void = () => undefined;
+      mockGetCompletions.mockImplementation(() => {
+        return new Promise((resolve) => {
+          finish = resolve;
+        });
+      });
+      const onListAppended = jest.fn();
+      const { provider } = getCompletionProvider(monaco, dataProvider, timeRange, onListAppended);
+      const model = createMockModel('{', null);
+      const position = createMockPosition(2);
+
+      const pending = (provider.provideCompletionItems as Function)(model, position);
+      finish([{ label: 'job', insertText: 'job=', type: 'LABEL_NAME' }]);
+      const result = await pending;
+
+      expect(result.incomplete).toBe(false);
+      expect(result.suggestions.map((item: { label: string }) => item.label)).toEqual(['job']);
+      expect(onListAppended).not.toHaveBeenCalled();
     });
 
     it('should add trigger command for items with triggerOnInsert', async () => {
@@ -266,7 +357,8 @@ describe('monaco-completion-provider', () => {
         dataProvider,
         timeRange,
         'te',
-        'full' // Should be 'full' despite short word length
+        'full', // Should be 'full' despite short word length
+        expect.any(Function)
       );
     });
   });
@@ -289,7 +381,8 @@ describe('monaco-completion-provider', () => {
           dataProvider,
           timeRange,
           undefined, // No word at position after trigger char
-          'full'
+          'full',
+          expect.any(Function)
         );
       });
     });

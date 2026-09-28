@@ -28,6 +28,32 @@ describe('MetricsModal', () => {
     });
   });
 
+  it('shows an incomplete message when the Search API has more results', async () => {
+    const datasource = createDatasource(false);
+    datasource.languageProvider.getSearchApiClient = jest.fn().mockReturnValue({
+      searchMetricNames: jest.fn().mockImplementation((_timeRange, _term, options) => {
+        options.onBatch([{ name: 'streamed_metric', type: 'counter', help: 'streamed' }]);
+        return Promise.resolve({ results: [], warnings: [], hasMore: true });
+      }),
+    });
+
+    render(<MetricsModal {...createProps(defaultQuery, datasource, listOfMetrics)} />);
+
+    expect(
+      await screen.findByText('Showing the first 1,000 results. Refine your search to find other metrics.')
+    ).toBeInTheDocument();
+    expect(screen.getByText('streamed_metric')).toBeInTheDocument();
+    expect(screen.getByRole('navigation')).toBeInTheDocument();
+  });
+
+  it('does not show the incomplete message for label discovery', async () => {
+    setup(defaultQuery, listOfMetrics);
+    await screen.findByText('all-metrics');
+    expect(
+      screen.queryByText('Showing the first 1,000 results. Refine your search to find other metrics.')
+    ).not.toBeInTheDocument();
+  });
+
   it('renders a list of metrics', async () => {
     setup(defaultQuery, listOfMetrics);
     await waitFor(() => {
@@ -51,6 +77,26 @@ describe('MetricsModal', () => {
     setup(query, ['with-labels']);
     await waitFor(() => {
       expect(screen.getByText('with-labels')).toBeInTheDocument();
+    });
+  });
+
+  it('passes query labels to backend metric searches', async () => {
+    const query: PromVisualQuery = {
+      metric: '',
+      labels: [{ op: '!=', label: 'action', value: 'remove' }],
+      operations: [],
+    };
+    const { datasource } = setup(query, ['with-labels']);
+    datasource.languageProvider.queryLabelValues = jest.fn().mockResolvedValue([]);
+
+    await userEvent.type(screen.getByTestId(metricsModaltestIds.searchMetric), 'http');
+
+    await waitFor(() => {
+      expect(datasource.languageProvider.queryLabelValues).toHaveBeenCalledWith(
+        expect.anything(),
+        '__name__',
+        '{__name__=~"(?i).*http.*",action!="remove"}'
+      );
     });
   });
 
@@ -172,6 +218,7 @@ describe('MetricsModal', () => {
       expect(reportInteraction).toHaveBeenCalledWith('grafana_prometheus_metrics_explorer_search_performed', {
         searchQuery: 'a_buck',
         resultsCount: 0,
+        discoveryApi: 'standard',
       });
     });
   });
@@ -310,6 +357,7 @@ function createDatasource(withLabels?: boolean) {
         help: 'with-labels-help',
       },
     });
+    languageProvider.queryLabelValues = jest.fn().mockResolvedValue(['with-labels']);
   } else {
     // all metrics - create metadata for all metrics in listOfMetrics
     const mockMetadata: Record<string, { type: string; help: string }> = {};
@@ -367,6 +415,8 @@ function createDatasource(withLabels?: boolean) {
     undefined,
     languageProvider
   );
+  datasource.interpolateString = jest.fn((value: string) => value);
+  languageProvider.datasource = datasource;
   return datasource;
 }
 
