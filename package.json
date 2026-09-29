@@ -83,6 +83,7 @@
     "@types/react": "18.3.31",
     "@types/react-dom": "18.3.7",
     "human-id": "4.2.1",
+    "@lezer/lr": "1.4.10",
     "@grafana/plugin-ui": {
       "@grafana/data": "$@grafana/data",
       "@grafana/ui": "$@grafana/ui",
