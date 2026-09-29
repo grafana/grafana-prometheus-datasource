@@ -4,7 +4,7 @@
   "workspaces": [
     "packages/*"
   ],
-  "packageManager": "npm@11.20.0",
+  "packageManager": "npm@11.19.0",
   "scripts": {
     "build": "webpack -c ./webpack.config.ts --env production",
     "dev": "webpack -w -c ./webpack.config.ts --env development",
@@ -109,14 +109,14 @@
   },
   "dependencies": {
     "@emotion/css": "11.13.5",
-    "@grafana/data": "13.2.2",
-    "@grafana/e2e-selectors": "13.2.2",
-    "@grafana/i18n": "13.2.2",
+    "@grafana/data": "13.1.7",
+    "@grafana/e2e-selectors": "13.1.7",
+    "@grafana/i18n": "13.1.7",
     "@grafana/plugin-ui": "0.17.6",
     "@grafana/prometheus": "workspace:*",
-    "@grafana/runtime": "13.2.2",
-    "@grafana/schema": "13.2.2",
-    "@grafana/ui": "13.2.2",
+    "@grafana/runtime": "13.1.7",
+    "@grafana/schema": "13.1.7",
+    "@grafana/ui": "13.1.7",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "rxjs": "7.8.2",
