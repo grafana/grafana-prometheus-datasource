@@ -6,7 +6,7 @@ require (
 	github.com/andybalholm/brotli v1.2.5
 	github.com/grafana/dskit v0.0.0-20260928073014-b6a53f6bee29
 	github.com/grafana/grafana-plugin-sdk-go v0.296.5
-	github.com/grafana/grafana/apps/scope v0.0.0-20260929091448-83723d057845
+	github.com/grafana/grafana/apps/scope v0.0.0-kmdagger3
 	github.com/json-iterator/go v1.1.12
 	github.com/prometheus/client_golang v1.24.1
 	github.com/prometheus/common v0.72.0
@@ -57,7 +57,7 @@ require (
 	github.com/google/gnostic-models v0.7.1 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/grafana/grafana/pkg/apimachinery v0.0.0-20260929085012-2455d47955d8 // indirect
+	github.com/grafana/grafana/pkg/apimachinery v0.0.0-kmdagger3 // indirect
 	github.com/grafana/otel-profiling-go v0.6.0 // indirect
 	github.com/grafana/pyroscope-go/godeltaprof v0.1.12 // indirect
 	github.com/grafana/regexp v0.0.0-20250905093917-f7b3be9d1853 // indirect
@@ -113,7 +113,7 @@ require (
 	golang.org/x/text v0.42.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260928230214-8a89bd6388cc // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260928230214-8a89bd6388cc // indirect
-	google.golang.org/grpc v1.85.0-dev.0.20260825072537-93e31b48545e // indirect
+	google.golang.org/grpc v1.86.0-dev // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20260928204700-0115328ef16b // indirect
