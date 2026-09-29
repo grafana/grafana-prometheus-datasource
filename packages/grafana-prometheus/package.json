@@ -2,7 +2,7 @@
   "author": "Grafana Labs",
   "license": "AGPL-3.0-only",
   "name": "@grafana/prometheus",
-  "version": "13.2.1",
+  "version": "13.2.2",
   "description": "Grafana Prometheus Library",
   "packageManager": "npm@11.19.0",
   "keywords": [
