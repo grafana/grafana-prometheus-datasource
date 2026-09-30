@@ -65,6 +65,8 @@ export function MetricCombobox({
             match,
             signal: abortController.signal,
             retainResults: false,
+            includeMetadata: false,
+            sortBy: 'alpha',
             onBatch: (batch) => {
               onBatch?.(batch.map((result) => ({ label: result.name, value: result.name })));
             },

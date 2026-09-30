@@ -625,9 +625,9 @@ describe('buildVisualQueryFromString', () => {
     expect(buildVisualQueryFromString('ewafweaf{afea=afe}')).toEqual({
       errors: [
         {
-          text: 'afe}',
+          text: 'afe',
           from: 14,
-          to: 18,
+          to: 17,
           parentType: 'UnquotedLabelMatcher',
         },
       ],

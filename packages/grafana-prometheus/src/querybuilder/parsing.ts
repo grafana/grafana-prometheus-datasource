@@ -18,11 +18,14 @@ import {
   MatchOp,
   MatrixSelector,
   NumberDurationLiteral,
+  OffsetExpr,
   On,
   ParenExpr,
   parser,
+  StepInvariantExpr,
   StringLiteral,
   SmoothedExpr,
+  SubqueryExpr,
   QuotedLabelMatcher,
   UnquotedLabelMatcher,
   VectorSelector,
@@ -30,7 +33,9 @@ import {
 } from '@prometheus-io/lezer-promql';
 
 import { t } from '@grafana/i18n';
+import { config } from '@grafana/runtime';
 
+import { decodePromQLStringLiteral } from '../escaping';
 import { getRangeModifierOperationId, rangeModifierFunctions } from '../rangeModifiers';
 
 import { binaryScalarOperatorToOperatorName } from './binaryScalarOperations';
@@ -140,7 +145,7 @@ function handleExpression(expr: string, node: SyntaxNode, context: Context) {
     }
 
     case QuotedLabelMatcher: {
-      const quotedLabel = getLabel(expr, node, QuotedLabelName);
+      const quotedLabel = getLabel(expr, node, QuotedLabelName, context);
       quotedLabel.label = quotedLabel.label.slice(1, -1);
       visQuery.labels.push(quotedLabel);
       const err = node.getChild(ErrorId);
@@ -152,7 +157,7 @@ function handleExpression(expr: string, node: SyntaxNode, context: Context) {
 
     case UnquotedLabelMatcher: {
       // Same as MetricIdentifier should be just one per query.
-      visQuery.labels.push(getLabel(expr, node, LabelName));
+      visQuery.labels.push(getLabel(expr, node, LabelName, context));
       const err = node.getChild(ErrorId);
       if (err) {
         context.errors.push(makeError(expr, err));
@@ -220,11 +225,22 @@ function isIntervalVariableError(node: SyntaxNode) {
 function getLabel(
   expr: string,
   node: SyntaxNode,
-  labelType: typeof LabelName | typeof QuotedLabelName
+  labelType: typeof LabelName | typeof QuotedLabelName,
+  context: Context
 ): QueryBuilderLabelFilter {
   const label = getString(expr, node.getChild(labelType));
   const op = getString(expr, node.getChild(MatchOp));
-  const value = getString(expr, node.getChild(StringLiteral)).replace(/^["'`]|["'`]$/g, '');
+  const stringLiteralNode = node.getChild(StringLiteral);
+  const stringLiteral = getString(expr, stringLiteralNode);
+  let value = stringLiteral.replace(/^["'`]|["'`]$/g, '');
+  if (config.featureToggles.prometheusSpecialCharsInLabelValues) {
+    const decoded = decodePromQLStringLiteral(stringLiteral);
+    if (decoded !== undefined) {
+      value = decoded;
+    } else if (stringLiteralNode && !node.getChild(ErrorId)) {
+      context.errors.push(makeError(expr, stringLiteralNode));
+    }
+  }
   return {
     label,
     op,
@@ -292,17 +308,30 @@ function handleFunction(expr: string, node: SyntaxNode, context: Context) {
   const params = [];
   let interval = '';
 
-  // This is a bit of a shortcut to get the interval argument. Reasons are
-  // - interval is not part of the function args per promQL grammar but we model it as argument for the function in
-  //   the query model.
-  // - it is easier to handle template variables this way as template variable is an error for the parser
+  // PromQL puts the range duration after the vector selector; Builder stores it as
+  // a function parameter. Read that suffix of the original expression.
   if (rangeFunctions.includes(funcName) || funcName.endsWith('_over_time')) {
-    let match = getString(expr, node).match(/\[(.+)\]/);
+    const matrixSelector = body ? findFirstNodeByType(body, MatrixSelector) : undefined;
+    const vectorSelector = matrixSelector?.getChild(VectorSelector);
+    const match = vectorSelector
+      ? getString(expr, matrixSelector)
+          .slice(getString(expr, vectorSelector).length)
+          .match(/^\s*\[([^\]]+)\]$/)
+      : undefined;
     if (match?.[1]) {
       interval = match[1];
       // We were replaced the builtin variables to prevent errors
       // Here we return those back
       params.push(returnBuiltInVariable(match[1]));
+    }
+    const unsupportedArgument =
+      body?.getChild(OffsetExpr) ??
+      body?.getChild(StepInvariantExpr) ??
+      body?.getChild(SubqueryExpr) ??
+      (argument?.type.id === FunctionCall ? argument : undefined);
+    if (unsupportedArgument) {
+      // Builder cannot represent nested scalar arguments or range selector modifiers.
+      context.errors.push(makeError(expr, unsupportedArgument));
     }
   }
 
@@ -318,6 +347,19 @@ function handleFunction(expr: string, node: SyntaxNode, context: Context) {
     }
     updateFunctionArgs(expr, body, context, op);
   }
+}
+
+function findFirstNodeByType(node: SyntaxNode, type: number): SyntaxNode | undefined {
+  if (node.type.id === type) {
+    return node;
+  }
+  for (let child = node.firstChild; child; child = child.nextSibling) {
+    const found = findFirstNodeByType(child, type);
+    if (found) {
+      return found;
+    }
+  }
+  return undefined;
 }
 
 /**
