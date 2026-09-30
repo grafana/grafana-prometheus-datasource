@@ -1,5 +1,6 @@
 import { expect, test } from '@grafana/plugin-e2e';
 import { type ConsoleMessage, type Page } from '@playwright/test';
+import { resolveDataSourceUid } from './env';
 
 const PLUGIN_TYPE = 'prometheus';
 
@@ -59,7 +60,7 @@ test.describe('i18n initialization', () => {
     async ({ explorePage, page }) => {
       const captured = attachCapture(page);
 
-      await explorePage.datasource.set('prometheus-gzip');
+      await explorePage.datasource.set(await resolveDataSourceUid(page));
 
       await expect(
         page.locator('[data-testid="data-testid Query editor row"], [aria-label="Query editor row"]')
