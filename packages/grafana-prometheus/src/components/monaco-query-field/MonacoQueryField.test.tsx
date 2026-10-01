@@ -35,7 +35,10 @@ const lightTheme = {
     primary: { border: '#00f', text: '#00f' },
     text: { primary: '#111', secondary: '#555' },
   },
-  components: { input: { borderColor: '#aaa' }, height: { md: 4 } },
+  components: {
+    input: { borderColor: '#aaa' },
+    height: { md: 4 }
+  },
   shape: { radius: { default: '2px' } },
   shadows: { z3: '0 1px 3px #000' },
   spacing: (...values: number[]) => values.map((value) => `${value * 8}px`).join(' '),
