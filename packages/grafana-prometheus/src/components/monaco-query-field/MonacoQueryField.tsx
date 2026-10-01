@@ -39,8 +39,8 @@ const options: monacoTypes.editor.IStandaloneEditorConstructionOptions = {
   padding: {
     // these numbers were picked so that visually this matches the previous version
     // of the query-editor the best
-    top: 4,
-    bottom: 5,
+    top: 2,
+    bottom: 3,
   },
   renderLineHighlight: 'none',
   scrollbar: {
@@ -94,7 +94,12 @@ const getStyles = (theme: GrafanaTheme2, placeholder: string) => {
       justifyContent: 'start',
       alignItems: 'center',
       height: '100%',
+      minHeight: theme.spacing(theme.components.height.md),
       overflow: 'hidden',
+      // centre the editor when minHeight is taller than its content
+      '& > section': {
+        alignItems: 'center',
+      },
     }),
     placeholder: css({
       '::after': {
