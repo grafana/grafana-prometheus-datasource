@@ -8,6 +8,7 @@ import (
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/stretchr/testify/require"
 
+	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/middleware"
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/models"
 )
 
@@ -31,6 +32,7 @@ func TestCreateTransportOptions(t *testing.T) {
 			float64(jsonData.MaxSamplesProcessedWarningThreshold),
 			float64(jsonData.MaxSamplesProcessedErrorThreshold),
 			bool(jsonData.QueryStatsEnabled),
+			middleware.OAuth2ClientCredentialsConfig{},
 			backend.NewLoggerWith("logger", "test"),
 		)
 		require.NoError(t, err)
@@ -50,6 +52,7 @@ func TestCreateTransportOptions(t *testing.T) {
 			float64(jsonData.MaxSamplesProcessedWarningThreshold),
 			float64(jsonData.MaxSamplesProcessedErrorThreshold),
 			bool(jsonData.QueryStatsEnabled),
+			middleware.OAuth2ClientCredentialsConfig{},
 			backend.NewLoggerWith("logger", "test"),
 		)
 		require.NoError(t, err)

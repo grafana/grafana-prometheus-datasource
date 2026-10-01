@@ -33,6 +33,7 @@
           "values": [
             "BasicAuth",
             "OAuthForward",
+            "OAuth2ClientCredentials",
             "NoAuth"
           ]
         }
@@ -49,6 +50,10 @@
             "value": "OAuthForward"
           },
           {
+            "label": "OAuth2 Client Credentials",
+            "value": "OAuth2ClientCredentials"
+          },
+          {
             "label": "No Authentication",
             "value": "NoAuth"
           }
@@ -56,28 +61,39 @@
       },
       "storage": {
         "type": "computed",
-        "read": "root_basicAuth == true ? 'BasicAuth' : (jsonData_oauthPassThru == true ? 'OAuthForward' : 'NoAuth')"
+        "read": "jsonData_oauth2ClientCredentialsEnabled == true ? 'OAuth2ClientCredentials' : (root_basicAuth == true ? 'BasicAuth' : (jsonData_oauthPassThru == true ? 'OAuthForward' : 'NoAuth'))"
       },
       "effects": [
         {
           "when": "value == 'BasicAuth'",
           "set": {
             "root_basicAuth": true,
-            "jsonData_oauthPassThru": false
+            "jsonData_oauthPassThru": false,
+            "jsonData_oauth2ClientCredentialsEnabled": false
           }
         },
         {
           "when": "value == 'OAuthForward'",
           "set": {
             "root_basicAuth": false,
-            "jsonData_oauthPassThru": true
+            "jsonData_oauthPassThru": true,
+            "jsonData_oauth2ClientCredentialsEnabled": false
+          }
+        },
+        {
+          "when": "value == 'OAuth2ClientCredentials'",
+          "set": {
+            "root_basicAuth": false,
+            "jsonData_oauthPassThru": false,
+            "jsonData_oauth2ClientCredentialsEnabled": true
           }
         },
         {
           "when": "value == 'NoAuth'",
           "set": {
             "root_basicAuth": false,
-            "jsonData_oauthPassThru": false
+            "jsonData_oauthPassThru": false,
+            "jsonData_oauth2ClientCredentialsEnabled": false
           }
         }
       ]
@@ -133,6 +149,73 @@
       "tags": [
         "managed-by:virtual_authMethod"
       ]
+    },
+    {
+      "id": "jsonData_oauth2ClientCredentialsEnabled",
+      "key": "oauth2ClientCredentialsEnabled",
+      "valueType": "boolean",
+      "target": "jsonData",
+      "defaultValue": false,
+      "tags": [
+        "managed-by:virtual_authMethod"
+      ]
+    },
+    {
+      "id": "jsonData_oauth2ClientId",
+      "key": "oauth2ClientId",
+      "label": "Client ID",
+      "description": "The OAuth2 client ID used for the client credentials grant",
+      "valueType": "string",
+      "target": "jsonData",
+      "role": "auth.oauth2.clientId",
+      "dependsOn": "virtual_authMethod == 'OAuth2ClientCredentials'",
+      "requiredWhen": "jsonData_oauth2ClientCredentialsEnabled == true",
+      "ui": {
+        "component": "input"
+      }
+    },
+    {
+      "id": "secureJsonData_oauth2ClientSecret",
+      "key": "oauth2ClientSecret",
+      "label": "Client secret",
+      "description": "The OAuth2 client secret used for the client credentials grant",
+      "valueType": "string",
+      "target": "secureJsonData",
+      "role": "auth.oauth2.clientSecret",
+      "dependsOn": "virtual_authMethod == 'OAuth2ClientCredentials'",
+      "ui": {
+        "component": "input"
+      }
+    },
+    {
+      "id": "jsonData_oauth2TokenUrl",
+      "key": "oauth2TokenUrl",
+      "label": "Token URL",
+      "description": "The OAuth2 token endpoint that client credentials are exchanged at for an access token",
+      "valueType": "string",
+      "target": "jsonData",
+      "role": "auth.oauth2.tokenUrl",
+      "dependsOn": "virtual_authMethod == 'OAuth2ClientCredentials'",
+      "requiredWhen": "jsonData_oauth2ClientCredentialsEnabled == true",
+      "ui": {
+        "component": "input",
+        "placeholder": "https://example.com/oauth2/token"
+      }
+    },
+    {
+      "id": "jsonData_oauth2Scopes",
+      "key": "oauth2Scopes",
+      "label": "Scopes",
+      "description": "OAuth2 scopes to request with the access token",
+      "valueType": "array",
+      "target": "jsonData",
+      "item": {
+        "valueType": "string"
+      },
+      "dependsOn": "virtual_authMethod == 'OAuth2ClientCredentials'",
+      "ui": {
+        "component": "list"
+      }
     },
     {
       "id": "jsonData_tlsAuthWithCACert",
@@ -729,7 +812,11 @@
       "fieldRefs": [
         "virtual_authMethod",
         "root_basicAuthUser",
-        "secureJsonData_basicAuthPassword"
+        "secureJsonData_basicAuthPassword",
+        "jsonData_oauth2ClientId",
+        "secureJsonData_oauth2ClientSecret",
+        "jsonData_oauth2TokenUrl",
+        "jsonData_oauth2Scopes"
       ]
     },
     {
@@ -837,6 +924,17 @@
     {
       "type": "group",
       "fields": [
+        "jsonData_oauth2ClientCredentialsEnabled",
+        "jsonData_oauth2ClientId",
+        "secureJsonData_oauth2ClientSecret",
+        "jsonData_oauth2TokenUrl",
+        "jsonData_oauth2Scopes"
+      ],
+      "description": "OAuth2 client credentials grant: enabling jsonData_oauth2ClientCredentialsEnabled requires jsonData_oauth2ClientId and jsonData_oauth2TokenUrl (Validate in pkg/promlib/models/settings.go); the backend exchanges them with secureJsonData_oauth2ClientSecret for a bearer token."
+    },
+    {
+      "type": "group",
+      "fields": [
         "jsonData_tlsAuth",
         "jsonData_serverName",
         "secureJsonData_tlsClientCert",
@@ -863,7 +961,7 @@
   ],
   "instructions": [
     {
-      "msg": "Prometheus authentication is built on Grafana's HTTP settings model, not a discriminator field. The editor's three visible auth methods write these flags: 'Basic authentication' sets root_basicAuth=true and provides root_basicAuthUser + secureJsonData_basicAuthPassword; 'Forward OAuth Identity' sets jsonData_oauthPassThru=true; 'No Authentication' leaves both false. Only one of basicAuth / oauthPassThru should be true at a time — the editor's onAuthMethodSelect (HttpSettings.tsx:59-69) always writes both. The upstream utility convertLegacyAuthProps (@grafana/plugin-ui) also recognises root_withCredentials for 'cross-site access control', but this plugin does not offer it in its visibleMethods.",
+      "msg": "Prometheus authentication is built on Grafana's HTTP settings model, not a discriminator field. The editor's four visible auth methods write these flags: 'Basic authentication' sets root_basicAuth=true and provides root_basicAuthUser + secureJsonData_basicAuthPassword; 'Forward OAuth Identity' sets jsonData_oauthPassThru=true; 'OAuth2 Client Credentials' sets jsonData_oauth2ClientCredentialsEnabled=true and provides jsonData_oauth2ClientId, jsonData_oauth2TokenUrl, optional jsonData_oauth2Scopes and secureJsonData_oauth2ClientSecret; 'No Authentication' leaves all three false. Only one of basicAuth / oauthPassThru / oauth2ClientCredentialsEnabled should be true at a time — the editor's onAuthMethodSelect (HttpSettings.tsx:59-69) always writes both. The upstream utility convertLegacyAuthProps (@grafana/plugin-ui) also recognises root_withCredentials for 'cross-site access control', but this plugin does not offer it in its visibleMethods.",
       "tags": [
         "llm",
         "auth"
@@ -884,7 +982,7 @@
       ]
     },
     {
-      "msg": "secureJsonData values (basicAuthPassword, tlsCACert, tlsClientCert, tlsClientKey) are write-only: they can be set or reset but never read back. To check whether a secret is already configured on an existing datasource, read the secureJsonFields object (e.g. secureJsonFields.basicAuthPassword == true) instead of secureJsonData_",
+      "msg": "secureJsonData values (basicAuthPassword, tlsCACert, tlsClientCert, tlsClientKey, oauth2ClientSecret) are write-only: they can be set or reset but never read back. To check whether a secret is already configured on an existing datasource, read the secureJsonFields object (e.g. secureJsonFields.basicAuthPassword == true) instead of secureJsonData_",
       "tags": [
         "llm",
         "auth",
