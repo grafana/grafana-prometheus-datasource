@@ -3,7 +3,8 @@
 ## Signed commits are required
 
 > [!IMPORTANT]
-> All commits must be [signed](https://docs.github.com/en/authentication/managing-commit-signature-verification/signing-commits) (GPG, SSH, or S/MIME) to be merged into this repository. Pull requests with unsigned commits will need to be re-committed with signatures before they can be merged.
+> All commits must be [signed](https://docs.github.com/en/authentication/managing-commit-signature-verification/signing-commits) (GPG, SSH, or S/MIME)
+to be merged into this repository. Pull requests with unsigned commits will need to be re-committed with signatures before they can be merged.
 
 ## Never bump versions manually
 
@@ -24,11 +25,11 @@
 This repository ships three packages. Each one is versioned in **its own separate release PR**,
 and each needs a different step after that PR is merged:
 
-| Order | Package                         | What it is                          | Release PR command                           | After the PR is merged                      |
-| ----- | ------------------------------- | ----------------------------------- | -------------------------------------------- | ------------------------------------------- |
-| 1     | `promlib`                       | Go backend library in `pkg/promlib` | `npm run changeset:version -- --promlib`     | **Push a git tag** `pkg/promlib/vX.Y.Z`     |
-| 2     | `@grafana/prometheus`           | Frontend library published to npm   | `npm run changeset:version -- --npm-package` | **Run the npm release workflow**            |
-| 3     | `grafana-prometheus-datasource` | The plugin itself                   | `npm run changeset:version -- --datasource`  | **Run the plugin catalog publish workflow** |
+| Order | Package                                                | What it is                          | Release PR command                           | After the PR is merged                                                                                             |
+|-------|--------------------------------------------------------|-------------------------------------|----------------------------------------------|--------------------------------------------------------------------------------------------------------------------|
+| 1     | [`promlib`](#release-promlib)                          | Go backend library in `pkg/promlib` | `npm run changeset:version -- --promlib`     | **Push a git tag** `pkg/promlib/vX.Y.Z`. Details: [Release promlib](#release-promlib)                              |
+| 2     | [`@grafana/prometheus`](#release-grafana-prometheus)   | Frontend library published to npm   | `npm run changeset:version -- --npm-package` | **Run the npm release workflow**. Details: [Release Grafana Prometheus NPM Package](#release-grafana-prometheus)   |
+| 3     | [`grafana-prometheus-datasource`](#release-datasource) | The plugin itself                   | `npm run changeset:version -- --datasource`  | **Run the plugin catalog publish workflow**. Details: [Release Grafana Prometheus Datasource](#release-datasource) |
 
 Rules for release PRs:
 
@@ -46,12 +47,13 @@ Thank you for your interest in contributing! This guide covers how to participat
 
 Contributors are expected to adhere to the [Grafana Code of Conduct](https://github.com/grafana/grafana/blob/main/CODE_OF_CONDUCT.md).
 
-You can browse [existing issues](https://github.com/grafana/grafana-prometheus-datasource/issues) or open a new one before submitting a pull request — especially for larger changes, it's worth discussing the approach first.
+You can browse [existing issues](https://github.com/grafana/grafana-prometheus-datasource/issues) or open a new one before submitting a pull request —
+especially for larger changes, it's worth discussing the approach first.
 
 ## Required Tools
 
 | Tool                              | Notes                                       |
-| --------------------------------- | ------------------------------------------- |
+|-----------------------------------|---------------------------------------------|
 | [Git](https://git-scm.com/)       | Version control                             |
 | [Go](https://go.dev/)             | See `go.mod` for minimum version            |
 | [Mage](https://magefile.org/)     | Backend build tool                          |
@@ -163,19 +165,22 @@ provisioning tooling, documentation and automation.
 
 The schema format is defined and documented by [`grafana/dsconfig`](https://github.com/grafana/dsconfig/tree/main/dsconfig):
 
-- [README](https://github.com/grafana/dsconfig/tree/main/dsconfig#readme) — concepts and a worked example for each field shape (root / jsonData / secret / array / virtual), plus current gaps and limitations.
+- [README](https://github.com/grafana/dsconfig/tree/main/dsconfig#readme) — concepts and a worked example for each field shape (root / jsonData /
+  secret / array / virtual), plus current gaps and limitations.
 - [`schema.md`](https://github.com/grafana/dsconfig/blob/main/dsconfig/schema.md) — full property reference.
-- [`schema.json`](https://github.com/grafana/dsconfig/blob/main/dsconfig/schema.json) — the JSON Schema `dsconfig.json` validates against. It is pinned via the `$schema` key at the top of our file, so editors autocomplete from it; bump that URL when you bump `github.com/grafana/dsconfig/schema` in `go.mod`.
+- [`schema.json`](https://github.com/grafana/dsconfig/blob/main/dsconfig/schema.json) — the JSON Schema `dsconfig.json` validates against. It is
+  pinned via the `$schema` key at the top of our file, so editors autocomplete from it; bump that URL when you bump
+  `github.com/grafana/dsconfig/schema` in `go.mod`.
 
 The rest of this section covers only what is specific to this repository.
 
 ### Layout
 
-| File in `pkg/schema/`        | Description                                                                          |
-| ---------------------------- | ------------------------------------------------------------------------------------ |
-| `dsconfig.json`              | Source of truth — **edit this**                                                      |
-| `dsconfig_test.go`           | Wires the schema into the shared conformance suite; also holds `SecureKeys` and the provisioning examples shipped with the plugin |
-| `*.gen.json`                 | Generated artifacts — **never hand-edit**; `npm run build` copies them into `dist/schema/` via `webpack.config.ts` |
+| File in `pkg/schema/` | Description                                                                                                                       |
+|-----------------------|-----------------------------------------------------------------------------------------------------------------------------------|
+| `dsconfig.json`       | Source of truth — **edit this**                                                                                                   |
+| `dsconfig_test.go`    | Wires the schema into the shared conformance suite; also holds `SecureKeys` and the provisioning examples shipped with the plugin |
+| `*.gen.json`          | Generated artifacts — **never hand-edit**; `npm run build` copies them into `dist/schema/` via `webpack.config.ts`                |
 
 ### Adding a new settings option
 
@@ -184,8 +189,8 @@ The rest of this section covers only what is specific to this repository.
    convention, e.g. `jsonData_httpMethod`.
 2. **Add the matching Go field** to `PromOptions` in `pkg/promlib/models/settings.go` with
    a json tag equal to the schema `key`. This parity is enforced in both directions — a
-   field in the schema but not the struct (or vice versa) fails the test suite. Secrets
-   (`target: secureJsonData`) are the exception: they get no struct field, but their key
+   field in the schema but not the struct (or vice versa) fails the test suite. Secrets (`target: secureJsonData`) are the exception: they get no
+   struct field, but their key
    must be added to `SecureKeys` in `pkg/schema/dsconfig_test.go`.
 3. **Regenerate the artifacts** and commit them with your change:
 
@@ -254,7 +259,8 @@ npm run e2e
 
 ## Changelog or Changeset
 
-Each PR must have a proper changeset that explains the PR's purpose in one line. That information will be used to generate a changelog when we release a new version of the respective package.
+Each PR must have a proper changeset that explains the PR's purpose in one line. That information will be used to generate a changelog when we release
+a new version of the respective package.
 
 To have a changeset, simply run `npm run changeset` and follow the CLI instructions.
 When targeting `@grafana/prometheus` or `promlib`, the command intentionally
@@ -267,7 +273,7 @@ datasource changeset still creates only one file.
 ## Project Structure
 
 | Path                           | Description                                                                            |
-| ------------------------------ | -------------------------------------------------------------------------------------- |
+|--------------------------------|----------------------------------------------------------------------------------------|
 | `src/`                         | Plugin frontend source (webpack-built, bundled into the Grafana plugin zip)            |
 | `packages/grafana-prometheus/` | `@grafana/prometheus` library (rollup-built, published to npm separately)              |
 | `pkg/promlib/`                 | Go backend library (`promlib`)                                                         |
@@ -294,14 +300,16 @@ datasource changeset still creates only one file.
 >
 > - Each package gets **its own release PR**. Never version two packages in one PR.
 > - Release in this order: **1. `promlib` → 2. `@grafana/prometheus` → 3. `grafana-prometheus-datasource`**.
->   Skip any package that has nothing to release, but keep the order for the rest.
+    > Skip any package that has nothing to release, but keep the order for the rest.
 > - Always bump versions with **`npm run changeset:version`**. Never edit versions or changelogs by hand.
 > - **Merging the PR is not the end.** Every package has a required step after merge:
 >   - `promlib` → **push a git tag**
->   - `@grafana/prometheus` → **run the npm release workflow**
->   - `grafana-prometheus-datasource` → **run the plugin catalog publish workflow**
+    >   - `@grafana/prometheus` → **run the npm release workflow**
+    >   - `grafana-prometheus-datasource` → **run the plugin catalog publish workflow**
 
 _**NOTE: if there is no changeset for the package you want to release, CLI will still bump the version and create a changelog to help you.**_
+
+<a id="release-promlib"></a>
 
 ### 1. Backend library `promlib` (release by git tag)
 
@@ -312,22 +320,24 @@ The backend library in `pkg/promlib` is released (tagged) independently via a gi
 1. Create a new branch from latest `main`.
 2. Run `npm run changeset:version -- --promlib` (or run `npm run changeset:version` and select `promlib`).
 3. Follow the CLI instructions. The CLI will:
-   - aggregate the changesets and generate a new changelog entry,
-   - delete the aggregated changesets,
-   - keep the mirrored datasource changesets pending for the datasource release,
-   - bump the version in `packages/promlib`.
+    - aggregate the changesets and generate a new changelog entry,
+    - delete the aggregated changesets,
+    - keep the mirrored datasource changesets pending for the datasource release,
+    - bump the version in `packages/promlib`.
 4. Commit everything, open the PR, and get it merged.
 
 **Step B: after the PR is merged, push a tag (required)**
 
 1. Check out the commit you just merged: `git checkout <COMMIT_SHA>`
 2. Create the tag: `git tag pkg/promlib/<VERSION>` (for example `git tag pkg/promlib/v0.0.12`).
-   - We use lightweight tags, so no other options are needed.
+    - We use lightweight tags, so no other options are needed.
 3. Push the tag: `git push origin pkg/promlib/<VERSION>`
 4. Verify the tag exists [here](https://github.com/grafana/grafana-prometheus-datasource/tags).
 5. **DO NOT RELEASE** anything! Tagging is enough.
 6. Wait 5-10 minutes for the Go module registry to pick up the new tag.
 7. Bump `github.com/grafana/grafana-prometheus-datasource/pkg/promlib` to the new version in your project's `go.mod`.
+
+<a id="release-grafana-prometheus"></a>
 
 ### 2. NPM library `@grafana/prometheus` (release to npm)
 
@@ -338,10 +348,10 @@ The library in `packages/grafana-prometheus/` is released independently via a ma
 1. Create a new branch from latest `main`.
 2. Run `npm run changeset:version -- --npm-package` (or run `npm run changeset:version` and select `@grafana/prometheus`).
 3. Follow the CLI instructions. The CLI will:
-   - aggregate the changesets and generate a new changelog entry,
-   - delete the aggregated changesets,
-   - keep the mirrored datasource changesets pending for the datasource release,
-   - bump the version in `packages/grafana-prometheus/package.json`.
+    - aggregate the changesets and generate a new changelog entry,
+    - delete the aggregated changesets,
+    - keep the mirrored datasource changesets pending for the datasource release,
+    - bump the version in `packages/grafana-prometheus/package.json`.
 4. Commit everything, open the PR, and get it merged.
 
 **Step B: after the PR is merged, publish to npm (required)**
@@ -356,6 +366,8 @@ The library in `packages/grafana-prometheus/` is released independently via a ma
    npm view @grafana/prometheus dist-tags
    ```
 
+<a id="release-datasource"></a>
+
 ### 3. Grafana plugin `grafana-prometheus-datasource` (publish to the plugin catalog)
 
 Release this last, so its changelog includes the mirrored changesets from the library releases above.
@@ -365,9 +377,9 @@ Release this last, so its changelog includes the mirrored changesets from the li
 1. Create a new branch from latest `main`.
 2. Run `npm run changeset:version -- --datasource` (or run `npm run changeset:version` and select `grafana-prometheus-datasource`).
 3. Follow the CLI instructions. The CLI will:
-   - aggregate the changesets and generate a new changelog entry,
-   - delete the aggregated changesets,
-   - bump the version in the root `package.json` and `packages/grafana-prometheus-datasource/package.json`.
+    - aggregate the changesets and generate a new changelog entry,
+    - delete the aggregated changesets,
+    - bump the version in the root `package.json` and `packages/grafana-prometheus-datasource/package.json`.
 4. Commit everything, open the PR, and get it merged.
 
 **Step B: after the PR is merged, publish to the plugin catalog (required)**
