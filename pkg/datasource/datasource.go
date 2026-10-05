@@ -14,13 +14,21 @@ import (
 func NewDatasource(ctx context.Context, dsInstanceSettings backend.DataSourceInstanceSettings) (instancemgmt.Instance, error) {
 	plog := backend.NewLoggerWith("logger", "tsdb.prometheus")
 	plog.Debug("Initializing")
-	return &Datasource{
-		Service: promlib.NewService(sdkhttpclient.NewProvider(), plog, nil),
-	}, nil
+	service, err := promlib.NewDatasourceService(ctx, dsInstanceSettings, sdkhttpclient.NewProvider(), plog, nil)
+	if err != nil {
+		return nil, err
+	}
+	return &Datasource{Service: service}, nil
 }
 
 type Datasource struct {
 	Service *promlib.Service
+}
+
+var _ instancemgmt.InstanceDisposer = (*Datasource)(nil)
+
+func (d *Datasource) Dispose() {
+	d.Service.Dispose()
 }
 
 func (d *Datasource) QueryData(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {

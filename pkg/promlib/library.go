@@ -3,6 +3,7 @@ package promlib
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
@@ -19,99 +20,133 @@ import (
 )
 
 type Service struct {
-	im     instancemgmt.InstanceManager
-	logger log.Logger
+	im       instancemgmt.InstanceManager
+	instance *instance
+	logger   log.Logger
 }
 
 type instance struct {
 	queryData *querydata.QueryData
 	resource  *resource.Resource
+	transport *http.Transport
 }
 
 type ExtendOptions func(ctx context.Context, settings backend.DataSourceInstanceSettings, clientOpts *sdkhttpclient.Options, log log.Logger) error
 
 const searchResponseLimitBytes int64 = 100 * 1024 * 1024
 
+// NewService creates a service that manages multiple datasource instances for in-process use.
 func NewService(httpClientProvider *sdkhttpclient.Provider, plog log.Logger, extendOptions ExtendOptions) *Service {
-	if httpClientProvider == nil {
-		httpClientProvider = sdkhttpclient.NewProvider()
-	}
 	return &Service{
 		im:     datasource.NewInstanceManager(newInstanceSettings(httpClientProvider, plog, extendOptions)),
 		logger: plog,
 	}
 }
 
-// Dispose here tells plugin SDK that plugin wants to clean up resources when a new instance
-// created. As soon as datasource settings change detected by SDK old datasource instance will
-// be disposed and a new one will be created using NewSampleDatasource factory function.
+// NewDatasourceService creates a service for one datasource. The caller owns its
+// lifecycle and must call Dispose when replacing it. Use this with datasource.Manage,
+// which already handles caching and invalidation, to avoid nesting instance managers.
+func NewDatasourceService(ctx context.Context, settings backend.DataSourceInstanceSettings, httpClientProvider *sdkhttpclient.Provider, plog log.Logger, extendOptions ExtendOptions) (*Service, error) {
+	i, err := newInstance(ctx, settings, httpClientProvider, plog, extendOptions)
+	if err != nil {
+		return nil, err
+	}
+	return &Service{instance: i, logger: plog}, nil
+}
+
+// Dispose releases the connections owned by a single-datasource service.
+// For a service created with NewService, the instance manager disposes its instances.
 func (s *Service) Dispose() {
-	// Clean up datasource instance resources.
-	s.logger.Debug("Disposing the instance...")
+	if s.instance != nil {
+		s.instance.Dispose()
+	}
+}
+
+func (i *instance) Dispose() {
+	i.transport.CloseIdleConnections()
 }
 
 func newInstanceSettings(httpClientProvider *sdkhttpclient.Provider, log log.Logger, extendOptions ExtendOptions) datasource.InstanceFactoryFunc {
 	return func(ctx context.Context, settings backend.DataSourceInstanceSettings) (instancemgmt.Instance, error) {
-		// Parsed once and shared for consumers below.
-		jsonData, err := models.ParsePromOptions(settings)
-		if err != nil {
-			return nil, fmt.Errorf("error reading settings: %v", err)
-		}
-
-		// Creates a http roundTripper.
-		opts, err := client.CreateTransportOptions(
-			ctx,
-			settings,
-			jsonData.HTTPMethod,
-			string(jsonData.CustomQueryParameters),
-			float64(jsonData.MaxSamplesProcessedWarningThreshold),
-			float64(jsonData.MaxSamplesProcessedErrorThreshold),
-			bool(jsonData.QueryStatsEnabled),
-			log,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("error creating transport options: %v", err)
-		}
-
-		if extendOptions != nil {
-			err = extendOptions(ctx, settings, opts, log)
-			if err != nil {
-				return nil, fmt.Errorf("error extending transport options: %v", err)
-			}
-		}
-
-		httpClient, err := httpClientProvider.New(*opts)
-		if err != nil {
-			return nil, fmt.Errorf("error creating http client: %v", err)
-		}
-
-		featureToggles := backend.GrafanaConfigFromContext(ctx).FeatureToggles()
-
-		// New version using custom client and better response parsing
-		qd, err := querydata.New(
-			httpClient,
-			settings,
-			jsonData.HTTPMethod,
-			jsonData.QueryTimeout,
-			jsonData.TimeInterval,
-			log,
-			featureToggles,
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		// Resource call management using new custom client same as querydata
-		r, err := resource.New(httpClient, settings, jsonData.HTTPMethod, log)
-		if err != nil {
-			return nil, err
-		}
-
-		return instance{
-			queryData: qd,
-			resource:  r,
-		}, nil
+		return newInstance(ctx, settings, httpClientProvider, log, extendOptions)
 	}
+}
+
+func newInstance(ctx context.Context, settings backend.DataSourceInstanceSettings, httpClientProvider *sdkhttpclient.Provider, log log.Logger, extendOptions ExtendOptions) (*instance, error) {
+	if httpClientProvider == nil {
+		httpClientProvider = sdkhttpclient.NewProvider()
+	}
+	// Parsed once and shared for consumers below.
+	jsonData, err := models.ParsePromOptions(settings)
+	if err != nil {
+		return nil, fmt.Errorf("error reading settings: %v", err)
+	}
+
+	opts, err := client.CreateTransportOptions(
+		ctx,
+		settings,
+		jsonData.HTTPMethod,
+		string(jsonData.CustomQueryParameters),
+		float64(jsonData.MaxSamplesProcessedWarningThreshold),
+		float64(jsonData.MaxSamplesProcessedErrorThreshold),
+		bool(jsonData.QueryStatsEnabled),
+		log,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("error creating transport options: %v", err)
+	}
+
+	if extendOptions != nil {
+		err = extendOptions(ctx, settings, opts, log)
+		if err != nil {
+			return nil, fmt.Errorf("error extending transport options: %v", err)
+		}
+	}
+
+	// SDK middleware wraps the transport without forwarding CloseIdleConnections.
+	// Keep the underlying transport so disposal actually closes pooled connections.
+	var transport *http.Transport
+	configureTransport := opts.ConfigureTransport
+	opts.ConfigureTransport = func(options sdkhttpclient.Options, t *http.Transport) {
+		if configureTransport != nil {
+			configureTransport(options, t)
+		}
+		transport = t
+	}
+	initialized := false
+	defer func() {
+		if !initialized && transport != nil {
+			transport.CloseIdleConnections()
+		}
+	}()
+
+	httpClient, err := httpClientProvider.New(*opts)
+	if err != nil {
+		return nil, fmt.Errorf("error creating http client: %v", err)
+	}
+
+	featureToggles := backend.GrafanaConfigFromContext(ctx).FeatureToggles()
+
+	qd, err := querydata.New(
+		httpClient,
+		settings,
+		jsonData.HTTPMethod,
+		jsonData.QueryTimeout,
+		jsonData.TimeInterval,
+		log,
+		featureToggles,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	r, err := resource.New(httpClient, settings, jsonData.HTTPMethod, log)
+	if err != nil {
+		return nil, err
+	}
+
+	initialized = true
+	return &instance{queryData: qd, resource: r, transport: transport}, nil
 }
 
 func (s *Service) QueryData(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
@@ -162,10 +197,12 @@ func (s *Service) CallResource(ctx context.Context, req *backend.CallResourceReq
 }
 
 func (s *Service) getInstance(ctx context.Context, pluginCtx backend.PluginContext) (*instance, error) {
+	if s.instance != nil {
+		return s.instance, nil
+	}
 	i, err := s.im.Get(ctx, pluginCtx)
 	if err != nil {
 		return nil, err
 	}
-	in := i.(instance)
-	return &in, nil
+	return i.(*instance), nil
 }
