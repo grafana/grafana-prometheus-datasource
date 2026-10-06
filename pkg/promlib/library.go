@@ -58,11 +58,8 @@ func NewDatasourceService(ctx context.Context, settings backend.DataSourceInstan
 	return &Service{instance: &in, logger: plog}, nil
 }
 
-// Dispose here tells plugin SDK that plugin wants to clean up resources when a new instance
-// created. As soon as datasource settings change detected by SDK old datasource instance will
-// be disposed and a new one will be created using NewSampleDatasource factory function.
+// Dispose currently logs disposal without releasing resources.
 func (s *Service) Dispose() {
-	// Clean up datasource instance resources.
 	s.logger.Debug("Disposing the instance...")
 }
 
