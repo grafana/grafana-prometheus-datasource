@@ -81,6 +81,7 @@ func TestNewDatasourceService(t *testing.T) {
 			return nil
 		})
 		require.NoError(t, err)
+		t.Cleanup(s.Dispose)
 		require.Nil(t, s.im)
 
 		for range 2 {
@@ -100,6 +101,30 @@ func TestNewDatasourceService(t *testing.T) {
 	})
 }
 
+func TestInstancePreservesTransportConfiguration(t *testing.T) {
+	var configuredTransport *http.Transport
+	provider := sdkhttpclient.NewProvider(sdkhttpclient.ProviderOptions{
+		ConfigureTransport: func(_ sdkhttpclient.Options, transport *http.Transport) {
+			configuredTransport = transport
+			transport.MaxConnsPerHost = 19
+		},
+	})
+	s, err := NewDatasourceService(context.Background(), *mockRequest().PluginContext.DataSourceInstanceSettings,
+		provider, backend.NewLoggerWith("logger", "test"),
+		func(_ context.Context, _ backend.DataSourceInstanceSettings, opts *sdkhttpclient.Options, _ log.Logger) error {
+			opts.ConfigureTransport = func(_ sdkhttpclient.Options, transport *http.Transport) {
+				transport.MaxIdleConns = 17
+			}
+			return nil
+		})
+	require.NoError(t, err)
+	t.Cleanup(s.Dispose)
+	require.NotNil(t, configuredTransport)
+	require.Same(t, configuredTransport, s.instance.transport)
+	require.Equal(t, 17, configuredTransport.MaxIdleConns)
+	require.Equal(t, 19, configuredTransport.MaxConnsPerHost)
+}
+
 func TestServiceManagesMultipleDatasources(t *testing.T) {
 	s := NewService(nil, backend.NewLoggerWith("logger", "test"), nil)
 	ctx := context.Background()
@@ -108,10 +133,12 @@ func TestServiceManagesMultipleDatasources(t *testing.T) {
 	firstContext := backend.PluginContext{DataSourceInstanceSettings: &firstSettings}
 	first, err := s.getInstance(ctx, firstContext)
 	require.NoError(t, err)
+	t.Cleanup(first.Dispose)
 	secondSettings := firstSettings
 	secondSettings.ID = 2
 	second, err := s.getInstance(ctx, backend.PluginContext{DataSourceInstanceSettings: &secondSettings})
 	require.NoError(t, err)
+	t.Cleanup(second.Dispose)
 	require.NotSame(t, first.queryData, second.queryData)
 	again, err := s.getInstance(ctx, firstContext)
 	require.NoError(t, err)

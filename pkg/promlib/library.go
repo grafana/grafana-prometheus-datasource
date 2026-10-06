@@ -3,6 +3,7 @@ package promlib
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
@@ -27,6 +28,7 @@ type Service struct {
 type instance struct {
 	queryData *querydata.QueryData
 	resource  *resource.Resource
+	transport *http.Transport
 }
 
 type ExtendOptions func(ctx context.Context, settings backend.DataSourceInstanceSettings, clientOpts *sdkhttpclient.Options, log log.Logger) error
@@ -58,12 +60,19 @@ func NewDatasourceService(ctx context.Context, settings backend.DataSourceInstan
 	return &Service{instance: &in, logger: plog}, nil
 }
 
-// Dispose here tells plugin SDK that plugin wants to clean up resources when a new instance
-// created. As soon as datasource settings change detected by SDK old datasource instance will
-// be disposed and a new one will be created using NewSampleDatasource factory function.
+// Dispose releases the connections owned by a single-datasource service.
+// For a service created with NewService, the instance manager disposes its instances.
 func (s *Service) Dispose() {
-	// Clean up datasource instance resources.
-	s.logger.Debug("Disposing the instance...")
+	if s.instance != nil {
+		s.instance.Dispose()
+	}
+}
+
+// Instances are cached as values, so the value must implement InstanceDisposer.
+var _ instancemgmt.InstanceDisposer = instance{}
+
+func (i instance) Dispose() {
+	i.transport.CloseIdleConnections()
 }
 
 func newInstanceSettings(httpClientProvider *sdkhttpclient.Provider, log log.Logger, extendOptions ExtendOptions) datasource.InstanceFactoryFunc {
@@ -96,6 +105,23 @@ func newInstanceSettings(httpClientProvider *sdkhttpclient.Provider, log log.Log
 			}
 		}
 
+		// SDK middleware wraps the transport without forwarding CloseIdleConnections.
+		// Keep the underlying transport so disposal actually closes pooled connections.
+		var transport *http.Transport
+		configureTransport := opts.ConfigureTransport
+		opts.ConfigureTransport = func(options sdkhttpclient.Options, t *http.Transport) {
+			if configureTransport != nil {
+				configureTransport(options, t)
+			}
+			transport = t
+		}
+		initialized := false
+		defer func() {
+			if !initialized && transport != nil {
+				transport.CloseIdleConnections()
+			}
+		}()
+
 		httpClient, err := httpClientProvider.New(*opts)
 		if err != nil {
 			return nil, fmt.Errorf("error creating http client: %v", err)
@@ -123,9 +149,11 @@ func newInstanceSettings(httpClientProvider *sdkhttpclient.Provider, log log.Log
 			return nil, err
 		}
 
+		initialized = true
 		return instance{
 			queryData: qd,
 			resource:  r,
+			transport: transport,
 		}, nil
 	}
 }

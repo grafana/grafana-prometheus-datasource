@@ -62,6 +62,7 @@ func TestDatasourceInstanceManagement(t *testing.T) {
 	i, err := manager.Get(ctx, pluginCtx)
 	require.NoError(t, err)
 	ds := i.(*Datasource)
+	t.Cleanup(ds.Dispose)
 
 	// Exercise every client-backed handler. None should create an inner instance.
 	query, err := ds.QueryData(ctx, &backend.QueryDataRequest{
@@ -101,11 +102,13 @@ func TestDatasourceInstanceManagement(t *testing.T) {
 	updated, err := manager.Get(ctx, pluginCtx)
 	require.NoError(t, err)
 	require.NotSame(t, ds, updated)
+	t.Cleanup(updated.(*Datasource).Dispose)
 	pluginCtx.GrafanaConfig = backend.NewGrafanaCfg(map[string]string{backend.ResponseLimit: "1024"})
 	ctx = backend.WithGrafanaConfig(ctx, pluginCtx.GrafanaConfig)
 	reconfigured, err := manager.Get(ctx, pluginCtx)
 	require.NoError(t, err)
 	require.NotSame(t, updated, reconfigured)
+	t.Cleanup(reconfigured.(*Datasource).Dispose)
 	require.Equal(t, before+3, instancesCreated(t))
 }
 
