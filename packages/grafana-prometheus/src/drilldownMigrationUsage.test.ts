@@ -38,12 +38,19 @@ describe('classifyDrilldownMigrationUsage', () => {
       expect(classifyDrilldownMigrationUsage('job', expr)).toEqual({ kind: 'filter', key: 'job', operator: '=' });
     });
 
-    it('rejects a matcher on a selector without a metric name', () => {
+    it('rejects the only matcher of a selector without a metric name', () => {
       expect(classifyDrilldownMigrationUsage('job', '{job="$job"}')).toEqual({
         kind: 'unsafe',
         reason: expect.any(String),
       });
     });
+
+    it.each([['{job="$job", env="prod"}'], ['{__name__="up", job="$job"}']])(
+      'accepts a matcher on a selector without a metric name but with other matchers: %s',
+      (expr) => {
+        expect(classifyDrilldownMigrationUsage('job', expr)).toEqual({ kind: 'filter', key: 'job', operator: '=' });
+      }
+    );
 
     it('accepts a matcher on a selector with a quoted utf8 metric name', () => {
       expect(classifyDrilldownMigrationUsage('job', '{"my.metric", job="$job"}')).toEqual({
@@ -173,6 +180,32 @@ describe('classifyDrilldownMigrationUsage', () => {
     );
   });
 
+  describe('other variables in numeric positions', () => {
+    it.each([
+      ['rate(up{job="$job"}[$window])'],
+      ['rate(up{job="$job"}[${window}])'],
+      ['max_over_time(rate(up{job="$job"}[5m])[$range:$step])'],
+      ['up{job="$job"} offset $offset'],
+      ['up{job="$job"} offset -$offset'],
+      ['up{job="$job"} @ $ts'],
+    ])('does not error on %s', (expr) => {
+      expect(classifyDrilldownMigrationUsage('job', expr)).toEqual({ kind: 'filter', key: 'job', operator: '=' });
+    });
+
+    it('ignores brackets inside string literals when detecting range positions', () => {
+      expect(classifyDrilldownMigrationUsage('label', 'sum(up{path=~"[x", job="$job"}) by ($label)')).toEqual({
+        kind: 'groupBy',
+      });
+    });
+
+    it('still rejects the classified variable in a range position', () => {
+      expect(classifyDrilldownMigrationUsage('window', 'rate(up[$window])')).toEqual({
+        kind: 'unsafe',
+        reason: expect.any(String),
+      });
+    });
+  });
+
   describe('parse errors', () => {
     it('reports unparsable expressions as unsafe', () => {
       expect(classifyDrilldownMigrationUsage('job', 'sum(up{job="$job"}')).toEqual({
@@ -211,6 +244,24 @@ describe('classifyDrilldownMigrationUsageForQuery', () => {
   it('classifies the query expr', () => {
     expect(
       classifyDrilldownMigrationUsageForQuery({ variableName: 'job', query: { refId: 'A', expr: 'up{job="$job"}' } })
+    ).toEqual({ kind: 'filter', key: 'job', operator: '=' });
+  });
+
+  it.each([['legendFormat'], ['interval']])('is unsafe when the variable is also used in %s', (field) => {
+    expect(
+      classifyDrilldownMigrationUsageForQuery({
+        variableName: 'job',
+        query: { refId: 'A', expr: 'up{job="$job"}', [field]: '{{instance}} $job' },
+      })
+    ).toEqual({ kind: 'unsafe', reason: expect.any(String) });
+  });
+
+  it('ignores other variables used in non-expr fields', () => {
+    expect(
+      classifyDrilldownMigrationUsageForQuery({
+        variableName: 'job',
+        query: { refId: 'A', expr: 'up{job="$job"}', interval: '$interval' },
+      })
     ).toEqual({ kind: 'filter', key: 'job', operator: '=' });
   });
 

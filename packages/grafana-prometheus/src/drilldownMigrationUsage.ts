@@ -93,6 +93,35 @@ const builtInVariableRegex = new RegExp(
   'g'
 );
 
+const stringLiteralRegex = /"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`[^`]*`/g;
+
+/**
+ * Replaces variables other than `variableName` that sit in numeric-only positions (range /
+ * subquery brackets, `offset`, `@`) with a numeric literal, so that e.g. a custom `$window`
+ * interval variable doesn't turn the whole expression into a parse error and hide an otherwise
+ * clean usage of `variableName`. The variable being classified is left alone: if it's in one of
+ * these positions, the resulting parse error correctly makes it unsafe.
+ */
+function replaceNumericPositionVariables(expr: string, variableName: string): string {
+  const stringSpans = [...expr.matchAll(stringLiteralRegex)].map((m) => [m.index, m.index + m[0].length]);
+
+  return expr.replace(variableRegex, (match, var1, var2, _fmt2, var3, _fieldPath, _fmt3, offset: number) => {
+    const name = var1 ?? var2 ?? var3;
+    if (name === variableName || stringSpans.some(([from, to]) => offset >= from && offset < to)) {
+      return match;
+    }
+
+    // Every string literal before `offset` is complete, so stripping them leaves only real brackets.
+    const before = expr.slice(0, offset).replace(stringLiteralRegex, '');
+    const bracketDepth = (before.match(/\[/g)?.length ?? 0) - (before.match(/\]/g)?.length ?? 0);
+
+    if (bracketDepth > 0 || /(?:\boffset|@)\s*-?\s*$/i.test(before)) {
+      return '1';
+    }
+    return match;
+  });
+}
+
 function replaceBuiltInVariables(expr: string): string {
   return expr.replace(builtInVariableRegex, (match) => {
     return BUILT_IN_VARIABLES.find((v) => v.variable === match)?.replacement ?? match;
@@ -151,7 +180,7 @@ function classifyVariableUsagesInExpr(
   expr: string,
   variableName: string
 ): { usages: PromQLVariableUsage[]; hasParseError: boolean } {
-  const replacedExpr = replaceVariables(replaceBuiltInVariables(expr));
+  const replacedExpr = replaceVariables(replaceNumericPositionVariables(replaceBuiltInVariables(expr), variableName));
   const tree = parser.parse(replacedExpr);
 
   const usages: PromQLVariableUsage[] = [];
@@ -203,23 +232,28 @@ function classifyStringLiteralOccurrence(
   }
   const operator = expr.substring(opNode.from, opNode.to);
 
-  // Removing the matcher must not leave an empty selector, so the selector needs a metric
-  // name - either a plain identifier or a quoted (utf8) metric inside the braces.
-  if (!selectorHasMetricName(matcher.parent)) {
-    return { position: 'other', context: 'selector without metric name' };
+  // Removing the matcher must not leave an empty selector (`{}` is invalid PromQL), so the
+  // selector needs a metric name or at least one other matcher.
+  if (!selectorHasOtherContent(matcher)) {
+    return { position: 'other', context: 'only matcher in a selector without metric name' };
   }
 
   return { position: 'filterValue', labelKey, operator };
 }
 
-function selectorHasMetricName(labelMatchers: SyntaxNode | null): boolean {
+function selectorHasOtherContent(matcher: SyntaxNode): boolean {
+  const labelMatchers = matcher.parent;
   if (!labelMatchers) {
     return false;
   }
-  if (labelMatchers.getChild(QuotedLabelName)) {
+  if (labelMatchers.getChild(QuotedLabelName) || labelMatchers.parent?.getChild(Identifier) != null) {
     return true;
   }
-  return labelMatchers.parent?.getChild(Identifier) != null;
+  const matchers = [
+    ...labelMatchers.getChildren(UnquotedLabelMatcher),
+    ...labelMatchers.getChildren(QuotedLabelMatcher),
+  ];
+  return matchers.length > 1;
 }
 
 function getMatcherLabelKey(matcher: SyntaxNode, expr: string): string | undefined {
@@ -355,8 +389,20 @@ export function classifyDrilldownMigrationUsage(
 export function classifyDrilldownMigrationUsageForQuery(
   options: DrilldownMigrationUsageOptions
 ): DrilldownMigrationUsage | undefined {
-  if (!options.query.expr) {
+  const { query, variableName } = options;
+
+  // Only `expr` is parsed, but the variable may also drive other query fields (legendFormat,
+  // interval, ...) - migrating it away would silently break those, so treat that as unsafe.
+  const usedOutsideExpr = Object.entries(query).some(
+    ([key, value]) =>
+      key !== 'expr' && key !== 'refId' && typeof value === 'string' && textReferencesVariable(value, variableName)
+  );
+  if (usedOutsideExpr) {
+    return { kind: 'unsafe', reason: 'variable is used in a query field other than the expression' };
+  }
+
+  if (!query.expr) {
     return undefined;
   }
-  return classifyDrilldownMigrationUsage(options.variableName, options.query.expr);
+  return classifyDrilldownMigrationUsage(variableName, query.expr);
 }
