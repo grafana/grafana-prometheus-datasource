@@ -25,12 +25,6 @@ type Datasource struct {
 	Service *promlib.Service
 }
 
-var _ instancemgmt.InstanceDisposer = (*Datasource)(nil)
-
-func (d *Datasource) Dispose() {
-	d.Service.Dispose()
-}
-
 func (d *Datasource) QueryData(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
 	ctx = d.contextualMiddlewares(ctx)
 	return d.Service.QueryData(ctx, req)

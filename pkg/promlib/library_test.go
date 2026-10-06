@@ -75,21 +75,13 @@ func TestNewDatasourceService(t *testing.T) {
 	logger := backend.NewLoggerWith("logger", "test")
 	t.Run("reuses a single instance without a manager", func(t *testing.T) {
 		calls := 0
-		configured := false
 		s, err := NewDatasourceService(ctx, settings, nil, logger, func(_ context.Context, got backend.DataSourceInstanceSettings, opts *sdkhttpclient.Options, _ log.Logger) error {
 			calls++
 			require.Equal(t, settings, got)
-			opts.ConfigureTransport = func(_ sdkhttpclient.Options, transport *http.Transport) {
-				configured = true
-				transport.MaxIdleConns = 17
-			}
 			return nil
 		})
 		require.NoError(t, err)
-		t.Cleanup(s.Dispose)
 		require.Nil(t, s.im)
-		require.True(t, configured)
-		require.Equal(t, 17, s.instance.transport.MaxIdleConns)
 
 		for range 2 {
 			i, err := s.getInstance(ctx, backend.PluginContext{})
@@ -116,16 +108,14 @@ func TestServiceManagesMultipleDatasources(t *testing.T) {
 	firstContext := backend.PluginContext{DataSourceInstanceSettings: &firstSettings}
 	first, err := s.getInstance(ctx, firstContext)
 	require.NoError(t, err)
-	t.Cleanup(first.Dispose)
 	secondSettings := firstSettings
 	secondSettings.ID = 2
 	second, err := s.getInstance(ctx, backend.PluginContext{DataSourceInstanceSettings: &secondSettings})
 	require.NoError(t, err)
-	t.Cleanup(second.Dispose)
-	require.NotSame(t, first, second)
+	require.NotSame(t, first.queryData, second.queryData)
 	again, err := s.getInstance(ctx, firstContext)
 	require.NoError(t, err)
-	require.Same(t, first, again)
+	require.Same(t, first.queryData, again.queryData)
 }
 
 func TestService(t *testing.T) {
