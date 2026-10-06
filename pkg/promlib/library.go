@@ -115,12 +115,6 @@ func newInstanceSettings(httpClientProvider *sdkhttpclient.Provider, log log.Log
 			}
 			transport = t
 		}
-		initialized := false
-		defer func() {
-			if !initialized && transport != nil {
-				transport.CloseIdleConnections()
-			}
-		}()
 
 		httpClient, err := httpClientProvider.New(*opts)
 		if err != nil {
@@ -149,7 +143,6 @@ func newInstanceSettings(httpClientProvider *sdkhttpclient.Provider, log log.Log
 			return nil, err
 		}
 
-		initialized = true
 		return instance{
 			queryData: qd,
 			resource:  r,

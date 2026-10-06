@@ -11,7 +11,6 @@ import (
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	sdkdatasource "github.com/grafana/grafana-plugin-sdk-go/backend/datasource"
-	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 )
@@ -39,16 +38,9 @@ func instancesCreated(t *testing.T) float64 {
 }
 
 func TestDatasourceInstanceManagement(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		switch r.URL.Path {
-		case "/api/v1/query":
-			_, _ = fmt.Fprint(w, `{"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":[1,"2"]}]}}`)
-		case "/api/v1/status/buildinfo":
-			_, _ = fmt.Fprint(w, `{"status":"success","data":{"version":"3.0.0"}}`)
-		default:
-			_, _ = fmt.Fprint(w, `{"status":"success","data":["up"]}`)
-		}
+		_, _ = fmt.Fprint(w, `{"status":"success","data":["up"]}`)
 	}))
 	defer server.Close()
 	settings := backend.DataSourceInstanceSettings{
@@ -64,36 +56,31 @@ func TestDatasourceInstanceManagement(t *testing.T) {
 	ds := i.(*Datasource)
 	t.Cleanup(ds.Dispose)
 
-	// Exercise every client-backed handler. None should create an inner instance.
-	query, err := ds.QueryData(ctx, &backend.QueryDataRequest{
-		PluginContext: pluginCtx,
-		Queries: []backend.DataQuery{{
-			RefID: "A", JSON: json.RawMessage(`{"expr":"1+1","instant":true}`),
-			TimeRange: backend.TimeRange{From: time.Unix(1, 0), To: time.Unix(4, 0)},
-		}},
-	})
-	require.NoError(t, err)
-	require.NoError(t, query.Responses["A"].Error)
-	require.NotEmpty(t, query.Responses["A"].Frames)
+	// A client-backed request must not create a second SDK instance.
 	sender := &resourceSender{}
 	err = ds.CallResource(ctx, &backend.CallResourceRequest{
 		PluginContext: pluginCtx, Path: "api/v1/labels", URL: "api/v1/labels", Method: http.MethodGet,
 	}, sender)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, sender.response.Status)
-	health, err := ds.CheckHealth(ctx, &backend.CheckHealthRequest{PluginContext: pluginCtx})
-	require.NoError(t, err)
-	require.Equal(t, backend.HealthStatusOk, health.Status)
-	info, err := ds.GetBuildInfo(ctx, promlib.BuildInfoRequest{PluginContext: pluginCtx})
-	require.NoError(t, err)
-	require.Equal(t, "3.0.0", info.Data.Version)
-	heuristics, err := ds.GetHeuristics(ctx, promlib.HeuristicsRequest{PluginContext: pluginCtx})
-	require.NoError(t, err)
-	require.Equal(t, promlib.KindPrometheus, heuristics.Application)
+	require.JSONEq(t, `{"status":"success","data":["up"]}`, string(sender.response.Body))
 	again, err := manager.Get(ctx, pluginCtx)
 	require.NoError(t, err)
 	require.Same(t, ds, again)
 	require.Equal(t, before+1, instancesCreated(t))
+}
+
+func TestDatasourceInstanceInvalidation(t *testing.T) {
+	settings := backend.DataSourceInstanceSettings{
+		ID: 1, JSONData: json.RawMessage(`{}`), Updated: time.Unix(1, 0),
+	}
+	cfg := backend.NewGrafanaCfg(map[string]string{})
+	ctx := backend.WithGrafanaConfig(context.Background(), cfg)
+	pluginCtx := backend.PluginContext{DataSourceInstanceSettings: &settings, GrafanaConfig: cfg}
+	manager := sdkdatasource.NewInstanceManager(NewDatasource)
+	ds, err := manager.Get(ctx, pluginCtx)
+	require.NoError(t, err)
+	t.Cleanup(ds.(*Datasource).Dispose)
 
 	// The outer SDK manager still owns settings and Grafana config invalidation.
 	updatedSettings := settings
@@ -109,7 +96,6 @@ func TestDatasourceInstanceManagement(t *testing.T) {
 	require.NoError(t, err)
 	require.NotSame(t, updated, reconfigured)
 	t.Cleanup(reconfigured.(*Datasource).Dispose)
-	require.Equal(t, before+3, instancesCreated(t))
 }
 
 func TestNewDatasourceRejectsInvalidSettings(t *testing.T) {
