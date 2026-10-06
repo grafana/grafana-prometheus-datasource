@@ -151,7 +151,9 @@ type PromQLVariableUsage =
 const placeholderPattern = /__V_[0-2]__(\w+?)__V__(?:__F__.+?__F__)?/;
 
 function buildOccurrenceRegex(variableName: string): RegExp {
-  return new RegExp(`__V_[0-2]__${variableName}__V__(?:__F__.+?__F__)?`, 'g');
+  // Names come from dashboard JSON, which isn't limited to word characters (`[[a(b]]` is valid syntax).
+  const escaped = variableName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`__V_[0-2]__${escaped}__V__(?:__F__.+?__F__)?`, 'g');
 }
 
 function treeHasError(tree: Tree): boolean {

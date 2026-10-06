@@ -215,6 +215,24 @@ describe('classifyDrilldownMigrationUsage', () => {
     });
   });
 
+  describe('variable names with regex characters', () => {
+    it('does not throw on a name that is an invalid regex', () => {
+      expect(classifyDrilldownMigrationUsage('a(b', 'up{x="[[a(b]]"}')).toEqual({
+        kind: 'filter',
+        key: 'x',
+        operator: '=',
+      });
+    });
+
+    it('matches regex characters in a name literally', () => {
+      expect(classifyDrilldownMigrationUsage('a.b', 'up{x="[[a.b]]", y="[[aXb]]"}')).toEqual({
+        kind: 'filter',
+        key: 'x',
+        operator: '=',
+      });
+    });
+  });
+
   describe('unsupported variable syntax', () => {
     it('flags a field-path reference anywhere in the expression as unsafe', () => {
       expect(classifyDrilldownMigrationUsage('job', 'up{job="$job", other="${obj.field}"}')).toEqual({
