@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
-	"github.com/grafana/grafana-plugin-sdk-go/backend/datasource"
 	sdkhttpclient "github.com/grafana/grafana-plugin-sdk-go/backend/httpclient"
 	"github.com/stretchr/testify/assert"
 )
@@ -82,11 +81,7 @@ func getMockProvider[T http.RoundTripper]() *sdkhttpclient.Provider {
 func Test_healthcheck(t *testing.T) {
 	t.Run("should do a successful health check", func(t *testing.T) {
 		httpProvider := getMockProvider[*healthCheckSuccessRoundTripper]()
-		logger := backend.NewLoggerWith("logger", "test")
-		s := &Service{
-			im:     datasource.NewInstanceManager(newInstanceSettings(httpProvider, logger, mockExtendClientOpts)),
-			logger: logger,
-		}
+		s := newTestService(t, httpProvider, *getPromInstanceSettings(), mockExtendClientOpts)
 
 		req := &backend.CheckHealthRequest{
 			PluginContext: getPluginContext(),
@@ -100,11 +95,7 @@ func Test_healthcheck(t *testing.T) {
 
 	t.Run("should return an error for an unsuccessful health check", func(t *testing.T) {
 		httpProvider := getMockProvider[*healthCheckFailRoundTripper]()
-		logger := backend.NewLoggerWith("logger", "test")
-		s := &Service{
-			im:     datasource.NewInstanceManager(newInstanceSettings(httpProvider, logger, mockExtendClientOpts)),
-			logger: logger,
-		}
+		s := newTestService(t, httpProvider, *getPromInstanceSettings(), mockExtendClientOpts)
 
 		req := &backend.CheckHealthRequest{
 			PluginContext: getPluginContext(),

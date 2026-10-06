@@ -19,26 +19,15 @@ const (
 
 func (s *Service) CheckHealth(ctx context.Context, req *backend.CheckHealthRequest) (*backend.CheckHealthResult,
 	error) {
-	ds, err := s.getInstance(ctx, req.PluginContext)
-
-	// check that the datasource exists
-	if err != nil {
-		return getHealthCheckMessage("error getting datasource info", err)
-	}
-
-	if ds == nil {
-		return getHealthCheckMessage("", errors.New("invalid datasource info received"))
-	}
-
 	logger := s.logger.FromContext(ctx)
 
-	hc, err := healthcheck(ctx, req, ds)
+	hc, err := healthcheck(ctx, req, s.instance)
 	if err != nil {
 		logger.Warn("Error performing prometheus healthcheck", "err", err.Error())
 		return nil, err
 	}
 
-	heuristics, err := getHeuristics(ctx, ds, logger)
+	heuristics, err := getHeuristics(ctx, s.instance, logger)
 	if err != nil {
 		logger.Warn("Failed to get prometheus heuristics", "err", err.Error())
 	} else {

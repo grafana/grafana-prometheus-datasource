@@ -3,7 +3,6 @@ package promlib
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"testing"
@@ -73,7 +72,7 @@ func TestNewDatasourceService(t *testing.T) {
 	ctx := context.Background()
 	settings := *mockRequest().PluginContext.DataSourceInstanceSettings
 	logger := backend.NewLoggerWith("logger", "test")
-	t.Run("reuses a single instance without a manager", func(t *testing.T) {
+	t.Run("initializes the datasource clients", func(t *testing.T) {
 		calls := 0
 		s, err := NewDatasourceService(ctx, settings, nil, logger, func(_ context.Context, got backend.DataSourceInstanceSettings, opts *sdkhttpclient.Options, _ log.Logger) error {
 			calls++
@@ -82,13 +81,9 @@ func TestNewDatasourceService(t *testing.T) {
 		})
 		require.NoError(t, err)
 		t.Cleanup(s.Dispose)
-		require.Nil(t, s.im)
 
-		for range 2 {
-			i, err := s.getInstance(ctx, backend.PluginContext{})
-			require.NoError(t, err)
-			require.Same(t, s.instance, i)
-		}
+		require.NotNil(t, s.instance.queryData)
+		require.NotNil(t, s.instance.resource)
 		require.Equal(t, 1, calls)
 	})
 
@@ -125,24 +120,12 @@ func TestInstancePreservesTransportConfiguration(t *testing.T) {
 	require.Equal(t, 19, configuredTransport.MaxConnsPerHost)
 }
 
-func TestServiceManagesMultipleDatasources(t *testing.T) {
-	s := NewService(nil, backend.NewLoggerWith("logger", "test"), nil)
-	ctx := context.Background()
-	firstSettings := *mockRequest().PluginContext.DataSourceInstanceSettings
-	firstSettings.ID = 1
-	firstContext := backend.PluginContext{DataSourceInstanceSettings: &firstSettings}
-	first, err := s.getInstance(ctx, firstContext)
+func newTestService(t *testing.T, provider *sdkhttpclient.Provider, settings backend.DataSourceInstanceSettings, extendOptions ExtendOptions) *Service {
+	t.Helper()
+	s, err := NewDatasourceService(context.Background(), settings, provider, backend.NewLoggerWith("logger", "test"), extendOptions)
 	require.NoError(t, err)
-	t.Cleanup(first.Dispose)
-	secondSettings := firstSettings
-	secondSettings.ID = 2
-	second, err := s.getInstance(ctx, backend.PluginContext{DataSourceInstanceSettings: &secondSettings})
-	require.NoError(t, err)
-	t.Cleanup(second.Dispose)
-	require.NotSame(t, first.queryData, second.queryData)
-	again, err := s.getInstance(ctx, firstContext)
-	require.NoError(t, err)
-	require.Same(t, first.queryData, again.queryData)
+	t.Cleanup(s.Dispose)
+	return s
 }
 
 func TestService(t *testing.T) {
@@ -151,7 +134,7 @@ func TestService(t *testing.T) {
 			t.Run("creates correct request", func(t *testing.T) {
 				f := &fakeHTTPClientProvider{}
 				httpProvider := getMockPromTestSDKProvider(f)
-				service := NewService(httpProvider, backend.NewLoggerWith("logger", "test"), mockExtendTransportOptions)
+				service := newTestService(t, httpProvider, *mockRequest().PluginContext.DataSourceInstanceSettings, mockExtendTransportOptions)
 
 				req := mockRequest()
 				sender := &fakeSender{}
@@ -177,16 +160,15 @@ func TestService(t *testing.T) {
 	t.Run("no extendOptions function provided", func(t *testing.T) {
 		f := &fakeHTTPClientProvider{}
 		httpProvider := getMockPromTestSDKProvider(f)
-		service := NewService(httpProvider, backend.NewLoggerWith("logger", "test"), nil)
+		service := newTestService(t, httpProvider, *mockRequest().PluginContext.DataSourceInstanceSettings, nil)
 		require.NotNil(t, service)
-		require.NotNil(t, service.im)
+		require.NotNil(t, service.instance)
 	})
 
 	t.Run("extendOptions function provided", func(t *testing.T) {
 		f := &fakeHTTPClientProvider{}
 		httpProvider := getMockPromTestSDKProvider(f)
-		service := NewService(httpProvider, backend.NewLoggerWith("logger", "test"), func(ctx context.Context, settings backend.DataSourceInstanceSettings, clientOpts *sdkhttpclient.Options, log log.Logger) error {
-			fmt.Println(ctx, settings, clientOpts)
+		service := newTestService(t, httpProvider, *mockRequest().PluginContext.DataSourceInstanceSettings, func(ctx context.Context, settings backend.DataSourceInstanceSettings, clientOpts *sdkhttpclient.Options, log log.Logger) error {
 			require.NotNil(t, ctx)
 			require.NotNil(t, settings)
 			require.Equal(t, "test-prom", settings.Name)
@@ -202,8 +184,7 @@ func TestService(t *testing.T) {
 	t.Run("suggest resource", func(t *testing.T) {
 		f := &fakeHTTPClientProvider{}
 		httpProvider := getMockPromTestSDKProvider(f)
-		l := backend.NewLoggerWith("logger", "test")
-		service := NewService(httpProvider, l, mockExtendTransportOptions)
+		service := newTestService(t, httpProvider, *mockSuggestResource().PluginContext.DataSourceInstanceSettings, mockExtendTransportOptions)
 
 		req := mockSuggestResource()
 		sender := &fakeSender{}
@@ -215,7 +196,7 @@ func TestService(t *testing.T) {
 	t.Run("search resource uses streaming handler", func(t *testing.T) {
 		f := &fakeHTTPClientProvider{}
 		httpProvider := getMockPromTestSDKProvider(f)
-		service := NewService(httpProvider, backend.NewLoggerWith("logger", "test"), mockExtendTransportOptions)
+		service := newTestService(t, httpProvider, *mockRequest().PluginContext.DataSourceInstanceSettings, mockExtendTransportOptions)
 
 		req := mockRequest()
 		req.Path = "api/v1/search/metric_names"

@@ -40,11 +40,7 @@ type BuildInfoResponseData struct {
 }
 
 func (s *Service) GetBuildInfo(ctx context.Context, req BuildInfoRequest) (*BuildInfoResponse, error) {
-	ds, err := s.getInstance(ctx, req.PluginContext)
-	if err != nil {
-		return nil, err
-	}
-	return getBuildInfo(ctx, ds)
+	return getBuildInfo(ctx, s.instance)
 }
 
 // getBuildInfo queries /api/v1/status/buildinfo
@@ -83,12 +79,8 @@ type Features struct {
 }
 
 func (s *Service) GetHeuristics(ctx context.Context, req HeuristicsRequest) (*Heuristics, error) {
-	ds, err := s.getInstance(ctx, req.PluginContext)
-	if err != nil {
-		return nil, err
-	}
 	logger := s.logger.FromContext(ctx)
-	return getHeuristics(ctx, ds, logger)
+	return getHeuristics(ctx, s.instance, logger)
 }
 
 func getHeuristics(ctx context.Context, i *instance, logger log.Logger) (*Heuristics, error) {

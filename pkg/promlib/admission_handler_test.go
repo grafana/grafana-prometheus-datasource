@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
-	"github.com/grafana/grafana-plugin-sdk-go/backend/datasource"
 	"github.com/grafana/grafana-plugin-sdk-go/genproto/pluginv2"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/proto"
@@ -16,12 +15,7 @@ import (
 
 func Test_ValidateAdmission(t *testing.T) {
 	t.Run("should return error when MutateAdmission fails and response is nil", func(t *testing.T) {
-		httpProvider := getMockProvider[*healthCheckSuccessRoundTripper]()
-		logger := backend.NewLoggerWith("logger", "test")
-		s := &Service{
-			im:     datasource.NewInstanceManager(newInstanceSettings(httpProvider, logger, mockExtendClientOpts)),
-			logger: logger,
-		}
+		s := &Service{}
 
 		req := &backend.AdmissionRequest{
 			Kind: backend.GroupVersionKind{
@@ -37,12 +31,7 @@ func Test_ValidateAdmission(t *testing.T) {
 	})
 
 	t.Run("should return ValidationResponse when MutateAdmission succeeds", func(t *testing.T) {
-		httpProvider := getMockProvider[*healthCheckSuccessRoundTripper]()
-		logger := backend.NewLoggerWith("logger", "test")
-		s := &Service{
-			im:     datasource.NewInstanceManager(newInstanceSettings(httpProvider, logger, mockExtendClientOpts)),
-			logger: logger,
-		}
+		s := &Service{}
 
 		pb := &pluginv2.DataSourceInstanceSettings{
 			ApiVersion: "v0alpha1",
@@ -71,12 +60,7 @@ func Test_ValidateAdmission(t *testing.T) {
 
 func Test_MutateAdmission(t *testing.T) {
 	t.Run("should fail when Kind and Group do not match expected values", func(t *testing.T) {
-		httpProvider := getMockProvider[*healthCheckSuccessRoundTripper]()
-		logger := backend.NewLoggerWith("logger", "test")
-		s := &Service{
-			im:     datasource.NewInstanceManager(newInstanceSettings(httpProvider, logger, mockExtendClientOpts)),
-			logger: logger,
-		}
+		s := &Service{}
 
 		expected := getBadRequest("expected DataSourceInstanceSettings protobuf payload")
 
@@ -93,12 +77,7 @@ func Test_MutateAdmission(t *testing.T) {
 	})
 
 	t.Run("should return an error when object bytes is nil", func(t *testing.T) {
-		httpProvider := getMockProvider[*healthCheckSuccessRoundTripper]()
-		logger := backend.NewLoggerWith("logger", "test")
-		s := &Service{
-			im:     datasource.NewInstanceManager(newInstanceSettings(httpProvider, logger, mockExtendClientOpts)),
-			logger: logger,
-		}
+		s := &Service{}
 
 		expected := getBadRequest("missing datasource settings")
 
@@ -115,12 +94,7 @@ func Test_MutateAdmission(t *testing.T) {
 	})
 
 	t.Run("should return an error when protobuf payload conversion fails", func(t *testing.T) {
-		httpProvider := getMockProvider[*healthCheckSuccessRoundTripper]()
-		logger := backend.NewLoggerWith("logger", "test")
-		s := &Service{
-			im:     datasource.NewInstanceManager(newInstanceSettings(httpProvider, logger, mockExtendClientOpts)),
-			logger: logger,
-		}
+		s := &Service{}
 
 		req := &backend.AdmissionRequest{
 			Kind: backend.GroupVersionKind{
@@ -136,12 +110,7 @@ func Test_MutateAdmission(t *testing.T) {
 	})
 
 	t.Run("should return bad request error when settings APIVersion is invalid", func(t *testing.T) {
-		httpProvider := getMockProvider[*healthCheckSuccessRoundTripper]()
-		logger := backend.NewLoggerWith("logger", "test")
-		s := &Service{
-			im:     datasource.NewInstanceManager(newInstanceSettings(httpProvider, logger, mockExtendClientOpts)),
-			logger: logger,
-		}
+		s := &Service{}
 
 		pb := &pluginv2.DataSourceInstanceSettings{
 			ApiVersion: "v0alpha2",
@@ -165,12 +134,7 @@ func Test_MutateAdmission(t *testing.T) {
 	})
 
 	t.Run("should return bad request error when settings URL is invalid", func(t *testing.T) {
-		httpProvider := getMockProvider[*healthCheckSuccessRoundTripper]()
-		logger := backend.NewLoggerWith("logger", "test")
-		s := &Service{
-			im:     datasource.NewInstanceManager(newInstanceSettings(httpProvider, logger, mockExtendClientOpts)),
-			logger: logger,
-		}
+		s := &Service{}
 
 		pb := &pluginv2.DataSourceInstanceSettings{
 			ApiVersion: "v0alpha1",
@@ -194,12 +158,7 @@ func Test_MutateAdmission(t *testing.T) {
 	})
 
 	t.Run("should return successfully mutation response", func(t *testing.T) {
-		httpProvider := getMockProvider[*healthCheckSuccessRoundTripper]()
-		logger := backend.NewLoggerWith("logger", "test")
-		s := &Service{
-			im:     datasource.NewInstanceManager(newInstanceSettings(httpProvider, logger, mockExtendClientOpts)),
-			logger: logger,
-		}
+		s := &Service{}
 
 		pb := &pluginv2.DataSourceInstanceSettings{
 			ApiVersion: "v0alpha1",
