@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
-	"github.com/grafana/grafana-plugin-sdk-go/backend/datasource"
 	sdkhttpclient "github.com/grafana/grafana-plugin-sdk-go/backend/httpclient"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 )
@@ -78,11 +77,7 @@ func Test_GetHeuristics(t *testing.T) {
 			status: http.StatusOK,
 		}
 		httpProvider := newHeuristicsSDKProvider(rt)
-		logger := backend.NewLoggerWith("logger", "test")
-		s := &Service{
-			im:     datasource.NewInstanceManager(newInstanceSettings(httpProvider, logger, mockExtendClientOpts)),
-			logger: logger,
-		}
+		s := newTestService(t, httpProvider, *getPromInstanceSettings(), mockExtendClientOpts)
 
 		req := HeuristicsRequest{
 			PluginContext: getPluginContext(),
@@ -100,11 +95,7 @@ func Test_GetHeuristics(t *testing.T) {
 			status: http.StatusOK,
 		}
 		httpProvider := newHeuristicsSDKProvider(rt)
-		logger := backend.NewLoggerWith("logger", "test")
-		s := &Service{
-			im:     datasource.NewInstanceManager(newInstanceSettings(httpProvider, logger, mockExtendClientOpts)),
-			logger: logger,
-		}
+		s := newTestService(t, httpProvider, *getPromInstanceSettings(), mockExtendClientOpts)
 
 		req := HeuristicsRequest{
 			PluginContext: getPluginContext(),
@@ -124,11 +115,7 @@ func Test_GetHeuristics(t *testing.T) {
 			status: http.StatusOK,
 		}
 		httpProvider := newCapturingSDKProvider(rt)
-		logger := backend.NewLoggerWith("logger", "test")
-		s := &Service{
-			im:     datasource.NewInstanceManager(newInstanceSettings(httpProvider, logger, mockExtendClientOpts)),
-			logger: logger,
-		}
+		s := newTestService(t, httpProvider, *getPromInstanceSettings(), mockExtendClientOpts)
 
 		// getPluginContext configures the datasource with httpMethod POST (see helper).
 		res, err := s.GetHeuristics(context.Background(), HeuristicsRequest{PluginContext: getPluginContext()})

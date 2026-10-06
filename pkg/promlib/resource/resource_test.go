@@ -25,7 +25,7 @@ import (
 )
 
 // newResource parses settings and builds a Resource the way library.go's
-// newInstanceSettings does, instead of resource.New parsing settings itself.
+// NewDatasourceService does, instead of resource.New parsing settings itself.
 func newResource(t *testing.T, httpClient *http.Client, settings backend.DataSourceInstanceSettings, plog log.Logger) (*resource.Resource, error) {
 	t.Helper()
 	jsonData, err := models.ParsePromOptions(settings)
