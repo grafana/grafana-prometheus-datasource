@@ -55,6 +55,7 @@ func TestDatasourceInstanceManagement(t *testing.T) {
 	i, err := manager.Get(ctx, pluginCtx)
 	require.NoError(t, err)
 	ds := i.(*Datasource)
+	t.Cleanup(ds.Dispose)
 
 	// A client-backed request must not create a second SDK instance.
 	sender := &resourceSender{}
@@ -80,6 +81,7 @@ func TestDatasourceInstanceInvalidation(t *testing.T) {
 	manager := sdkdatasource.NewInstanceManager(NewDatasource)
 	ds, err := manager.Get(ctx, pluginCtx)
 	require.NoError(t, err)
+	t.Cleanup(ds.(*Datasource).Dispose)
 
 	// The outer SDK manager still owns settings and Grafana config invalidation.
 	updatedSettings := settings
@@ -88,11 +90,13 @@ func TestDatasourceInstanceInvalidation(t *testing.T) {
 	updated, err := manager.Get(ctx, pluginCtx)
 	require.NoError(t, err)
 	require.NotSame(t, ds, updated)
+	t.Cleanup(updated.(*Datasource).Dispose)
 	pluginCtx.GrafanaConfig = config.NewGrafanaCfg(map[string]string{config.ResponseLimit: "1024"})
 	ctx = config.WithGrafanaConfig(ctx, pluginCtx.GrafanaConfig)
 	reconfigured, err := manager.Get(ctx, pluginCtx)
 	require.NoError(t, err)
 	require.NotSame(t, updated, reconfigured)
+	t.Cleanup(reconfigured.(*Datasource).Dispose)
 }
 
 func TestNewDatasourceRejectsInvalidSettings(t *testing.T) {
