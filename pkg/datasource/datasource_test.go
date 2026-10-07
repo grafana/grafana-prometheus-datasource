@@ -11,6 +11,7 @@ import (
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	sdkdatasource "github.com/grafana/grafana-plugin-sdk-go/backend/datasource"
+	"github.com/grafana/grafana-plugin-sdk-go/config"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 )
@@ -46,8 +47,8 @@ func TestDatasourceInstanceManagement(t *testing.T) {
 	settings := backend.DataSourceInstanceSettings{
 		ID: 1, URL: server.URL, JSONData: json.RawMessage(`{}`), Updated: time.Unix(1, 0),
 	}
-	cfg := backend.NewGrafanaCfg(map[string]string{})
-	ctx := backend.WithGrafanaConfig(context.Background(), cfg)
+	cfg := config.NewGrafanaCfg(map[string]string{})
+	ctx := config.WithGrafanaConfig(context.Background(), cfg)
 	pluginCtx := backend.PluginContext{DataSourceInstanceSettings: &settings, GrafanaConfig: cfg}
 	manager := sdkdatasource.NewInstanceManager(NewDatasource)
 	before := instancesCreated(t)
@@ -73,8 +74,8 @@ func TestDatasourceInstanceInvalidation(t *testing.T) {
 	settings := backend.DataSourceInstanceSettings{
 		ID: 1, JSONData: json.RawMessage(`{}`), Updated: time.Unix(1, 0),
 	}
-	cfg := backend.NewGrafanaCfg(map[string]string{})
-	ctx := backend.WithGrafanaConfig(context.Background(), cfg)
+	cfg := config.NewGrafanaCfg(map[string]string{})
+	ctx := config.WithGrafanaConfig(context.Background(), cfg)
 	pluginCtx := backend.PluginContext{DataSourceInstanceSettings: &settings, GrafanaConfig: cfg}
 	manager := sdkdatasource.NewInstanceManager(NewDatasource)
 	ds, err := manager.Get(ctx, pluginCtx)
@@ -87,8 +88,8 @@ func TestDatasourceInstanceInvalidation(t *testing.T) {
 	updated, err := manager.Get(ctx, pluginCtx)
 	require.NoError(t, err)
 	require.NotSame(t, ds, updated)
-	pluginCtx.GrafanaConfig = backend.NewGrafanaCfg(map[string]string{backend.ResponseLimit: "1024"})
-	ctx = backend.WithGrafanaConfig(ctx, pluginCtx.GrafanaConfig)
+	pluginCtx.GrafanaConfig = config.NewGrafanaCfg(map[string]string{config.ResponseLimit: "1024"})
+	ctx = config.WithGrafanaConfig(ctx, pluginCtx.GrafanaConfig)
 	reconfigured, err := manager.Get(ctx, pluginCtx)
 	require.NoError(t, err)
 	require.NotSame(t, updated, reconfigured)
