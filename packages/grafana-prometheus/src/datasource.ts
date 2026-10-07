@@ -40,8 +40,9 @@ import { addLabelToQuery } from './add_label_to_query';
 import { applyModifyQuery } from './modify_query';
 import { PrometheusAnnotationSupport } from './annotations';
 import { DEFAULT_SERIES_LIMIT, GET_AND_POST_METADATA_ENDPOINTS, InstantQueryRefIdIndex } from './constants';
+import { placeHolderScopedVars } from './components/monaco-query-field/monaco-completion-provider/validation';
 import {
-  classifyDrilldownMigrationUsageForQuery,
+  classifyDrilldownMigrationUsage,
   type DrilldownMigrationUsage,
   type DrilldownMigrationUsageOptions,
 } from './drilldownMigrationUsage';
@@ -584,12 +585,18 @@ export class PrometheusDatasource
     return this.getTagKeys(options);
   }
 
-  // Opts this datasource into the "migrate variables to filters" assistant suggestion (see the
-  // variable-migration-assistant-cta grafana spec) - classifies whether a template variable is
-  // used as a label-matcher value (filter), a by(...) grouping label (groupBy), or neither
-  // (unsafe), purely from the query's PromQL, no live request needed.
-  getDrilldownMigrationUsage(options: DrilldownMigrationUsageOptions): DrilldownMigrationUsage | undefined {
-    return classifyDrilldownMigrationUsageForQuery(options);
+  // Opts this datasource into Grafana's "migrate variables to filters" suggestion: classifies
+  // whether a template variable is used as a label-matcher value (filter), a by(...) grouping
+  // label (groupBy), or neither (unsafe), purely from the query's PromQL, no live request needed.
+  getDrilldownMigrationUsage({
+    variableName,
+    query,
+  }: DrilldownMigrationUsageOptions): DrilldownMigrationUsage | undefined {
+    // Same interpolation the query editor validates with: real values for every variable and macro,
+    // placeholders for the interval/range macros the backend interpolates.
+    return classifyDrilldownMigrationUsage(query, (text, value) =>
+      this.interpolateString(text, { ...placeHolderScopedVars, [variableName]: { text: value, value } })
+    );
   }
 
   // By implementing getTagKeys and getTagValues we add ad-hoc filters functionality

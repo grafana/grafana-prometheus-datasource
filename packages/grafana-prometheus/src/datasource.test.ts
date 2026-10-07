@@ -8,6 +8,7 @@ import {
   type CustomVariableModel,
   type DataQueryRequest,
   type DataSourceInstanceSettings,
+  type ScopedVars,
   dateTime,
   LoadingState,
   type ScopeSpecFilter,
@@ -1478,8 +1479,15 @@ describe('modifyQuery', () => {
 });
 
 describe('getDrilldownMigrationUsage', () => {
+  // Applies scoped vars the way templateSrv does, so the test sees what the datasource passes in.
+  const scopedTemplateSrv = {
+    replace: (text: string, scopedVars: ScopedVars = {}) =>
+      text.replace(/\$\{?(\w+)\}?/g, (match, name: string) =>
+        scopedVars[name] !== undefined ? String(scopedVars[name].value) : match
+      ),
+  } as unknown as TemplateSrv;
   const instanceSettings = { jsonData: {} } as unknown as DataSourceInstanceSettings<PromOptions>;
-  const ds = new PrometheusDatasource(instanceSettings, templateSrvStub);
+  const ds = new PrometheusDatasource(instanceSettings, scopedTemplateSrv);
 
   it('classifies a filter usage from the query expr', () => {
     const query: PromQuery = { refId: 'A', expr: 'up{job="$job"}' };
@@ -1501,6 +1509,16 @@ describe('getDrilldownMigrationUsage', () => {
     const query: PromQuery = { refId: 'A', expr: 'up{job="grafana"}' };
 
     expect(ds.getDrilldownMigrationUsage({ variableName: 'instance', query })).toBeUndefined();
+  });
+
+  it('interpolates backend-handled interval macros with placeholders so the query parses', () => {
+    const query: PromQuery = { refId: 'A', expr: 'sum(rate(up{job="$job"}[$__rate_interval]))' };
+
+    expect(ds.getDrilldownMigrationUsage({ variableName: 'job', query })).toEqual({
+      kind: 'filter',
+      key: 'job',
+      operator: '=',
+    });
   });
 });
 
