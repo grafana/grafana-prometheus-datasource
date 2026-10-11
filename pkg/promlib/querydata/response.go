@@ -52,7 +52,8 @@ func (s *QueryData) parseResponse(ctx context.Context, q *models.Query, res *htt
 		// Query requests are always constructed fresh inside the plugin (client.go)
 		// with no external Accept-Encoding, so Go's transparent decompression applies.
 		iter := jsoniter.Parse(jsoniter.ConfigDefault, res.Body, 1024)
-		r := converter.ReadPrometheusStyleResult(iter, converter.Options{})
+		asTable := q.TableFrame && queryType == models.InstantQueryType
+		r := converter.ReadPrometheusStyleResult(iter, converter.Options{VectorAsTable: asTable})
 		r.Status = backend.Status(res.StatusCode)
 
 		// Add frame to attach metadata
@@ -62,7 +63,11 @@ func (s *QueryData) parseResponse(ctx context.Context, q *models.Query, res *htt
 
 		// The ExecutedQueryString can be viewed in QueryInspector in UI
 		for i, frame := range r.Frames {
-			addMetadataToMultiFrame(q, frame)
+			if asTable && frame.Meta != nil && frame.Meta.Type == data.FrameTypeNumericLong {
+				frame.Fields[0].Config = &data.FieldConfig{Interval: float64(q.Step.Milliseconds())}
+			} else {
+				addMetadataToMultiFrame(q, frame)
+			}
 			if i == 0 {
 				frame.Meta.ExecutedQueryString = executedQueryString(q)
 				if frame.Meta.Custom == nil {

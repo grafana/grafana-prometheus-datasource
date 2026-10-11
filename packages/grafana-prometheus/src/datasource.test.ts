@@ -1306,6 +1306,19 @@ describe('PrometheusDatasource2', () => {
     expect(Aexemplars).toBe(true);
     expect(BExpemplars).toBe(false);
   });
+
+  it.each([
+    [{ format: 'table', instant: true, range: false }, [true]],
+    [{ format: 'table', instant: true }, [true]],
+    [{ format: 'table', instant: false, range: true }, [undefined]],
+    [{ format: 'table', instant: true, range: true }, [undefined, undefined]],
+    [{ format: 'time_series', instant: true, range: false }, [undefined]],
+    [{ instant: true, range: false }, [undefined]],
+  ])('sets singleFrameTable only for instant table queries (%o)', (props, expected) => {
+    const target = { refId: 'A', expr: 'up', ...props } as PromQuery;
+    const processed = ds.processTargetV2(target, createDataRequest([target]));
+    expect(processed.map((t) => t.singleFrameTable)).toEqual(expected);
+  });
 });
 
 describe('When querying prometheus via check headers X-Dashboard-Id X-Panel-Id and X-Dashboard-UID', () => {

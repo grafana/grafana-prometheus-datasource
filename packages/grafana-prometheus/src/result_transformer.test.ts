@@ -2,6 +2,8 @@
 import {
   cacheFieldDisplayNames,
   createDataFrame,
+  type DataFrame,
+  DataFrameType,
   FieldType,
   type DataQueryRequest,
   type DataQueryResponse,
@@ -1371,6 +1373,45 @@ describe('Prometheus Result Transformer', () => {
       expect(tableDf.fields[2].name).toBe('label2');
       expect(tableDf.fields[2].values[0]).toBe('value2');
       expect(tableDf.fields[3].name).toBe('Value');
+    });
+
+    it('returns the same table for a single table frame as for one frame per series', () => {
+      const meta = { custom: { resultType: 'vector', calculatedMinStep: 15000 }, executedQueryString: 'Expr: up' };
+      const series = (refId: string, time: number, value: number, labels: Record<string, string>) =>
+        createDataFrame({
+          refId,
+          meta: { ...meta, type: DataFrameType.NumericMulti },
+          fields: [
+            { name: 'Time', type: FieldType.time, values: [time], config: { interval: 15000 } },
+            { name: 'up', type: FieldType.number, values: [value], labels },
+          ],
+        });
+      const perSeries = [
+        series('A', 2000, 1, { job: 'b', __name__: 'up' }),
+        series('A', 1000, NaN, { zone: 'z1', instance: 'i1' }),
+        series('A', 2000, Infinity, {}),
+        series('B', 2000, 3, { job: 'c' }),
+      ];
+      const singleFrames = [
+        createDataFrame({
+          refId: 'A',
+          meta: { ...meta, type: DataFrameType.NumericLong },
+          fields: [
+            { name: 'Time', type: FieldType.time, values: [1000, 2000, 2000], config: { interval: 15000 } },
+            { name: '__name__', type: FieldType.string, values: ['', 'up', ''], config: { filterable: true } },
+            { name: 'job', type: FieldType.string, values: ['', 'b', ''], config: { filterable: true } },
+            { name: 'instance', type: FieldType.string, values: ['i1', '', ''], config: { filterable: true } },
+            { name: 'zone', type: FieldType.string, values: ['z1', '', ''], config: { filterable: true } },
+            { name: 'Value', type: FieldType.number, values: [NaN, 1, Infinity] },
+          ],
+        }),
+        series('B', 2000, 3, { job: 'c' }),
+      ];
+      const withoutDisplay = (frames: DataFrame[]) =>
+        frames.map((frame) => ({ ...frame, fields: frame.fields.map(({ display, ...field }) => field) }));
+
+      expect(withoutDisplay(transformDFToTable(singleFrames))).toEqual(withoutDisplay(transformDFToTable(perSeries)));
+      expect(transformDFToTable(singleFrames)[0].fields[5].display).toBeDefined();
     });
 
     // Queries do not always return results

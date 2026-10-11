@@ -185,3 +185,43 @@ func createJsonTestData(start int64, step int64, timestampCount int, seriesCount
 
 	return bytes, &res
 }
+
+// BenchmarkInstantTableJson measures an instant table query with 25k series,
+// including the Arrow encoding a plugin does before sending it over gRPC.
+func BenchmarkInstantTableJson(b *testing.B) {
+	var sb strings.Builder
+	sb.WriteString(`{"status":"success","data":{"resultType":"vector","result":[`)
+	for i := range 25000 {
+		if i > 0 {
+			sb.WriteByte(',')
+		}
+		fmt.Fprintf(&sb, `{"metric":{"__name__":"kube_pod_info","namespace":"ns-%d","pod":"pod-%d","node":"node-%d","job":"kube-state-metrics"},"value":[1700000000,"1"]}`, i%100, i, i%50)
+	}
+	sb.WriteString(`]}}`)
+	body := []byte(sb.String())
+
+	for _, mode := range []struct {
+		name             string
+		singleFrameTable bool
+	}{{"per-series", false}, {"single-frame", true}} {
+		b.Run(mode.name, func(b *testing.B) {
+			qm, err := json.Marshal(map[string]any{"expr": "kube_pod_info", "format": "table", "instant": true, "singleFrameTable": mode.singleFrameTable})
+			require.NoError(b, err)
+			now := time.Unix(1700000000, 0)
+			q := &backend.QueryDataRequest{
+				PluginContext: backend.PluginContext{GrafanaConfig: config.NewGrafanaCfg(nil)},
+				Queries:       []backend.DataQuery{{RefID: "A", JSON: qm, Interval: 15 * time.Second, TimeRange: backend.TimeRange{From: now.Add(-time.Hour), To: now}}},
+			}
+			tCtx, err := setup()
+			require.NoError(b, err)
+			b.ReportAllocs()
+			for b.Loop() {
+				tCtx.httpProvider.setResponse(nil, &http.Response{StatusCode: 200, Body: io.NopCloser(bytes.NewReader(body))}, nil)
+				r, err := tCtx.queryData.Execute(context.Background(), q)
+				require.NoError(b, err)
+				_, err = backend.ToProto().QueryDataResponse(backend.DataFrameFormat_ARROW, r)
+				require.NoError(b, err)
+			}
+		})
+	}
+}

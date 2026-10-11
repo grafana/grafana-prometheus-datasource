@@ -173,6 +173,9 @@ type QueryModel struct {
 	// Timezone offset to align start & end time on backend
 	UtcOffsetSec int64  `json:"utcOffsetSec,omitempty"`
 	Interval     string `json:"interval,omitempty"`
+	// Set by frontends that accept an instant table query as one table frame
+	// instead of one frame per series
+	SingleFrameTable bool `json:"singleFrameTable,omitempty"`
 }
 
 type TimeRange struct {
@@ -193,6 +196,8 @@ type Query struct {
 	RangeQuery    bool
 	ExemplarQuery bool
 	UtcOffsetSec  int64
+	// TableFrame returns the instant query result as one table frame
+	TableFrame bool
 
 	Scopes []scope.ScopeSpec
 }
@@ -209,6 +214,9 @@ type internalQueryModel struct {
 	// Timezone offset to align start & end time on backend
 	UtcOffsetSec int64  `json:"utcOffsetSec,omitempty"`
 	Interval     string `json:"interval,omitempty"`
+	// Set by frontends that accept an instant table query as one table frame
+	// instead of one frame per series
+	SingleFrameTable bool `json:"singleFrameTable,omitempty"`
 }
 
 func Parse(ctx context.Context, log glog.Logger, span trace.Span, query backend.DataQuery, dsScrapeInterval string, intervalCalculator intervalv2.Calculator, fromAlert bool) (*Query, error) {
@@ -295,6 +303,7 @@ func Parse(ctx context.Context, log glog.Logger, span trace.Span, query backend.
 		RangeQuery:    model.Range,
 		ExemplarQuery: model.Exemplar,
 		UtcOffsetSec:  model.UtcOffsetSec,
+		TableFrame:    model.SingleFrameTable && model.Format == PromQueryFormatTable && model.Instant && !model.Range && !fromAlert,
 	}, nil
 }
 

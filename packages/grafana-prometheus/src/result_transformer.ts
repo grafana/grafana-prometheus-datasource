@@ -205,6 +205,10 @@ export function transformDFToTable(dfs: DataFrame[]): DataFrame[] {
   const frames = refIds.map((refId) => {
     // Create timeField, valueField and labelFields
     const valueText = getValueText(refIds.length, refId);
+
+    if (dataFramesByRefId[refId].length === 1 && isSingleTableFrame(dataFramesByRefId[refId][0])) {
+      return singleTableFrameToTable(dataFramesByRefId[refId][0], refId, valueText);
+    }
     const valueField = getValueField({ data: [], valueName: valueText });
     const timeField = getTimeField([]);
     const labelFields: Field[] = [];
@@ -273,6 +277,44 @@ export function transformDFToTable(dfs: DataFrame[]): DataFrame[] {
   });
 
   return frames;
+}
+
+// The backend returns an instant table query as one numeric-long frame (Time, label fields, Value)
+// when the query was sent with singleFrameTable.
+function isSingleTableFrame(df: DataFrame): boolean {
+  return df.meta?.type === DataFrameType.NumericLong && df.meta?.custom?.resultType === 'vector';
+}
+
+// Builds the same frame as the per-series path in transformDFToTable, so panels and transformations see no difference.
+function singleTableFrameToTable(df: DataFrame, refId: string, valueText: string): DataFrame {
+  const [time, ...rest] = df.fields;
+  const value = rest.pop();
+
+  const timeField = getTimeField([]);
+  timeField.config.interval ??= time.config.interval;
+  timeField.values = time.values;
+
+  const labelFields: Field[] = rest.map((field) => ({
+    name: field.name,
+    config: { filterable: true },
+    type: FieldType.string,
+    values: field.values,
+  }));
+
+  const valueField = getValueField({ data: [], valueName: valueText });
+  valueField.values = (value?.values ?? []).map(parseSampleValue);
+
+  return {
+    refId,
+    fields: [timeField, ...labelFields, valueField],
+    meta: {
+      ...df.meta,
+      // the per-series path keeps the type of its first frame
+      type: DataFrameType.NumericMulti,
+      preferredVisualisationType: 'rawPrometheus' as const,
+    },
+    length: timeField.values.length,
+  };
 }
 
 function getValueText(responseLength: number, refId = '') {

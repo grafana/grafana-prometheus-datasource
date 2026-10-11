@@ -21,6 +21,8 @@ func logf(format string, a ...any) {
 }
 
 type Options struct {
+	// VectorAsTable returns a vector result as one table frame instead of one frame per series
+	VectorAsTable bool
 }
 
 func rspErr(e error) backend.DataResponse {
@@ -629,6 +631,12 @@ func readMatrixOrVectorMulti(iter *sdkjsoniter.Iterator, resultType string, opt 
 	previousHistogramSize := -1
 	histogramCapacityHint := 0
 
+	var table *vectorTable
+	asTable := opt.VectorAsTable && resultType == "vector"
+	if asTable {
+		table = newVectorTable()
+	}
+
 	for more, err := iter.ReadArray(); more; more, err = iter.ReadArray() {
 		if err != nil {
 			return rspErr(err)
@@ -638,6 +646,7 @@ func readMatrixOrVectorMulti(iter *sdkjsoniter.Iterator, resultType string, opt 
 		tempTimes := make([]time.Time, 0, size)
 		tempValues := make([]float64, 0, size)
 		var labels data.Labels
+		var labelPairs [][2]string
 		var histogram *histogramInfo
 
 		for l1Field, err := iter.ReadObject(); l1Field != ""; l1Field, err = iter.ReadObject() {
@@ -646,7 +655,17 @@ func readMatrixOrVectorMulti(iter *sdkjsoniter.Iterator, resultType string, opt 
 			}
 			switch l1Field {
 			case "metric":
-				if err = iter.ReadVal(&labels); err != nil {
+				if asTable {
+					isNil, err := iter.ReadNil()
+					if err != nil {
+						return rspErr(err)
+					}
+					if !isNil {
+						if labelPairs, err = readLabelsAsPairs(iter); err != nil {
+							return rspErr(err)
+						}
+					}
+				} else if err = iter.ReadVal(&labels); err != nil {
 					return rspErr(err)
 				}
 
@@ -701,6 +720,21 @@ func readMatrixOrVectorMulti(iter *sdkjsoniter.Iterator, resultType string, opt 
 			}
 		}
 
+		if table != nil && histogram == nil && table.fits(labelPairs, len(tempTimes)) {
+			table.add(labelPairs, tempTimes, tempValues)
+			continue
+		}
+		if asTable {
+			// a histogram or a too sparse table: split what we have back into
+			// series frames and read the remaining series the usual way
+			labels = pairsToLabels(labelPairs)
+			if table != nil {
+				rsp.Frames = append(rsp.Frames, table.seriesFrames()...)
+				table = nil
+			}
+			asTable = false
+		}
+
 		if histogram != nil {
 			frame := data.NewFrame("",
 				data.NewField("xMax", labels, histogram.times),
@@ -722,21 +756,29 @@ func readMatrixOrVectorMulti(iter *sdkjsoniter.Iterator, resultType string, opt 
 			}
 			previousHistogramSize = histogramSize
 		} else {
-			frame := data.NewFrame("", data.NewField(data.TimeSeriesTimeFieldName, nil, tempTimes), data.NewField(data.TimeSeriesValueFieldName, labels, tempValues))
-			frame.Meta = &data.FrameMeta{
-				Type:        data.FrameTypeTimeSeriesMulti,
-				Custom:      resultTypeToCustomMeta(resultType),
-				TypeVersion: data.FrameTypeVersion{0, 1},
-			}
-			if resultType == "vector" {
-				frame.Meta.Type = data.FrameTypeNumericMulti
-			}
-			rsp.Frames = append(rsp.Frames, frame)
+			rsp.Frames = append(rsp.Frames, newSeriesFrame(resultType, labels, tempTimes, tempValues))
 			size = len(tempTimes)
 		}
 	}
 
+	if table != nil && len(table.times) > 0 {
+		rsp.Frames = append(rsp.Frames, table.frame())
+	}
+
 	return rsp
+}
+
+func newSeriesFrame(resultType string, labels data.Labels, times []time.Time, values []float64) *data.Frame {
+	frame := data.NewFrame("", data.NewField(data.TimeSeriesTimeFieldName, nil, times), data.NewField(data.TimeSeriesValueFieldName, labels, values))
+	frame.Meta = &data.FrameMeta{
+		Type:        data.FrameTypeTimeSeriesMulti,
+		Custom:      resultTypeToCustomMeta(resultType),
+		TypeVersion: data.FrameTypeVersion{0, 1},
+	}
+	if resultType == "vector" {
+		frame.Meta.Type = data.FrameTypeNumericMulti
+	}
+	return frame
 }
 
 func readTimeValuePair(iter *sdkjsoniter.Iterator) (time.Time, float64, error) {

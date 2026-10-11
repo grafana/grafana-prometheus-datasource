@@ -10,6 +10,10 @@ export interface PromQuery extends GenPromQuery, DataQuery {
    * Timezone offset to align start & end time on backend
    */
   utcOffsetSec?: number;
+  /**
+   * Request-only: lets the backend return an instant table query as one frame instead of one frame per series
+   */
+  singleFrameTable?: boolean;
   valueWithRefId?: boolean;
   showingGraph?: boolean;
   showingTable?: boolean;

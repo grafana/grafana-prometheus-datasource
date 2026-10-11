@@ -436,6 +436,11 @@ export class PrometheusDatasource
       utcOffsetSec: utcOffset * 60,
     };
 
+    // transformDFToTable turns the backend's single table frame into the same frame it builds from per-series frames
+    if (target.format === 'table' && target.instant && !target.range) {
+      processedTarget.singleFrameTable = true;
+    }
+
     if (request.scopes) {
       processedTarget.scopes = (request.scopes ?? []).map((scope) => ({
         name: scope.metadata.name,

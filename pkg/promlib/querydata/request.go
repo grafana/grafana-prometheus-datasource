@@ -76,6 +76,8 @@ func New(
 
 func (s *QueryData) Execute(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
 	fromAlert := req.Headers["FromAlert"] == "true"
+	// Expressions (SSE) read the frames themselves, so they always get one frame per series
+	fromExpr := req.GetHTTPHeader("X-Grafana-From-Expr") != ""
 	logger := s.log.FromContext(ctx)
 	logger.Debug("Begin query execution", "fromAlert", fromAlert)
 	result := backend.QueryDataResponse{
@@ -92,7 +94,7 @@ func (s *QueryData) Execute(ctx context.Context, req *backend.QueryDataRequest) 
 
 	_ = concurrency.ForEachJob(ctx, len(req.Queries), concurrentQueryCount, func(ctx context.Context, idx int) error {
 		query := req.Queries[idx]
-		r := s.handleQuery(ctx, query, fromAlert)
+		r := s.handleQuery(ctx, query, fromAlert, fromExpr)
 		if r != nil {
 			m.Lock()
 			result.Responses[query.RefID] = *r
@@ -104,7 +106,7 @@ func (s *QueryData) Execute(ctx context.Context, req *backend.QueryDataRequest) 
 	return &result, nil
 }
 
-func (s *QueryData) handleQuery(ctx context.Context, bq backend.DataQuery, fromAlert bool) *backend.DataResponse {
+func (s *QueryData) handleQuery(ctx context.Context, bq backend.DataQuery, fromAlert, fromExpr bool) *backend.DataResponse {
 	traceCtx, span := s.tracer.Start(ctx, "datasource.prometheus")
 	defer span.End()
 	query, err := models.Parse(ctx, s.log, span, bq, s.TimeInterval, s.intervalCalculator, fromAlert)
@@ -112,6 +114,9 @@ func (s *QueryData) handleQuery(ctx context.Context, bq backend.DataQuery, fromA
 		return &backend.DataResponse{
 			Error: err,
 		}
+	}
+	if fromExpr {
+		query.TableFrame = false
 	}
 
 	r := s.fetch(traceCtx, s.client, query)
