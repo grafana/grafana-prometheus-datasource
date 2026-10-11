@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
+	"github.com/grafana/grafana-plugin-sdk-go/backend/useragent"
 	"github.com/grafana/grafana-plugin-sdk-go/config"
 	"github.com/stretchr/testify/require"
 
@@ -208,8 +209,10 @@ func BenchmarkInstantTableJson(b *testing.B) {
 			qm, err := json.Marshal(map[string]any{"expr": "kube_pod_info", "format": "table", "instant": true, "singleFrameTable": mode.singleFrameTable})
 			require.NoError(b, err)
 			now := time.Unix(1700000000, 0)
+			ua, err := useragent.New("13.3.0", "linux", "amd64")
+			require.NoError(b, err)
 			q := &backend.QueryDataRequest{
-				PluginContext: backend.PluginContext{GrafanaConfig: config.NewGrafanaCfg(nil)},
+				PluginContext: backend.PluginContext{GrafanaConfig: config.NewGrafanaCfg(nil), UserAgent: ua},
 				Queries:       []backend.DataQuery{{RefID: "A", JSON: qm, Interval: 15 * time.Second, TimeRange: backend.TimeRange{From: now.Add(-time.Hour), To: now}}},
 			}
 			tCtx, err := setup()

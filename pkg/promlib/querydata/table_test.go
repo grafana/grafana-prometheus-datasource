@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
+	"github.com/grafana/grafana-plugin-sdk-go/backend/useragent"
 	"github.com/grafana/grafana-plugin-sdk-go/config"
 	"github.com/grafana/grafana-plugin-sdk-go/data"
 	"github.com/stretchr/testify/require"
@@ -25,6 +26,7 @@ func TestSingleFrameTable(t *testing.T) {
 		name    string
 		model   map[string]any
 		headers map[string]string
+		grafana string
 		frames  int
 	}{
 		{name: "instant table query with opt-in", model: map[string]any{"format": "table", "instant": true, "singleFrameTable": true}, frames: 1},
@@ -33,6 +35,10 @@ func TestSingleFrameTable(t *testing.T) {
 		{name: "instant and range", model: map[string]any{"format": "table", "instant": true, "range": true, "singleFrameTable": true}, frames: 3},
 		{name: "alerting", model: map[string]any{"format": "table", "instant": true, "singleFrameTable": true}, headers: map[string]string{"FromAlert": "true"}, frames: 2},
 		{name: "expressions", model: map[string]any{"format": "table", "instant": true, "singleFrameTable": true}, headers: map[string]string{"http_X-Grafana-From-Expr": "true"}, frames: 2},
+		{name: "grafana 13.2 cannot keep it out of expressions", model: map[string]any{"format": "table", "instant": true, "singleFrameTable": true}, grafana: "13.2.1", frames: 2},
+		{name: "unknown grafana version", model: map[string]any{"format": "table", "instant": true, "singleFrameTable": true}, grafana: "-", frames: 2},
+		{name: "grafana 13.3 pre-release", model: map[string]any{"format": "table", "instant": true, "singleFrameTable": true}, grafana: "13.3.0-pre", frames: 1},
+		{name: "grafana 14", model: map[string]any{"format": "table", "instant": true, "singleFrameTable": true}, grafana: "14.0.0", frames: 1},
 	}
 
 	for _, tt := range tests {
@@ -49,8 +55,18 @@ func TestSingleFrameTable(t *testing.T) {
 			b, err := json.Marshal(tt.model)
 			require.NoError(t, err)
 			now := time.Unix(1700000000, 0)
+			pCtx := backend.PluginContext{GrafanaConfig: config.NewGrafanaCfg(nil)}
+			switch tt.grafana {
+			case "":
+				pCtx.UserAgent, err = useragent.New("13.3.0", "linux", "amd64")
+				require.NoError(t, err)
+			case "-":
+			default:
+				pCtx.UserAgent, err = useragent.New(tt.grafana, "linux", "amd64")
+				require.NoError(t, err)
+			}
 			res, err := tCtx.queryData.Execute(context.Background(), &backend.QueryDataRequest{
-				PluginContext: backend.PluginContext{GrafanaConfig: config.NewGrafanaCfg(nil)},
+				PluginContext: pCtx,
 				Headers:       tt.headers,
 				Queries: []backend.DataQuery{{
 					RefID:     "A",

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -76,8 +78,10 @@ func New(
 
 func (s *QueryData) Execute(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
 	fromAlert := req.Headers["FromAlert"] == "true"
-	// Expressions (SSE) read the frames themselves, so they always get one frame per series
-	fromExpr := req.GetHTTPHeader("X-Grafana-From-Expr") != ""
+	// Expressions (SSE) read the frames themselves, so they always get one frame per series.
+	// Grafana removes singleFrameTable from expression queries from 13.3 on. Older versions
+	// call the datasource the same way for both, so the property is ignored there.
+	noTableFrame := req.GetHTTPHeader("X-Grafana-From-Expr") != "" || !grafanaDropsSingleFrameTableInExpressions(req.PluginContext)
 	logger := s.log.FromContext(ctx)
 	logger.Debug("Begin query execution", "fromAlert", fromAlert)
 	result := backend.QueryDataResponse{
@@ -94,7 +98,7 @@ func (s *QueryData) Execute(ctx context.Context, req *backend.QueryDataRequest) 
 
 	_ = concurrency.ForEachJob(ctx, len(req.Queries), concurrentQueryCount, func(ctx context.Context, idx int) error {
 		query := req.Queries[idx]
-		r := s.handleQuery(ctx, query, fromAlert, fromExpr)
+		r := s.handleQuery(ctx, query, fromAlert, noTableFrame)
 		if r != nil {
 			m.Lock()
 			result.Responses[query.RefID] = *r
@@ -106,7 +110,28 @@ func (s *QueryData) Execute(ctx context.Context, req *backend.QueryDataRequest) 
 	return &result, nil
 }
 
-func (s *QueryData) handleQuery(ctx context.Context, bq backend.DataQuery, fromAlert, fromExpr bool) *backend.DataResponse {
+// grafanaDropsSingleFrameTableInExpressions reports whether the calling Grafana is 13.3 or later.
+// An unknown version counts as older.
+func grafanaDropsSingleFrameTableInExpressions(pCtx backend.PluginContext) bool {
+	if pCtx.UserAgent == nil {
+		return false
+	}
+	parts := strings.SplitN(pCtx.UserAgent.GrafanaVersion(), ".", 3)
+	if len(parts) < 2 {
+		return false
+	}
+	major, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return false
+	}
+	minor, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return false
+	}
+	return major > 13 || (major == 13 && minor >= 3)
+}
+
+func (s *QueryData) handleQuery(ctx context.Context, bq backend.DataQuery, fromAlert, noTableFrame bool) *backend.DataResponse {
 	traceCtx, span := s.tracer.Start(ctx, "datasource.prometheus")
 	defer span.End()
 	query, err := models.Parse(ctx, s.log, span, bq, s.TimeInterval, s.intervalCalculator, fromAlert)
@@ -115,7 +140,7 @@ func (s *QueryData) handleQuery(ctx context.Context, bq backend.DataQuery, fromA
 			Error: err,
 		}
 	}
-	if fromExpr {
+	if noTableFrame {
 		query.TableFrame = false
 	}
 
