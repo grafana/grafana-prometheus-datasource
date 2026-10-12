@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -14,6 +15,8 @@ import (
 	"github.com/grafana/grafana-plugin-sdk-go/config"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
+
+	"github.com/grafana/grafana-prometheus-datasource/pkg/datasource/internal/hostlimit"
 )
 
 type resourceSender struct {
@@ -101,4 +104,59 @@ func TestNewDatasourceRejectsInvalidSettings(t *testing.T) {
 	})
 	require.ErrorContains(t, err, "invalid httpMethod")
 	require.Nil(t, i)
+}
+
+func TestDatasourceRejectsQueriesOverTheHostLimit(t *testing.T) {
+	entered := make(chan struct{}, 1)
+	release := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		entered <- struct{}{}
+		select {
+		case <-release:
+		case <-r.Context().Done():
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprint(w, `{"status":"success","data":["up"]}`)
+	}))
+	defer server.Close()
+	releaseHeld := sync.OnceFunc(func() { close(release) })
+	defer releaseHeld()
+	settings := backend.DataSourceInstanceSettings{
+		ID: 1, URL: server.URL, JSONData: json.RawMessage(`{}`), Updated: time.Unix(1, 0),
+	}
+	cfg := config.NewGrafanaCfg(map[string]string{})
+	ctx := config.WithGrafanaConfig(context.Background(), cfg)
+	pluginCtx := backend.PluginContext{DataSourceInstanceSettings: &settings, GrafanaConfig: cfg}
+	i, err := newDatasource(ctx, settings, hostlimit.New(1))
+	require.NoError(t, err)
+	ds := i.(*Datasource)
+
+	held := make(chan error, 1)
+	go func() {
+		held <- ds.CallResource(ctx, &backend.CallResourceRequest{
+			PluginContext: pluginCtx, Path: "api/v1/labels", URL: "api/v1/labels", Method: http.MethodGet,
+		}, &resourceSender{})
+	}()
+	select {
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("first request did not reach the server")
+	}
+
+	res, err := ds.QueryData(ctx, &backend.QueryDataRequest{
+		PluginContext: pluginCtx,
+		Queries: []backend.DataQuery{{
+			RefID:     "A",
+			JSON:      json.RawMessage(`{"expr":"up","range":true}`),
+			TimeRange: backend.TimeRange{From: time.Unix(0, 0), To: time.Unix(60, 0)},
+			Interval:  15 * time.Second,
+		}},
+	})
+	require.NoError(t, err)
+	require.ErrorIs(t, res.Responses["A"].Error, hostlimit.ErrLimitReached)
+	require.True(t, backend.IsDownstreamError(res.Responses["A"].Error))
+	require.Equal(t, backend.ErrorSourceDownstream, res.Responses["A"].ErrorSource)
+
+	releaseHeld()
+	require.NoError(t, <-held)
 }

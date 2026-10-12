@@ -2,23 +2,47 @@ package datasource
 
 import (
 	"context"
+	"sync"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	sdkhttpclient "github.com/grafana/grafana-plugin-sdk-go/backend/httpclient"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
+	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 	"github.com/grafana/grafana-plugin-sdk-go/config"
 
+	"github.com/grafana/grafana-prometheus-datasource/pkg/datasource/internal/hostlimit"
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib"
 )
 
+var hostLimiter = sync.OnceValue(func() *hostlimit.Limiter {
+	limiter, err := hostlimit.FromEnv()
+	if err != nil {
+		backend.Logger.Error("Ignoring invalid per-host request limit", "error", err)
+	} else if limiter.Limit() > 0 {
+		backend.Logger.Info("Per-host request limit enabled", "limit", limiter.Limit())
+	}
+	return limiter
+})
+
 func NewDatasource(ctx context.Context, dsInstanceSettings backend.DataSourceInstanceSettings) (instancemgmt.Instance, error) {
+	return newDatasource(ctx, dsInstanceSettings, hostLimiter())
+}
+
+func newDatasource(ctx context.Context, dsInstanceSettings backend.DataSourceInstanceSettings, limiter *hostlimit.Limiter) (instancemgmt.Instance, error) {
 	plog := backend.NewLoggerWith("logger", "tsdb.prometheus")
 	plog.Debug("Initializing")
-	service, err := promlib.NewDatasourceService(ctx, dsInstanceSettings, sdkhttpclient.NewProvider(), plog, nil)
+	service, err := promlib.NewDatasourceService(ctx, dsInstanceSettings, sdkhttpclient.NewProvider(), plog, withHostLimit(limiter))
 	if err != nil {
 		return nil, err
 	}
 	return &Datasource{Service: service}, nil
+}
+
+func withHostLimit(limiter *hostlimit.Limiter) promlib.ExtendOptions {
+	return func(_ context.Context, _ backend.DataSourceInstanceSettings, opts *sdkhttpclient.Options, _ log.Logger) error {
+		opts.Middlewares = append(opts.Middlewares, limiter.Middleware())
+		return nil
+	}
 }
 
 type Datasource struct {
