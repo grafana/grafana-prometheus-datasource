@@ -1,5 +1,15 @@
 # Prometheus data source for Grafana
 
+> [!CAUTION]
+> **Do not bump package versions by hand.**
+>
+> Don't edit `version` in any `package.json`, and don't edit any `CHANGELOG.md`.
+> A normal pull request only adds a changeset (`npm run changeset`).
+> Versions are bumped by maintainers in dedicated release PRs using
+> `npm run changeset:version`.
+>
+> For details, read [CONTRIBUTING.md](./CONTRIBUTING.md#never-bump-versions-manually).
+
 > **Note**: This core plugin was extracted from the
 > [grafana/grafana](https://github.com/grafana/grafana) repository and is now
 > developed and released from this repository.

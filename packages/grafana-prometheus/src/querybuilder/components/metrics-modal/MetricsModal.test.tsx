@@ -28,6 +28,32 @@ describe('MetricsModal', () => {
     });
   });
 
+  it('shows an incomplete message when the Search API has more results', async () => {
+    const datasource = createDatasource(false);
+    datasource.languageProvider.getSearchApiClient = jest.fn().mockReturnValue({
+      searchMetricNames: jest.fn().mockImplementation((_timeRange, _term, options) => {
+        options.onBatch([{ name: 'streamed_metric', type: 'counter', help: 'streamed' }]);
+        return Promise.resolve({ results: [], warnings: [], hasMore: true });
+      }),
+    });
+
+    render(<MetricsModal {...createProps(defaultQuery, datasource, listOfMetrics)} />);
+
+    expect(
+      await screen.findByText('Showing the first 1,000 results. Refine your search to find other metrics.')
+    ).toBeInTheDocument();
+    expect(screen.getByText('streamed_metric')).toBeInTheDocument();
+    expect(screen.getByRole('navigation')).toBeInTheDocument();
+  });
+
+  it('does not show the incomplete message for label discovery', async () => {
+    setup(defaultQuery, listOfMetrics);
+    await screen.findByText('all-metrics');
+    expect(
+      screen.queryByText('Showing the first 1,000 results. Refine your search to find other metrics.')
+    ).not.toBeInTheDocument();
+  });
+
   it('renders a list of metrics', async () => {
     setup(defaultQuery, listOfMetrics);
     await waitFor(() => {

@@ -95,15 +95,14 @@ describe('DataProvider', () => {
       );
     });
 
-    it('returns an empty array when the language provider rejects', async () => {
+    it('rejects when the language provider rejects', async () => {
       const languageProvider = createLanguageProviderMock();
       languageProvider.queryLabelValues.mockRejectedValue(new Error('network down'));
       const dataProvider = createDataProvider(languageProvider);
       const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
-      const result = await dataProvider.queryMetricNames(timeRange, 'up');
+      await expect(dataProvider.queryMetricNames(timeRange, 'up')).rejects.toThrow('network down');
 
-      expect(result).toEqual([]);
       expect(warnSpy).toHaveBeenCalled();
       warnSpy.mockRestore();
     });
@@ -143,6 +142,36 @@ describe('DataProvider', () => {
       );
       expect(firstSignal.aborted).toBe(true);
       expect(languageProvider.queryLabelValues).not.toHaveBeenCalled();
+    });
+
+    it('forwards search batches and still resolves the full metric list', async () => {
+      const languageProvider = createLanguageProviderMock();
+      const onBatch = jest.fn();
+      const searchMetricNames = jest.fn().mockImplementation((_timeRange, _term, options) => {
+        options.onBatch?.([{ name: 'up' }]);
+        options.onBatch?.([{ name: 'go_goroutines' }]);
+        return Promise.resolve({
+          results: [{ name: 'up' }, { name: 'go_goroutines' }],
+          warnings: [],
+          hasMore: false,
+        });
+      });
+      languageProvider.getSearchApiClient.mockReturnValue({ searchMetricNames });
+      const dataProvider = createDataProvider(languageProvider);
+
+      await expect(dataProvider.queryMetricNames(timeRange, 'up', onBatch)).resolves.toEqual(['up', 'go_goroutines']);
+      expect(onBatch).toHaveBeenNthCalledWith(1, ['up']);
+      expect(onBatch).toHaveBeenNthCalledWith(2, ['go_goroutines']);
+    });
+
+    it('does not emit batches when metric lookup falls back to series discovery', async () => {
+      const languageProvider = createLanguageProviderMock();
+      languageProvider.queryLabelValues.mockResolvedValue(['standard_metric']);
+      const dataProvider = createDataProvider(languageProvider);
+      const onBatch = jest.fn();
+
+      await expect(dataProvider.queryMetricNames(timeRange, 'metric', onBatch)).resolves.toEqual(['standard_metric']);
+      expect(onBatch).not.toHaveBeenCalled();
     });
 
     it('falls back to standard discovery when fuzzy search is unavailable', async () => {
@@ -194,6 +223,57 @@ describe('DataProvider', () => {
         })
       );
       expect(languageProvider.queryLabelValues).not.toHaveBeenCalled();
+    });
+
+    it('forwards label name and label value batches', async () => {
+      const languageProvider = createLanguageProviderMock();
+      const labelNames = jest.fn();
+      const labelValues = jest.fn();
+      const searchLabelNames = jest.fn().mockImplementation((_timeRange, _term, options) => {
+        options.onBatch?.([{ name: 'job' }]);
+        options.onBatch?.([{ name: 'instance' }]);
+        return Promise.resolve({
+          results: [{ name: 'job' }, { name: 'instance' }],
+          warnings: [],
+          hasMore: false,
+        });
+      });
+      const searchLabelValues = jest.fn().mockImplementation((_timeRange, _label, _term, options) => {
+        options.onBatch?.([{ value: 'api' }]);
+        options.onBatch?.([{ value: 'db' }]);
+        return Promise.resolve({
+          results: [{ value: 'api' }, { value: 'db' }],
+          warnings: [],
+          hasMore: false,
+        });
+      });
+      languageProvider.getSearchApiClient.mockReturnValue({ searchLabelNames, searchLabelValues });
+      const dataProvider = createDataProvider(languageProvider);
+
+      await expect(
+        dataProvider.queryLabelKeys(timeRange, '{__name__="up"}', DEFAULT_COMPLETION_LIMIT, 'jo', labelNames)
+      ).resolves.toEqual(['job', 'instance']);
+      await expect(
+        dataProvider.queryLabelValues(timeRange, 'job', '{__name__="up"}', DEFAULT_COMPLETION_LIMIT, 'a', labelValues)
+      ).resolves.toEqual(['api', 'db']);
+
+      expect(labelNames).toHaveBeenNthCalledWith(1, ['job']);
+      expect(labelNames).toHaveBeenNthCalledWith(2, ['instance']);
+      expect(labelValues).toHaveBeenNthCalledWith(1, ['api']);
+      expect(labelValues).toHaveBeenNthCalledWith(2, ['db']);
+    });
+
+    it('does not emit batches when label lookup uses the series endpoints', async () => {
+      const languageProvider = createLanguageProviderMock();
+      languageProvider.queryLabelKeys.mockResolvedValue(['job']);
+      languageProvider.queryLabelValues.mockResolvedValue(['api']);
+      const dataProvider = createDataProvider(languageProvider);
+      const onBatch = jest.fn();
+
+      await dataProvider.queryLabelKeys(timeRange, undefined, DEFAULT_COMPLETION_LIMIT, undefined, onBatch);
+      await dataProvider.queryLabelValues(timeRange, 'job', undefined, DEFAULT_COMPLETION_LIMIT, undefined, onBatch);
+
+      expect(onBatch).not.toHaveBeenCalled();
     });
 
     it('returns an empty list when a search is aborted and does not fall back', async () => {

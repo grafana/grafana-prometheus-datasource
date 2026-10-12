@@ -218,6 +218,35 @@ describe('SearchApiClient', () => {
     expect(client.labelKeys).toEqual(['instance', 'job']);
   });
 
+  it('sends alphabetical metric names without metadata when the caller asks', async () => {
+    const client = new SearchApiClient(jest.fn(), datasource);
+
+    await client.searchMetricNames(timeRange, '', { includeMetadata: false, sortBy: 'alpha' });
+    await client.searchMetricNames(timeRange, 'http req', { includeMetadata: false, sortBy: 'alpha' });
+
+    expect(chunkedMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        url: expect.stringMatching(/\/metric_names$/),
+        params: expect.objectContaining({
+          sort_by: 'alpha',
+          include_metadata: false,
+        }),
+      })
+    );
+    expect(chunkedMock.mock.calls[0][0].params).not.toHaveProperty('search[]');
+    expect(chunkedMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        params: expect.objectContaining({
+          'search[]': 'httpreq',
+          sort_by: 'alpha',
+          include_metadata: false,
+        }),
+      })
+    );
+  });
+
   it('searches metric names with metadata and score ordering', async () => {
     chunkedMock.mockReturnValue(
       chunkedStream([
@@ -246,7 +275,7 @@ describe('SearchApiClient', () => {
         fuzz_alg: 'jarowinkler',
         case_sensitive: 'false',
         batch_size: '100',
-        include_metadata: 'true',
+        include_metadata: true,
       },
       headers: {},
     });

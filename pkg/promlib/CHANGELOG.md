@@ -1,5 +1,17 @@
 # promlib
 
+## 0.0.22
+
+🐛 Fix security vulnerabilities (CVE-2026-84445) ([#371](https://github.com/grafana/grafana-prometheus-datasource/pull/371))
+
+🐛 Backend dependency updates ([#368](https://github.com/grafana/grafana-prometheus-datasource/pull/368))
+
+## 0.0.21
+
+🐛 added datasource config schema ([#228](https://github.com/grafana/grafana-prometheus-datasource/pull/228))
+
+🐛 Fix security vulnerabilities (CVE-2026-84445) ([#366](https://github.com/grafana/grafana-prometheus-datasource/pull/366))
+
 ## 0.0.20
 
 🐛 Support PromQL anchored and smoothed range selectors in the query builder, code editor, scope filtering, and label suggestions. ([#343](https://github.com/grafana/grafana-prometheus-datasource/pull/343))

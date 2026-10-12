@@ -4,6 +4,7 @@ import { type ReactNode } from 'react';
 import { type TimeRange } from '@grafana/data';
 import { reportInteraction } from '@grafana/runtime';
 
+import { PROMETHEUS_QUERY_BUILDER_MAX_RESULTS } from '../../../constants';
 import { type PrometheusLanguageProviderInterface } from '../../../language_provider';
 import { SearchApiUnavailableError } from '../../../search_api_stream';
 import { getMockTimeRange } from '../../../test/mocks/datasource';
@@ -19,6 +20,7 @@ jest.mock('@grafana/runtime', () => ({
 
 // Mock dependencies
 jest.mock('./helpers', () => ({
+  ...jest.requireActual('./helpers'),
   generateMetricData: jest.fn(),
 }));
 
@@ -335,6 +337,146 @@ describe('MetricsModalContext', () => {
         resultsCount: 2,
         discoveryApi: 'search',
       });
+    });
+
+    it('fills type and description from Search API metadata', async () => {
+      const searchMetricNames = jest.fn().mockImplementation((_timeRange, term, options) => {
+        if (term === '') {
+          options.onBatch([
+            { name: 'requests_total', type: 'counter', help: 'Total requests' },
+            { name: 'rpc_duration', type: 'histogram', help: 'RPC latency' },
+            { name: 'build_info', type: 'gauge', help: 'A histogram-like gauge' },
+          ]);
+        }
+        return Promise.resolve({ results: [], warnings: [], hasMore: false });
+      });
+      const searchLanguageProvider = {
+        ...mockLanguageProvider,
+        hasSearchSupport: jest.fn().mockReturnValue(true),
+        getSearchApiClient: jest.fn().mockReturnValue({ searchMetricNames }),
+        queryMetricsMetadata: jest.fn(),
+      } as unknown as PrometheusLanguageProviderInterface;
+      const { result } = renderHook(() => useMetricsModal(), {
+        wrapper: createWrapper(searchLanguageProvider),
+      });
+
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      expect(searchMetricNames).toHaveBeenCalledWith(
+        expect.anything(),
+        '',
+        expect.objectContaining({ includeMetadata: true })
+      );
+      expect(searchLanguageProvider.queryMetricsMetadata).not.toHaveBeenCalled();
+      expect(result.current.filteredMetricsData).toEqual([
+        { value: 'requests_total', type: 'counter', description: 'Total requests' },
+        { value: 'rpc_duration', type: 'native histogram', description: 'RPC latency' },
+        { value: 'build_info', type: 'gauge (histogram)', description: 'A histogram-like gauge' },
+      ]);
+    });
+
+    it('stops at the builder result cap and marks the set incomplete', async () => {
+      const cappedBatch = Array.from({ length: PROMETHEUS_QUERY_BUILDER_MAX_RESULTS }, (_, index) => ({
+        name: `metric_${index}`,
+      }));
+      const searchMetricNames = jest.fn().mockImplementation((_timeRange, term, options) => {
+        if (term === '') {
+          return Promise.resolve({ results: [], warnings: [], hasMore: false });
+        }
+
+        options.onBatch(cappedBatch);
+        options.onBatch([{ name: 'past_cap' }]);
+        return Promise.resolve({ results: [], warnings: ['truncated'], hasMore: false });
+      });
+      const searchLanguageProvider = {
+        ...mockLanguageProvider,
+        hasSearchSupport: jest.fn().mockReturnValue(true),
+        getSearchApiClient: jest.fn().mockReturnValue({ searchMetricNames }),
+      } as unknown as PrometheusLanguageProviderInterface;
+      const { result } = renderHook(() => useMetricsModal(), {
+        wrapper: createWrapper(searchLanguageProvider),
+      });
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      await act(async () => {
+        await result.current.debouncedBackendSearch(defaultTimeRange, 'all');
+      });
+
+      expect(result.current.filteredMetricsData).toHaveLength(PROMETHEUS_QUERY_BUILDER_MAX_RESULTS);
+      expect(result.current.filteredMetricsData.some((metric) => metric.value === 'past_cap')).toBe(false);
+      expect(result.current.resultsIncomplete).toBe(true);
+    });
+
+    it('marks the set incomplete when the Search API reports more results', async () => {
+      const searchMetricNames = jest.fn().mockImplementation((_timeRange, term, options) => {
+        if (term === '') {
+          return Promise.resolve({ results: [], warnings: [], hasMore: false });
+        }
+
+        options.onBatch([{ name: 'only_metric' }]);
+        return Promise.resolve({ results: [], warnings: [], hasMore: true });
+      });
+      const searchLanguageProvider = {
+        ...mockLanguageProvider,
+        hasSearchSupport: jest.fn().mockReturnValue(true),
+        getSearchApiClient: jest.fn().mockReturnValue({ searchMetricNames }),
+      } as unknown as PrometheusLanguageProviderInterface;
+      const { result } = renderHook(() => useMetricsModal(), {
+        wrapper: createWrapper(searchLanguageProvider),
+      });
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      await act(async () => {
+        await result.current.debouncedBackendSearch(defaultTimeRange, 'only');
+      });
+
+      expect(result.current.filteredMetricsData).toEqual([{ value: 'only_metric' }]);
+      expect(result.current.resultsIncomplete).toBe(true);
+    });
+
+    it('ignores a stale Search API trailer', async () => {
+      let resolveSearch: ((hasMore: boolean) => void) | undefined;
+      const searchMetricNames = jest.fn().mockImplementation((_timeRange, term, options) => {
+        if (term === '') {
+          return Promise.resolve({ results: [], warnings: [], hasMore: false });
+        }
+        if (term === 'first') {
+          options.onBatch([{ name: 'first_metric' }]);
+          return new Promise((resolve) => {
+            resolveSearch = (hasMore: boolean) => resolve({ results: [], warnings: ['stale'], hasMore });
+          });
+        }
+
+        options.onBatch([{ name: 'second_metric' }]);
+        return Promise.resolve({ results: [], warnings: [], hasMore: false });
+      });
+      const searchLanguageProvider = {
+        ...mockLanguageProvider,
+        hasSearchSupport: jest.fn().mockReturnValue(true),
+        getSearchApiClient: jest.fn().mockReturnValue({ searchMetricNames }),
+      } as unknown as PrometheusLanguageProviderInterface;
+      const { result } = renderHook(() => useMetricsModal(), {
+        wrapper: createWrapper(searchLanguageProvider),
+      });
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      let pendingSearch!: Promise<void>;
+      act(() => {
+        pendingSearch = result.current.debouncedBackendSearch(defaultTimeRange, 'first');
+      });
+      await waitFor(() => expect(result.current.filteredMetricsData).toHaveLength(1));
+
+      await act(async () => {
+        await result.current.debouncedBackendSearch(defaultTimeRange, 'second');
+      });
+
+      await act(async () => {
+        resolveSearch?.(true);
+        await pendingSearch;
+      });
+
+      expect(result.current.filteredMetricsData.map((metric) => metric.value)).toEqual(['second_metric']);
+      expect(result.current.resultsIncomplete).toBe(false);
     });
 
     it('invalidates an active stream as soon as the search text changes', async () => {

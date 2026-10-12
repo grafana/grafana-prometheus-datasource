@@ -71,6 +71,8 @@ const scriptsProject = {
   testEnvironment: 'node',
   testMatch: ['<rootDir>/scripts/**/__tests__/*.{test,spec}.{js,ts}'],
   transform: { '^.+\\.(t|j)sx?$': swcTransform },
+  // human-id (a @changesets/write dependency) ships ESM only; add it to the transform allowlist
+  transformIgnorePatterns: [nodeModulesToTransform(['human-id'])],
 };
 
 module.exports = {

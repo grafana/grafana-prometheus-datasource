@@ -720,7 +720,7 @@ export class PrometheusDatasource
     const finalQuery = filters.map(remapOneOf).reduce((acc, filter) => {
       const { key, operator } = filter;
       let { value } = filter;
-      if (operator === '=~' || operator === '!~') {
+      if (!config.featureToggles.prometheusSpecialCharsInLabelValues && (operator === '=~' || operator === '!~')) {
         value = prometheusRegularEscape(value);
       }
       return addLabelToQuery(acc, key, value, operator);
@@ -892,7 +892,10 @@ export function remapOneOf(filter: AdHocVariableFilter) {
   let { operator, value, values } = filter;
   if (operator === '=|' || operator === '!=|') {
     operator = operator === '=|' ? '=~' : '!~';
-    value = values?.map(prometheusRegularEscape).join('|') ?? '';
+    const escapedValues = config.featureToggles.prometheusSpecialCharsInLabelValues
+      ? values
+      : values?.map(prometheusRegularEscape);
+    value = escapedValues?.join('|') ?? '';
   }
 
   return {

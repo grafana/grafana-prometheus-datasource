@@ -40,6 +40,7 @@ const MetricsModalContent = (props: MetricsModalProps) => {
     setSelectedTypes,
     searchedText,
     setSearchedText,
+    resultsIncomplete,
   } = useMetricsModal();
   const styles = useStyles2(getMetricsModalStyles);
   const placeholders = getPlaceholders();
@@ -132,6 +133,13 @@ const MetricsModalContent = (props: MetricsModalProps) => {
         {filteredMetricsData && <ResultsTable onChange={onChange} onClose={onClose} query={query} />}
       </div>
       <div className={styles.resultsFooter}>
+        {resultsIncomplete && (
+          <div>
+            <Trans i18nKey="grafana-prometheus.querybuilder.metrics-modal.incomplete-results">
+              Showing the first 1,000 results. Refine your search to find other metrics.
+            </Trans>
+          </div>
+        )}
         <Pagination
           currentPage={pagination.pageNum > pagination.totalPageNum ? 1 : pagination.pageNum}
           numberOfPages={pagination.totalPageNum}
