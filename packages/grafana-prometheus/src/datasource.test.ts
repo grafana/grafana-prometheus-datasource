@@ -1478,7 +1478,7 @@ describe('modifyQuery', () => {
   });
 });
 
-describe('getDrilldownMigrationUsage', () => {
+describe('getFiltersMigrationUsage', () => {
   // Applies scoped vars the way templateSrv does, so the test sees what the datasource passes in.
   const scopedTemplateSrv = {
     replace: (text: string, scopedVars: ScopedVars = {}) =>
@@ -1492,7 +1492,7 @@ describe('getDrilldownMigrationUsage', () => {
   it('classifies a filter usage from the query expr', () => {
     const query: PromQuery = { refId: 'A', expr: 'up{job="$job"}' };
 
-    expect(ds.getDrilldownMigrationUsage({ variableName: 'job', query })).toEqual({
+    expect(ds.getFiltersMigrationUsage({ variableName: 'job', query })).toEqual({
       kind: 'filter',
       key: 'job',
       operator: '=',
@@ -1502,19 +1502,19 @@ describe('getDrilldownMigrationUsage', () => {
   it('classifies a groupBy usage from the query expr', () => {
     const query: PromQuery = { refId: 'A', expr: 'sum by($groupby) (up)' };
 
-    expect(ds.getDrilldownMigrationUsage({ variableName: 'groupby', query })).toEqual({ kind: 'groupBy' });
+    expect(ds.getFiltersMigrationUsage({ variableName: 'groupby', query })).toEqual({ kind: 'groupBy' });
   });
 
   it('returns undefined when the variable is not used in the query', () => {
     const query: PromQuery = { refId: 'A', expr: 'up{job="grafana"}' };
 
-    expect(ds.getDrilldownMigrationUsage({ variableName: 'instance', query })).toBeUndefined();
+    expect(ds.getFiltersMigrationUsage({ variableName: 'instance', query })).toBeUndefined();
   });
 
   it('interpolates backend-handled interval macros with placeholders so the query parses', () => {
     const query: PromQuery = { refId: 'A', expr: 'sum(rate(up{job="$job"}[$__rate_interval]))' };
 
-    expect(ds.getDrilldownMigrationUsage({ variableName: 'job', query })).toEqual({
+    expect(ds.getFiltersMigrationUsage({ variableName: 'job', query })).toEqual({
       kind: 'filter',
       key: 'job',
       operator: '=',

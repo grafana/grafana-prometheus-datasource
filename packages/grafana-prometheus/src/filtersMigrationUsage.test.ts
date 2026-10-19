@@ -1,4 +1,4 @@
-import { classifyDrilldownMigrationUsage, type InterpolateWithVariable } from './drilldownMigrationUsage';
+import { classifyFiltersMigrationUsage, type InterpolateWithVariable } from './filtersMigrationUsage';
 import { type PromQuery } from './types';
 
 // Stand-in for `datasource.interpolateString` with `placeHolderScopedVars`: the classified variable
@@ -40,12 +40,12 @@ function interpolatorFor(variableName: string): InterpolateWithVariable {
 }
 
 function classify(variableName: string, expr: string, extra: Partial<PromQuery> = {}) {
-  return classifyDrilldownMigrationUsage({ refId: 'A', expr, ...extra }, interpolatorFor(variableName));
+  return classifyFiltersMigrationUsage({ refId: 'A', expr, ...extra }, interpolatorFor(variableName));
 }
 
 const unsafe = { kind: 'unsafe', reason: expect.any(String) };
 
-describe('classifyDrilldownMigrationUsage', () => {
+describe('classifyFiltersMigrationUsage', () => {
   describe('not referenced', () => {
     it('returns undefined when the variable is not used in the query', () => {
       expect(classify('job', 'up{instance="localhost"}')).toBeUndefined();

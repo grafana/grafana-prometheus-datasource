@@ -17,7 +17,7 @@ import {
 import { type PromQuery } from './types';
 
 /**
- * Backs `PrometheusDatasource.getDrilldownMigrationUsage` (see datasource.ts). It only classifies
+ * Backs `PrometheusDatasource.getFiltersMigrationUsage` (see datasource.ts). It only classifies
  * how a variable is used so Grafana can decide whether to suggest migrating it to filters; it never
  * rewrites queries, that's left to the Assistant.
  *
@@ -35,26 +35,26 @@ export type InterpolateWithVariable = (text: string, value: string) => string;
 
 // Valid as a label name (for `by(...)`) and untouched by Prometheus value escaping. Two of them, so
 // whether the variable is referenced at all is a comparison rather than a syntax match.
-const SENTINEL = 'grafana_drilldown_sentinel_a';
-const OTHER_SENTINEL = 'grafana_drilldown_sentinel_b';
+const SENTINEL = 'grafana_filters_sentinel_a';
+const OTHER_SENTINEL = 'grafana_filters_sentinel_b';
 
 /**
  * @alpha
- * Local mirror of `@grafana/data`'s `DrilldownMigrationUsage`, which isn't in a released
+ * Local mirror of `@grafana/data`'s `FiltersMigrationUsage`, which isn't in a released
  * `@grafana/data` version this package depends on yet. Once it is and the dependency is bumped,
- * delete this type (and `DrilldownMigrationUsageOptions` below) in favor of importing it.
+ * delete this type (and `FiltersMigrationUsageOptions` below) in favor of importing it.
  */
-export type DrilldownMigrationUsage =
+export type FiltersMigrationUsage =
   | { kind: 'filter'; key: string; operator: string }
   | { kind: 'groupBy' }
   | { kind: 'unsafe'; reason?: string };
 
 /**
  * @alpha
- * Local mirror of `@grafana/data`'s `DataSourceGetDrilldownMigrationUsageOptions<PromQuery>`, see
- * `DrilldownMigrationUsage` above.
+ * Local mirror of `@grafana/data`'s `DataSourceGetFiltersMigrationUsageOptions<PromQuery>`, see
+ * `FiltersMigrationUsage` above.
  */
-export interface DrilldownMigrationUsageOptions {
+export interface FiltersMigrationUsageOptions {
   variableName: string;
   query: PromQuery;
 }
@@ -64,7 +64,7 @@ type Position =
   | { kind: 'groupBy' }
   | { kind: 'other' };
 
-const unsafe = (reason: string): DrilldownMigrationUsage => ({ kind: 'unsafe', reason });
+const unsafe = (reason: string): FiltersMigrationUsage => ({ kind: 'unsafe', reason });
 
 /**
  * Classifies how one variable is used in one query, collapsed to the single result the capability
@@ -78,10 +78,10 @@ const unsafe = (reason: string): DrilldownMigrationUsage => ({ kind: 'unsafe', r
  *   unparsable expression) -> `unsafe`. Reporting only one of several conflicting usages would hide
  *   the rest from the caller, so any disagreement within the query counts as unsafe.
  */
-export function classifyDrilldownMigrationUsage(
+export function classifyFiltersMigrationUsage(
   query: PromQuery,
   interpolate: InterpolateWithVariable
-): DrilldownMigrationUsage | undefined {
+): FiltersMigrationUsage | undefined {
   const references = (text: string) => interpolate(text, SENTINEL) !== interpolate(text, OTHER_SENTINEL);
 
   const usedOutsideExpr = Object.entries(query).some(
