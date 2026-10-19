@@ -11,6 +11,7 @@ import {
   QuotedLabelName,
   StringLiteral,
   UnquotedLabelMatcher,
+  VectorSelector,
 } from '@prometheus-io/lezer-promql';
 
 import { type PromQuery } from './types';
@@ -58,7 +59,10 @@ export interface DrilldownMigrationUsageOptions {
   query: PromQuery;
 }
 
-type Position = { kind: 'filter'; key: string; operator: string } | { kind: 'groupBy' } | { kind: 'other' };
+type Position =
+  | { kind: 'filter'; key: string; operator: string; selectorFrom: number }
+  | { kind: 'groupBy' }
+  | { kind: 'other' };
 
 const unsafe = (reason: string): DrilldownMigrationUsage => ({ kind: 'unsafe', reason });
 
@@ -68,8 +72,8 @@ const unsafe = (reason: string): DrilldownMigrationUsage => ({ kind: 'unsafe', r
  * - not referenced anywhere in the query -> `undefined`;
  * - referenced from a field other than `expr` (legendFormat, interval, ...) -> `unsafe`, since
  *   migrating the variable away would silently change that field;
- * - every occurrence in `expr` is a whole label-matcher value on the same key -> `filter`, or every
- *   occurrence is a `by(...)` label -> `groupBy`;
+ * - every occurrence in `expr` is a whole label-matcher value on the same key, and every selector
+ *   in `expr` has such a matcher -> `filter`, or every occurrence is a `by(...)` label -> `groupBy`;
  * - anything else (other positions, mixed shapes, two keys, a format that changes the value, an
  *   unparsable expression) -> `unsafe`. Reporting only one of several conflicting usages would hide
  *   the rest from the caller, so any disagreement within the query counts as unsafe.
@@ -118,6 +122,12 @@ export function classifyDrilldownMigrationUsage(
   if (new Set(filters.map((f) => f.key)).size > 1) {
     return unsafe('variable filters on more than one label key within this query');
   }
+  // An ad hoc filter applies to every selector in the query, so a selector without the matcher
+  // (the denominator of a ratio, say) would change meaning once the variable is migrated.
+  const filteredSelectors = new Set(filters.map((f) => f.selectorFrom));
+  if (vectorSelectorStarts(tree).some((from) => !filteredSelectors.has(from))) {
+    return unsafe('query has a selector the variable does not filter');
+  }
 
   // Occurrences agreeing on the key may still differ in operator (one "=", one "=~"). The caller only
   // disqualifies on disagreeing keys, so the first operator is reported rather than adding a rule.
@@ -130,6 +140,18 @@ function occurrences(text: string, needle: string): number[] {
     offsets.push(i);
   }
   return offsets;
+}
+
+function vectorSelectorStarts(tree: Tree): number[] {
+  const starts: number[] = [];
+  tree.iterate({
+    enter: (node) => {
+      if (node.type.id === VectorSelector) {
+        starts.push(node.from);
+      }
+    },
+  });
+  return starts;
 }
 
 function treeHasError(tree: Tree): boolean {
@@ -183,7 +205,8 @@ function classifyMatcherValue(stringNode: SyntaxNode, expr: string, from: number
 
   const labelNode = matcher.getChild(LabelName) ?? matcher.getChild(QuotedLabelName);
   const opNode = matcher.getChild(MatchOp);
-  if (!labelNode || !opNode || !selectorKeepsContent(matcher)) {
+  const selector = findAncestor(matcher, VectorSelector);
+  if (!labelNode || !opNode || !selector || !selectorKeepsContent(matcher)) {
     return { kind: 'other' };
   }
 
@@ -192,7 +215,17 @@ function classifyMatcherValue(stringNode: SyntaxNode, expr: string, from: number
     kind: 'filter',
     key: labelNode.type.id === QuotedLabelName ? label.slice(1, -1) : label,
     operator: expr.substring(opNode.from, opNode.to),
+    selectorFrom: selector.from,
   };
+}
+
+function findAncestor(node: SyntaxNode, typeId: number): SyntaxNode | undefined {
+  for (let current = node.parent; current; current = current.parent) {
+    if (current.type.id === typeId) {
+      return current;
+    }
+  }
+  return undefined;
 }
 
 // Removing the matcher must not leave an empty selector (`{}` is invalid PromQL), so the selector

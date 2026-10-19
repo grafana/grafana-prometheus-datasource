@@ -97,6 +97,22 @@ describe('classifyDrilldownMigrationUsage', () => {
       expect(classify('job', 'up{job=~"prefix-$job"}')).toEqual(unsafe);
     });
 
+    it.each([
+      ['a ratio with an unfiltered denominator', 'sum(rate(up{job="$job"}[5m])) / sum(rate(up[5m]))'],
+      ['a set operation with an unfiltered side', 'up{job="$job"} unless on(instance) other_metric'],
+      ['an unfiltered selector in a function argument', 'up{job="$job"} and absent(down)'],
+    ])('rejects %s, since the migrated filter would apply to every selector', (_, expr) => {
+      expect(classify('job', expr)).toEqual(unsafe);
+    });
+
+    it('accepts a filter on every selector, including range and subquery selectors', () => {
+      expect(classify('job', 'rate(up{job="$job"}[5m]) / max_over_time(down{job="$job"}[1h:5m])')).toEqual({
+        kind: 'filter',
+        key: 'job',
+        operator: '=',
+      });
+    });
+
     it('rejects a variable in label key position', () => {
       expect(classify('label', 'up{$label="foo"}')).toEqual(unsafe);
     });
