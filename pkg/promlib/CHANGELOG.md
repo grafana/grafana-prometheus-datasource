@@ -1,5 +1,11 @@
 # promlib
 
+## 0.0.23
+
+🐛 Keep the error source of failed resource and Search API requests. Timeouts, cancellations, connection errors and other downstream errors from these requests are now reported as downstream, not as plugin errors. ([#388](https://github.com/grafana/grafana-prometheus-datasource/pull/388))
+
+🐛 Update Go to 1.27.3.
+
 ## 0.0.22
 
 🐛 Fix security vulnerabilities (CVE-2026-84445) ([#371](https://github.com/grafana/grafana-prometheus-datasource/pull/371))
