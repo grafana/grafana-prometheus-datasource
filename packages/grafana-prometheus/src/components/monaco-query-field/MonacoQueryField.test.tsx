@@ -37,7 +37,7 @@ const lightTheme = {
   },
   components: {
     input: { borderColor: '#aaa' },
-    height: { md: 4 }
+    height: { md: 4 },
   },
   shape: { radius: { default: '2px' } },
   shadows: { z3: '0 1px 3px #000' },
@@ -133,5 +133,24 @@ describe('MonacoQueryField query coauthoring wiring', () => {
     expect(completionDispose).toHaveBeenCalledTimes(1);
     expect(dataProviderDispose).toHaveBeenCalledTimes(1);
     dataProviderDispose.mockRestore();
+  });
+
+  it('registers an insertion target with the host once Monaco mounts', () => {
+    jest.mocked(usePrometheusQueryCoauthoring).mockReturnValue(jest.fn());
+    const unregister = jest.fn();
+    const insertionRegistrar = { register: jest.fn(() => unregister) };
+    const props = { ...createProps(undefined, undefined), unstable_queryEditorInsertionV1: insertionRegistrar };
+    const { unmount } = render(<MonacoQueryField {...props} />);
+    const { editor, monaco } = createEditorHarness();
+
+    expect(insertionRegistrar.register).not.toHaveBeenCalled();
+    act(() => mockMonacoOnMount?.(editor, monaco));
+    expect(insertionRegistrar.register).toHaveBeenCalledWith({
+      getSelection: expect.any(Function),
+      replaceRange: expect.any(Function),
+    });
+
+    unmount();
+    expect(unregister).toHaveBeenCalledTimes(1);
   });
 });
