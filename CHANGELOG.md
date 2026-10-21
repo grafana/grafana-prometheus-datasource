@@ -1,5 +1,19 @@
 # grafana-prometheus-datasource
 
+## 13.2.4
+
+🐛 Update Go to 1.27.3. ([#380](https://github.com/grafana/grafana-prometheus-datasource/pull/380))
+
+🐛 Fix security vulnerability CVE-2026-102990 by overriding basic-ftp to ^6.2.1 ([#386](https://github.com/grafana/grafana-prometheus-datasource/pull/386))
+
+🐛 Fix security vulnerabilities (CVE-2026-93749, CVE-2026-17495)
+
+🐛 Keep the error source of failed resource and Search API requests. Timeouts, cancellations, connection errors and other downstream errors from these requests are now reported as downstream, not as plugin errors. ([#388](https://github.com/grafana/grafana-prometheus-datasource/pull/388))
+
+🐛 Update contributing docs ([#380](https://github.com/grafana/grafana-prometheus-datasource/pull/380))
+
+🐛 Update MonacoQueryField to respect the theme.components.height.md variable ([#378](https://github.com/grafana/grafana-prometheus-datasource/pull/378))
+
 ## 13.2.3
 
 🐛 Cap Metrics Explorer search results and show when the list is incomplete. ([#365](https://github.com/grafana/grafana-prometheus-datasource/pull/365))
