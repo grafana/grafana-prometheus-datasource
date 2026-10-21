@@ -17,7 +17,7 @@ jobs:
     with:
       plugin-version-suffix: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || '' }}
       run-playwright: true
-      golangci-lint-version: "2.14.0"
+      golangci-lint-version: "2.15.0"
 
   publish-and-deploy:
     if: github.ref == 'refs/heads/main'
@@ -29,4 +29,4 @@ jobs:
       pull-requests: read
     with:
       go-version: "1.27.3"
-      golangci-lint-version: "2.14.0"
+      golangci-lint-version: "2.15.0"
