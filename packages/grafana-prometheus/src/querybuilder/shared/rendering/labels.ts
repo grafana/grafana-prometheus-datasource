@@ -1,6 +1,6 @@
 import { config } from '@grafana/runtime';
 
-import { prometheusRegularEscape } from '../../../escaping';
+import { escapeLabelValueInExactSelector } from '../../../escaping';
 import { utf8Support } from '../../../utf8_support';
 import { type QueryBuilderLabelFilter } from '../types';
 
@@ -19,10 +19,8 @@ export function renderLabels(labels: QueryBuilderLabelFilter[]): string {
     }
 
     let labelValue = filter.value;
-    const usingRegexOperator = filter.op === '=~' || filter.op === '!~';
-
-    if (config.featureToggles.prometheusSpecialCharsInLabelValues && !usingRegexOperator) {
-      labelValue = prometheusRegularEscape(labelValue);
+    if (config.featureToggles.prometheusSpecialCharsInLabelValues) {
+      labelValue = escapeLabelValueInExactSelector(labelValue);
     }
     expr += `${utf8Support(filter.label)}${filter.op}"${labelValue}"`;
   }
@@ -38,10 +36,8 @@ export function renderLabelsWithoutBrackets(labels: QueryBuilderLabelFilter[]): 
   const renderedLabels: string[] = [];
   for (const filter of labels) {
     let labelValue = filter.value;
-    const usingRegexOperator = filter.op === '=~' || filter.op === '!~';
-
-    if (config.featureToggles.prometheusSpecialCharsInLabelValues && !usingRegexOperator) {
-      labelValue = prometheusRegularEscape(labelValue);
+    if (config.featureToggles.prometheusSpecialCharsInLabelValues) {
+      labelValue = escapeLabelValueInExactSelector(labelValue);
     }
     renderedLabels.push(`${utf8Support(filter.label)}${filter.op}"${labelValue}"`);
   }

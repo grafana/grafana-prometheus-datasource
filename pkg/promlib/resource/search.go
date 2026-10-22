@@ -32,7 +32,7 @@ func (r *Resource) ExecuteSearch(
 	// below.
 	resp, err := r.promClient.QueryResource(ctx, req)
 	if err != nil {
-		return fmt.Errorf("error querying search resource: %v", err)
+		return fmt.Errorf("error querying search resource: %w", err)
 	}
 	defer resp.Body.Close()
 

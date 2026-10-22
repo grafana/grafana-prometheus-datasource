@@ -78,7 +78,7 @@ describe('PromQueryBuilder', () => {
 
   it('renders all the query sections', async () => {
     setup(bugQuery);
-    expect(screen.getByDisplayValue('random_metric')).toBeInTheDocument();
+    expect(screen.getByText('random_metric')).toBeInTheDocument();
     expect(screen.getByText('localhost:9090')).toBeInTheDocument();
     expect(screen.getByText('Rate')).toBeInTheDocument();
     const sumBys = screen.getAllByTestId('operations.1.wrapper');
@@ -174,8 +174,7 @@ describe('PromQueryBuilder', () => {
 
     // We need to trigger the option selection to show the hint
     // Just press Enter to select the current option (which should be our metric)
-    const input = screen.getByTestId('data-testid metric select');
-    await userEvent.type(input, '{enter}');
+    await userEvent.type(getMetricInput(container), '{enter}');
 
     // Now check for the hint
     await waitFor(() => {
@@ -193,8 +192,7 @@ describe('PromQueryBuilder', () => {
 
     // We need to trigger the option selection to show the hint
     // Just press Enter to select the current option (which should be our metric)
-    const input = screen.getByTestId('data-testid metric select');
-    await userEvent.type(input, '{enter}');
+    await userEvent.type(getMetricInput(container), '{enter}');
 
     // Now check for the hint
     await waitFor(() => expect(screen.getByText('hint: add rate')).toBeInTheDocument());
@@ -221,8 +219,7 @@ describe('PromQueryBuilder', () => {
 
     // We need to trigger the option selection to show the hint
     // Just press Enter to select the current option (which should be our metric)
-    const input = screen.getByTestId('data-testid metric select');
-    await userEvent.type(input, '{enter}');
+    await userEvent.type(getMetricInput(container), '{enter}');
 
     // Now check for the hints - should be multiple in this case
     await waitFor(() => expect(screen.getAllByText(/hint:/)).toHaveLength(2));
@@ -374,14 +371,17 @@ function setup(
   return { languageProvider, datasource, container };
 }
 
-async function openMetricSelect(container: HTMLElement) {
+function getMetricInput(container: HTMLElement) {
   const select = container.querySelector('[data-testid="data-testid metric select"]');
-  if (select) {
-    await userEvent.click(select);
-    // Also focus to ensure callbacks are triggered
-    await userEvent.type(select, ' ');
-    await userEvent.clear(select);
+  const input = select instanceof HTMLInputElement ? select : select?.querySelector('input');
+  if (!(input instanceof HTMLInputElement)) {
+    throw new Error('metric select input not found');
   }
+  return input;
+}
+
+async function openMetricSelect(container: HTMLElement) {
+  await userEvent.click(getMetricInput(container));
 }
 
 async function openLabelNameSelect(index = 0) {

@@ -8,6 +8,7 @@ import { type PrometheusLanguageProviderInterface } from '../../language_provide
 import { type QueryEditorCoauthoringRegistrationV1 } from '../../query_coauthoring/internalCoauthoringContract';
 import { type PromQuery } from '../../types';
 import MonacoQueryField from './MonacoQueryField';
+import { DataProvider } from './monaco-completion-provider/data_provider';
 import { usePrometheusQueryCoauthoring } from './usePrometheusQueryCoauthoring';
 
 let mockMonacoOnMount: ((editor: MonacoEditor, monaco: Monaco) => void) | undefined;
@@ -34,7 +35,10 @@ const lightTheme = {
     primary: { border: '#00f', text: '#00f' },
     text: { primary: '#111', secondary: '#555' },
   },
-  components: { input: { borderColor: '#aaa' } },
+  components: {
+    input: { borderColor: '#aaa' },
+    height: { md: 4 }
+  },
   shape: { radius: { default: '2px' } },
   shadows: { z3: '0 1px 3px #000' },
   spacing: (...values: number[]) => values.map((value) => `${value * 8}px`).join(' '),
@@ -104,6 +108,7 @@ describe('MonacoQueryField query coauthoring wiring', () => {
 
   it('attaches coauthoring when Monaco mounts and preserves editor cleanup', () => {
     const attachCoauthoring = jest.fn();
+    const dataProviderDispose = jest.spyOn(DataProvider.prototype, 'dispose');
     jest.mocked(usePrometheusQueryCoauthoring).mockReturnValue(attachCoauthoring);
     const createQueryForCoauthoring = (value: string): PromQuery => ({ expr: value, refId: 'A' });
     const registrar = { register: jest.fn(() => jest.fn()) };
@@ -126,5 +131,7 @@ describe('MonacoQueryField query coauthoring wiring', () => {
 
     unmount();
     expect(completionDispose).toHaveBeenCalledTimes(1);
+    expect(dataProviderDispose).toHaveBeenCalledTimes(1);
+    dataProviderDispose.mockRestore();
   });
 });

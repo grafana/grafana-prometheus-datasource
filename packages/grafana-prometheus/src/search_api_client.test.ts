@@ -70,6 +70,19 @@ describe('SearchApiClient', () => {
     });
   });
 
+  it('caches adapted metric names', async () => {
+    chunkedMock.mockReturnValue(searchResultsStream([{ name: 'up' }]));
+    const client = new SearchApiClient(jest.fn(), datasource);
+
+    await client.queryMetrics(timeRange, 20);
+    await expect(client.queryMetrics(timeRange, 20)).resolves.toEqual({
+      metrics: ['up'],
+      histogramMetrics: [],
+    });
+
+    expect(chunkedMock).toHaveBeenCalledTimes(1);
+  });
+
   it('adapts and caches label names', async () => {
     chunkedMock.mockReturnValue(searchResultsStream([{ name: 'instance' }, { name: 'job' }]));
     const client = new SearchApiClient(jest.fn(), datasource);
@@ -118,10 +131,12 @@ describe('SearchApiClient', () => {
     requestMock.mockResolvedValue(['standard-b', 'standard-a']);
     const client = new SearchApiClient(requestMock, datasource);
 
+    expect(client.isAvailable()).toBe(true);
     await expect(client.queryLabelKeys(timeRange)).resolves.toEqual(['standard-a', 'standard-b']);
 
     expect(requestMock).toHaveBeenCalledWith('/api/v1/labels', expect.anything(), undefined);
     expect(console.warn).toHaveBeenCalledTimes(1);
+    expect(client.isAvailable()).toBe(false);
   });
 
   it('falls back for a missing Search API route', async () => {
@@ -203,6 +218,35 @@ describe('SearchApiClient', () => {
     expect(client.labelKeys).toEqual(['instance', 'job']);
   });
 
+  it('sends alphabetical metric names without metadata when the caller asks', async () => {
+    const client = new SearchApiClient(jest.fn(), datasource);
+
+    await client.searchMetricNames(timeRange, '', { includeMetadata: false, sortBy: 'alpha' });
+    await client.searchMetricNames(timeRange, 'http req', { includeMetadata: false, sortBy: 'alpha' });
+
+    expect(chunkedMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        url: expect.stringMatching(/\/metric_names$/),
+        params: expect.objectContaining({
+          sort_by: 'alpha',
+          include_metadata: false,
+        }),
+      })
+    );
+    expect(chunkedMock.mock.calls[0][0].params).not.toHaveProperty('search[]');
+    expect(chunkedMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        params: expect.objectContaining({
+          'search[]': 'httpreq',
+          sort_by: 'alpha',
+          include_metadata: false,
+        }),
+      })
+    );
+  });
+
   it('searches metric names with metadata and score ordering', async () => {
     chunkedMock.mockReturnValue(
       chunkedStream([
@@ -225,19 +269,42 @@ describe('SearchApiClient', () => {
         start: '1681300260',
         end: '1681300320',
         limit: '100',
-        'search[]': 'http req',
+        'search[]': 'httpreq',
         sort_by: 'score',
+        fuzz_threshold: '80',
+        fuzz_alg: 'jarowinkler',
+        case_sensitive: 'false',
         batch_size: '100',
-        include_metadata: 'true',
+        include_metadata: true,
       },
       headers: {},
     });
   });
 
+  it.each([
+    ['leading and trailing whitespace', '  http req  ', 'httpreq'],
+    ['tabs and repeated spaces', '\thttp \t  req\t', 'httpreq'],
+    ['a quoted UTF-8 value', '  "café au lait"  ', '"caféaulait"'],
+    ['a value containing spaces', 'New York City', 'NewYorkCity'],
+  ])('normalizes %s into one Search API term', async (_name, term, expected) => {
+    const client = new SearchApiClient(jest.fn(), datasource);
+
+    await client.searchMetricNames(timeRange, term);
+
+    expect(chunkedMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          'search[]': expected,
+          sort_by: 'score',
+        }),
+      })
+    );
+  });
+
   it('uses snapped range parameters and match filters for label names', async () => {
     const client = new SearchApiClient(jest.fn(), datasource);
 
-    await client.searchLabelNames(timeRange, '', { match: '{job="grafana"}', limit: 20 });
+    await client.searchLabelNames(timeRange, 'extra lab', { match: '{job="grafana"}', limit: 20 });
 
     expect(chunkedMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -246,6 +313,11 @@ describe('SearchApiClient', () => {
           start: '1681300293',
           end: '1681300294',
           limit: '20',
+          'search[]': 'extralab',
+          sort_by: 'score',
+          fuzz_threshold: '80',
+          fuzz_alg: 'jarowinkler',
+          case_sensitive: 'false',
           'match[]': '{job="grafana"}',
           batch_size: '100',
         },
@@ -256,7 +328,7 @@ describe('SearchApiClient', () => {
   it('sends the label name and adjusted range when searching label values', async () => {
     const client = new SearchApiClient(jest.fn(), datasource);
 
-    await client.searchLabelValues(timeRange, 'service.name', 'api', { limit: 25 });
+    await client.searchLabelValues(timeRange, 'service.name', 'datasource uid', { limit: 25 });
 
     expect(chunkedMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -265,7 +337,43 @@ describe('SearchApiClient', () => {
           start: '1681300260',
           end: '1681300320',
           label: 'service.name',
-          'search[]': 'api',
+          'search[]': 'datasourceuid',
+        }),
+      })
+    );
+  });
+
+  it('accepts endpoint-specific fuzzy matching options', async () => {
+    const client = new SearchApiClient(jest.fn(), datasource);
+
+    await client.searchLabelValues(timeRange, 'service.name', 'API', {
+      fuzzThreshold: 100,
+      fuzzAlgorithm: 'subsequence',
+      caseSensitive: true,
+    });
+
+    expect(chunkedMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          fuzz_threshold: '100',
+          fuzz_alg: 'subsequence',
+          case_sensitive: 'true',
+        }),
+      })
+    );
+  });
+
+  it('omits fuzzy matching parameters when no search term is provided', async () => {
+    const client = new SearchApiClient(jest.fn(), datasource);
+
+    await client.searchLabelNames(timeRange, '');
+
+    expect(chunkedMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.not.objectContaining({
+          fuzz_threshold: expect.anything(),
+          fuzz_alg: expect.anything(),
+          case_sensitive: expect.anything(),
         }),
       })
     );
@@ -324,7 +432,9 @@ describe('SearchApiClient', () => {
     );
     const client = new SearchApiClient(jest.fn(), datasource);
 
+    expect(client.isAvailable()).toBe(true);
     await expect(client.searchMetricNames(timeRange, 'up')).rejects.toBeInstanceOf(SearchApiUnavailableError);
+    expect(client.isAvailable()).toBe(false);
   });
 
   it('retries once after a 401 through the login ping', async () => {
@@ -406,6 +516,34 @@ describe('SearchApiClient', () => {
       warnings: ['limited'],
       hasMore: true,
     });
+  });
+
+  it('supports batch-only consumers without retaining the complete result', async () => {
+    chunkedMock.mockReturnValue(
+      chunkedStream([
+        '{"results":[{"name":"up"}]}\n',
+        '{"results":[{"name":"go_goroutines"}]}\n',
+        '{"status":"success","has_more":false}\n',
+      ])
+    );
+    const onBatch = jest.fn();
+    const onTransportStats = jest.fn();
+    const client = new SearchApiClient(jest.fn(), datasource);
+
+    const result = await client.searchMetricNames(timeRange, '', {
+      onBatch,
+      onTransportStats,
+      retainResults: false,
+    });
+
+    expect(onBatch).toHaveBeenCalledTimes(2);
+    expect(onTransportStats).toHaveBeenCalledWith({
+      queuedBytes: 0,
+      queuedChunks: 0,
+      peakQueuedBytes: expect.any(Number),
+      peakQueuedChunks: expect.any(Number),
+    });
+    expect(result).toEqual({ results: [], warnings: [], hasMore: false });
   });
 });
 

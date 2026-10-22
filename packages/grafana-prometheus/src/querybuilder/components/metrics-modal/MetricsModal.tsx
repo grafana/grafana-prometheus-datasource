@@ -40,6 +40,7 @@ const MetricsModalContent = (props: MetricsModalProps) => {
     setSelectedTypes,
     searchedText,
     setSearchedText,
+    resultsIncomplete,
   } = useMetricsModal();
   const styles = useStyles2(getMetricsModalStyles);
   const placeholders = getPlaceholders();
@@ -53,9 +54,9 @@ const MetricsModalContent = (props: MetricsModalProps) => {
     };
   });
 
-  const searchCallback = (query: string, fullMetaSearchVal?: boolean) => {
-    setSearchedText(query);
-    debouncedBackendSearch(timeRange, query);
+  const searchCallback = (searchText: string) => {
+    setSearchedText(searchText);
+    debouncedBackendSearch(timeRange, searchText, query.labels);
   };
 
   return (
@@ -80,7 +81,6 @@ const MetricsModalContent = (props: MetricsModalProps) => {
             value={searchedText}
             onInput={(e) => {
               const value = e.currentTarget.value ?? '';
-              setSearchedText(value);
               setPagination({ ...pagination, pageNum: 1 });
               searchCallback(value);
             }}
@@ -133,6 +133,13 @@ const MetricsModalContent = (props: MetricsModalProps) => {
         {filteredMetricsData && <ResultsTable onChange={onChange} onClose={onClose} query={query} />}
       </div>
       <div className={styles.resultsFooter}>
+        {resultsIncomplete && (
+          <div>
+            <Trans i18nKey="grafana-prometheus.querybuilder.metrics-modal.incomplete-results">
+              Showing the first 1,000 results. Refine your search to find other metrics.
+            </Trans>
+          </div>
+        )}
         <Pagination
           currentPage={pagination.pageNum > pagination.totalPageNum ? 1 : pagination.pageNum}
           numberOfPages={pagination.totalPageNum}
@@ -152,7 +159,11 @@ const MetricsModalContent = (props: MetricsModalProps) => {
 
 export const MetricsModal = (props: MetricsModalProps) => {
   return (
-    <MetricsModalContextProvider languageProvider={props.datasource.languageProvider} timeRange={props.timeRange}>
+    <MetricsModalContextProvider
+      languageProvider={props.datasource.languageProvider}
+      queryLabels={props.query.labels}
+      timeRange={props.timeRange}
+    >
       <MetricsModalContent {...props} />
     </MetricsModalContextProvider>
   );

@@ -1,6 +1,6 @@
 import { regexifyLabelValuesQueryString } from '../parsingUtils';
+import { renderLabels, renderLabelsWithoutBrackets } from '../shared/rendering/labels';
 import { type QueryBuilderLabelFilter } from '../shared/types';
-import { utf8Support } from './../../utf8_support';
 
 const formatPrometheusLabelFiltersToString = (
   queryString: string,
@@ -12,9 +12,7 @@ const formatPrometheusLabelFiltersToString = (
 };
 
 export const formatPrometheusLabelFilters = (labelsFilters: QueryBuilderLabelFilter[]): string[] => {
-  return labelsFilters.map((label) => {
-    return `,${utf8Support(label.label)}="${label.value}"`;
-  });
+  return renderLabelsWithoutBrackets(labelsFilters).map((label) => `,${label}`);
 };
 
 /**
@@ -24,4 +22,8 @@ export const formatKeyValueStrings = (query: string, labelsFilters?: QueryBuilde
   const queryString = regexifyLabelValuesQueryString(query);
 
   return formatPrometheusLabelFiltersToString(queryString, labelsFilters);
+};
+
+export const formatLabelFiltersToString = (labelsFilters?: QueryBuilderLabelFilter[]): string => {
+  return labelsFilters?.length ? renderLabels(labelsFilters) : '';
 };

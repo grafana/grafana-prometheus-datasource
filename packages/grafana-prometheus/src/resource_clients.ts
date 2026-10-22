@@ -304,7 +304,7 @@ export class ResourceClientsCache {
     this._accessTimestamps[cacheKey] = Date.now();
   }
 
-  public getLabelValues(timeRange: TimeRange, match: string, limit: number): string[] | undefined {
+  public getLabelValues(timeRange: TimeRange, match: string | undefined, limit: number): string[] | undefined {
     const cacheKey = this.getCacheKey(timeRange, match, limit, 'value');
     const result = this._cache[cacheKey];
     if (result) {

@@ -21,6 +21,7 @@ npm run build
 | `src/`                         | Plugin frontend source (webpack-built, bundled into the Grafana plugin zip) |
 | `packages/grafana-prometheus/` | `@grafana/prometheus` library (rollup-built, published to npm)              |
 | `pkg/promlib/`                 | Go backend (`promlib`)                                                      |
+| `pkg/schema/`                  | `dsconfig` configuration schema — single source of truth for settings       |
 | `.config/`                     | Grafana plugin tooling config — **do not modify**                           |
 
 ## Running locally
@@ -42,7 +43,7 @@ the provisioned `prometheus-direct` and `prometheus-gzip` datasource UIDs:
 | `npm run server:random-data`      | Random counters, gauges, and histograms                               |
 | `npm run server:high-cardinality` | `fakedata_highcard_http_requests_total` with many label combinations  |
 | `npm run server:utf8`             | UTF-8 metric and label names, including `a.utf8.metric 🤘`            |
-| `npm run server:search-api`       | Prometheus 3.13.1 with the experimental Search API enabled            |
+| `npm run server:search-api`       | Prometheus 3.13.3 with the experimental Search API enabled            |
 | `npm run server:full`             | All generators, node exporter, fake-data-gen, rules, and Alertmanager |
 
 The scripts are shorthand for layering one override onto the base file. The base
@@ -63,8 +64,10 @@ gzip-proxy datasource provisioning.
 
 The Search API environment additionally provisions `prometheus-search-api` as
 the default datasource with `enableSearchApi` enabled. Use
-`prometheus-direct` in the same environment to compare classic discovery
-against the experimental metric and label search endpoints.
+`prometheus-direct` in the same environment to compare standard Prometheus discovery
+against the experimental metric and label search endpoints. See the
+[Search API lifecycle](./docs/prometheus-search-api-lifecycle.md) for runtime
+requirements and fallback behavior.
 
 Stop the active environment before selecting another one:
 
@@ -160,7 +163,26 @@ npm run test:ci          # unit tests
 npm run e2e              # playwright e2e tests (requires running Grafana)
 npm run lint             # eslint
 npm run typecheck        # typescript type checking
+mage test                # go backend tests (includes the schema conformance suite)
 ```
+
+---
+
+## Data source configuration schema
+
+`pkg/schema/dsconfig.json` is the single source of truth for the data source's settings.
+After changing it — or after adding/removing a field on `PromOptions` in
+`pkg/promlib/models/settings.go` — regenerate and verify the committed artifacts:
+
+```bash
+go generate ./pkg/schema/...   # rewrite the *.gen.json artifacts
+go test ./pkg/schema/...       # conformance suite (drift, validity, struct parity)
+```
+
+See [Data Source Configuration Schema](CONTRIBUTING.md#data-source-configuration-schema)
+in the contributing guide for the walkthrough of adding a new settings option, and the
+[`grafana/dsconfig` docs](https://github.com/grafana/dsconfig/tree/main/dsconfig) for the
+schema format itself.
 
 ---
 

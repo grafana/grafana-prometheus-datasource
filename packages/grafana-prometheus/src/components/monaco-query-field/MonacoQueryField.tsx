@@ -14,6 +14,7 @@ import { type Props } from './MonacoQueryFieldProps';
 import { getOverrideServices } from './getOverrideServices';
 import { DataProvider } from './monaco-completion-provider/data_provider';
 import { getCompletionProvider, getSuggestOptions } from './monaco-completion-provider/monaco-completion-provider';
+import { installSuggestSelectionPreserver, refreshOpenSuggestions } from './monaco-completion-provider/suggest_refresh';
 import { placeHolderScopedVars, validateQuery } from './monaco-completion-provider/validation';
 import { language, languageConfiguration } from './promql';
 import { usePrometheusQueryCoauthoring } from './usePrometheusQueryCoauthoring';
@@ -38,8 +39,8 @@ const options: monacoTypes.editor.IStandaloneEditorConstructionOptions = {
   padding: {
     // these numbers were picked so that visually this matches the previous version
     // of the query-editor the best
-    top: 4,
-    bottom: 5,
+    top: 2,
+    bottom: 3,
   },
   renderLineHighlight: 'none',
   scrollbar: {
@@ -93,7 +94,12 @@ const getStyles = (theme: GrafanaTheme2, placeholder: string) => {
       justifyContent: 'start',
       alignItems: 'center',
       height: '100%',
+      minHeight: theme.spacing(theme.components.height.md),
       overflow: 'hidden',
+      // centre the editor when minHeight is taller than its content
+      '& > section': {
+        alignItems: 'center',
+      },
     }),
     placeholder: css({
       '::after': {
@@ -188,11 +194,17 @@ const MonacoQueryField = (props: Props) => {
             languageProvider: lpRef.current,
           });
 
-          // Create completion provider with state for Ctrl+Space detection
+          // Create completion provider with state for Ctrl+Space detection.
+          // Later search batches retrigger this open session; the preserver puts
+          // the highlight back on the row that was already focused.
+          const suggestSelection = installSuggestSelectionPreserver(editor);
           const { provider: completionProvider, state: completionState } = getCompletionProvider(
             monaco,
             dataProvider,
-            timeRange
+            timeRange,
+            () => {
+              refreshOpenSuggestions(editor);
+            }
           );
 
           // completion-providers in monaco are not registered directly to editor-instances,
@@ -242,6 +254,8 @@ const MonacoQueryField = (props: Props) => {
           // Combine cleanup functions
           autocompleteDisposeFun.current = () => {
             document.removeEventListener('keydown', handleKeyDown, true);
+            suggestSelection.dispose();
+            dataProvider.dispose();
             dispose();
           };
 

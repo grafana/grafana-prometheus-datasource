@@ -42,7 +42,7 @@ func (r *Resource) Execute(ctx context.Context, req *backend.CallResourceRequest
 	r.log.FromContext(ctx).Debug("Sending resource query", "URL", req.URL)
 	resp, err := r.promClient.QueryResource(ctx, req)
 	if err != nil {
-		return nil, fmt.Errorf("error querying resource: %v", err)
+		return nil, fmt.Errorf("error querying resource: %w", err)
 	}
 
 	// frontend sets the X-Grafana-Cache with the desired response cache control value

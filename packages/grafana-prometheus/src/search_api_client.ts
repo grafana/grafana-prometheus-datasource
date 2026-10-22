@@ -11,9 +11,13 @@ import {
   SeriesApiClient,
 } from './resource_clients';
 import { readSearchStream, SearchApiUnavailableError, type SearchStreamResult } from './search_api_stream';
-import { bridgeChunkedResponse } from './search_api_transport';
+import { bridgeChunkedResponse, type SearchTransportStats } from './search_api_transport';
 
 export const DEFAULT_SEARCH_API_MAX_LIMIT = 10_000;
+export const DEFAULT_SEARCH_FUZZ_THRESHOLD = 80;
+export const DEFAULT_SEARCH_FUZZ_ALGORITHM: SearchFuzzAlgorithm = 'jarowinkler';
+
+export type SearchFuzzAlgorithm = 'subsequence' | 'jarowinkler';
 
 export interface SearchMetricResult {
   name: string;
@@ -38,11 +42,19 @@ export interface SearchOptions<T> {
   match?: string;
   signal?: AbortSignal;
   onBatch?: (results: T[]) => void;
+  onTransportStats?: (stats: Readonly<SearchTransportStats>) => void;
+  retainResults?: boolean;
   batchSize?: number;
+  fuzzThreshold?: number;
+  fuzzAlgorithm?: SearchFuzzAlgorithm;
+  caseSensitive?: boolean;
 }
+
+export type SearchMetricSort = 'score' | 'alpha';
 
 export interface SearchMetricOptions extends SearchOptions<SearchMetricResult> {
   includeMetadata?: boolean;
+  sortBy?: SearchMetricSort;
 }
 
 type SearchEndpoint = 'metric_names' | 'label_names' | 'label_values';
@@ -56,6 +68,12 @@ export class SearchApiClient extends BaseResourceClient implements ResourceApiCl
   public metrics: string[] = [];
   public labelKeys: string[] = [];
   public cachedLabelValues: Record<string, string[]> = {};
+
+  // True means capability has not been disproved for this datasource instance;
+  // the first request still performs the actual probe.
+  public isAvailable(): boolean {
+    return !this.searchUnavailable;
+  }
 
   public start = async (timeRange: TimeRange): Promise<void> => {
     return this.withFallback(
@@ -112,6 +130,13 @@ export class SearchApiClient extends BaseResourceClient implements ResourceApiCl
     limit?: number
   ): Promise<{ metrics: string[]; histogramMetrics: string[] }> {
     const effectiveLimit = this.getEffectiveSearchLimit(limit);
+    const cached = this._cache.getLabelValues(timeRange, undefined, effectiveLimit);
+    if (cached) {
+      this.metrics = cached.slice();
+      this.histogramMetrics = processHistogramMetrics(this.metrics);
+      return { metrics: this.metrics, histogramMetrics: this.histogramMetrics };
+    }
+
     const response = await this.searchMetricNames(timeRange, '', { limit: effectiveLimit });
     this.metrics = response.results.map((result) => result.name);
     this.histogramMetrics = processHistogramMetrics(this.metrics);
@@ -161,7 +186,8 @@ export class SearchApiClient extends BaseResourceClient implements ResourceApiCl
   ): Promise<SearchStreamResult<SearchMetricResult>> => {
     return this.trackAvailability(
       this.search('metric_names', timeRange, term, options, {
-        include_metadata: options.includeMetadata ? 'true' : undefined,
+        include_metadata: options.includeMetadata,
+        sort_by: options.sortBy,
       })
     );
   };
@@ -239,21 +265,25 @@ export class SearchApiClient extends BaseResourceClient implements ResourceApiCl
     timeRange: TimeRange,
     term: string,
     options: SearchOptions<T>,
-    extraParams: Record<string, string | undefined> = {}
+    extraParams: Record<string, string | boolean | undefined> = {}
   ): Promise<SearchStreamResult<T>> {
     const timeParams =
       endpoint === 'label_names'
         ? getRangeSnapInterval(this.datasource.cacheLevel, timeRange)
         : this.datasource.getAdjustedInterval(timeRange);
-    const params: Record<string, string> = {
+    const params: Record<string, string | boolean> = {
       start: String(timeParams.start),
       end: String(timeParams.end),
       limit: String(this.getEffectiveSearchLimit(options.limit)),
     };
 
-    if (term) {
-      params['search[]'] = term;
+    const normalizedTerm = term.trim().replace(/\s+/g, '');
+    if (normalizedTerm) {
+      params['search[]'] = normalizedTerm;
       params.sort_by = 'score';
+      params.fuzz_threshold = String(options.fuzzThreshold ?? DEFAULT_SEARCH_FUZZ_THRESHOLD);
+      params.fuzz_alg = options.fuzzAlgorithm ?? DEFAULT_SEARCH_FUZZ_ALGORITHM;
+      params.case_sensitive = String(options.caseSensitive ?? false);
     }
     if (options.match) {
       params['match[]'] = options.match;
@@ -279,16 +309,17 @@ export class SearchApiClient extends BaseResourceClient implements ResourceApiCl
     }
 
     const request: BackendSrvRequest = { url, method: 'GET', params, headers };
-    let { source, cancel } = await bridgeChunkedResponse(request, options.signal);
+    let { source, cancel, stats } = await bridgeChunkedResponse(request, options.signal);
     if (source.status === 401) {
       cancel();
       await this.pingLoginToRefreshSession();
-      ({ source, cancel } = await bridgeChunkedResponse(request, options.signal));
+      ({ source, cancel, stats } = await bridgeChunkedResponse(request, options.signal));
     }
 
     try {
-      return await readSearchStream<T>(source, options.onBatch);
+      return await readSearchStream<T>(source, options.onBatch, undefined, options.retainResults);
     } finally {
+      options.onTransportStats?.({ ...stats });
       cancel();
     }
   }

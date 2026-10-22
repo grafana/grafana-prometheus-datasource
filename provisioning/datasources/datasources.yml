@@ -31,3 +31,19 @@ datasources:
     editable: true
     jsonData:
       httpMethod: 'GET'
+
+  # Only 'server:search-api' enables --enable-feature=search-api on Prometheus.
+  # Elsewhere the capability probe fails and this behaves like 'prometheus-direct',
+  # falling back to standard discovery (see docs/prometheus-search-api-lifecycle.md).
+  - name: 'prometheus-search-api'
+    uid: 'prometheus-search-api'
+    type: 'prometheus'
+    access: proxy
+    url: 'http://prometheus:9090'
+    isDefault: false
+    orgId: 1
+    version: 1
+    editable: true
+    jsonData:
+      httpMethod: 'GET'
+      enableSearchApi: true

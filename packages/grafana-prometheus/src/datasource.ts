@@ -89,6 +89,7 @@ export class PrometheusDatasource
   languageProvider: PrometheusLanguageProviderInterface;
   lookupsDisabled: boolean;
   ruleMappings: RuleQueryMapping;
+  enableSearchApi: boolean;
   seriesEndpoint: boolean;
   seriesLimit: number;
   type: string;
@@ -123,6 +124,7 @@ export class PrometheusDatasource
     this.interval = instanceSettings.jsonData.timeInterval || '15s';
     this.lookupsDisabled = instanceSettings.jsonData.disableMetricsLookup ?? false;
     this.ruleMappings = {};
+    this.enableSearchApi = instanceSettings.jsonData.enableSearchApi ?? false;
     this.seriesEndpoint = instanceSettings.jsonData.seriesEndpoint ?? false;
     this.seriesLimit = instanceSettings.jsonData.seriesLimit ?? DEFAULT_SERIES_LIMIT;
     this.type = 'prometheus';
@@ -234,6 +236,10 @@ export class PrometheusDatasource
       //https://github.com/thanos-io/thanos/releases/tag/v0.18.0
       this._isDatasourceVersionGreaterOrEqualTo('0.18.0', PromApplication.Thanos)
     );
+  }
+
+  hasSearchApiSupport(): boolean {
+    return this.enableSearchApi;
   }
 
   _isDatasourceVersionGreaterOrEqualTo(targetVersion: string, targetFlavor: PromApplication): boolean {
@@ -694,7 +700,7 @@ export class PrometheusDatasource
     const finalQuery = filters.map(remapOneOf).reduce((acc, filter) => {
       const { key, operator } = filter;
       let { value } = filter;
-      if (operator === '=~' || operator === '!~') {
+      if (!config.featureToggles.prometheusSpecialCharsInLabelValues && (operator === '=~' || operator === '!~')) {
         value = prometheusRegularEscape(value);
       }
       return addLabelToQuery(acc, key, value, operator);
@@ -866,7 +872,10 @@ export function remapOneOf(filter: AdHocVariableFilter) {
   let { operator, value, values } = filter;
   if (operator === '=|' || operator === '!=|') {
     operator = operator === '=|' ? '=~' : '!~';
-    value = values?.map(prometheusRegularEscape).join('|') ?? '';
+    const escapedValues = config.featureToggles.prometheusSpecialCharsInLabelValues
+      ? values
+      : values?.map(prometheusRegularEscape);
+    value = escapedValues?.join('|') ?? '';
   }
 
   return {
