@@ -20,7 +20,9 @@ jobs:
       golangci-lint-version: "2.15.0"
 
   publish-and-deploy:
-    if: github.ref == 'refs/heads/main'
+    # Disabled: this job publishes to the dev Plugin Catalog and can trigger an
+    # Argo rollout to Grafana Cloud. Re-enable by restoring the `main` ref condition.
+    if: false
     uses: grafana/data-sources-ci-workflows/.github/workflows/cd-dev.yml@main
     permissions:
       attestations: write
