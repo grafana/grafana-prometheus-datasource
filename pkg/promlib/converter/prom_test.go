@@ -1,6 +1,7 @@
 package converter
 
 import (
+	"encoding/json"
 	"math"
 	"os"
 	"path"
@@ -248,4 +249,19 @@ func assertNumericStringValues(t *testing.T, field *data.Field) {
 	assert.True(t, math.IsNaN(field.At(2).(float64)))
 	assert.Equal(t, math.Inf(1), field.At(3))
 	assert.Equal(t, math.Inf(-1), field.At(4))
+}
+
+func TestReadPrometheusStyleResult_ErrorDetails(t *testing.T) {
+	body := `{"status":"error","errorType":"execution","error":"query failed","errorDetails":{"category":"adaptive_metrics_incompatible_query","exampleSeries":{"metric":{"__name__":"foo"}}}}`
+	iter := jsoniter.Parse(sdkjsoniter.ConfigDefault, strings.NewReader(body), 1024)
+
+	rsp := ReadPrometheusStyleResult(iter, Options{})
+
+	require.EqualError(t, rsp.Error, "execution: query failed")
+	require.Len(t, rsp.Frames, 1)
+	custom, ok := rsp.Frames[0].Meta.Custom.(map[string]any)
+	require.True(t, ok)
+	details, ok := custom["errorDetails"].(json.RawMessage)
+	require.True(t, ok)
+	require.JSONEq(t, `{"category":"adaptive_metrics_incompatible_query","exampleSeries":{"metric":{"__name__":"foo"}}}`, string(details))
 }

@@ -34,6 +34,7 @@ func ReadPrometheusStyleResult(jIter *jsoniter.Iterator, opt Options) backend.Da
 	status := "unknown"
 	errorType := ""
 	promErrString := ""
+	var errorDetails json.RawMessage
 	warnings := []data.Notice{}
 	infos := []data.Notice{}
 
@@ -64,6 +65,13 @@ l1Fields:
 				return rspErr(err)
 			}
 
+		case "errorDetails":
+			details, err := iter.SkipAndReturnBytes()
+			if err != nil {
+				return rspErr(err)
+			}
+			errorDetails = json.RawMessage(details)
+
 		case "warnings":
 			if warnings, err = readWarnings(iter); err != nil {
 				return rspErr(err)
@@ -91,9 +99,19 @@ l1Fields:
 	}
 
 	if status == "error" {
-		return backend.DataResponse{
+		resp := backend.DataResponse{
 			Error: fmt.Errorf("%s: %s", errorType, promErrString),
 		}
+
+		// A DataResponse has no place for datasource-specific error context, so carry it on the frame
+		// that parseResponse attaches to every parsed error response.
+		if len(errorDetails) > 0 {
+			frame := data.NewFrame("")
+			frame.Meta = &data.FrameMeta{Custom: map[string]any{"errorDetails": errorDetails}}
+			resp.Frames = append(resp.Frames, frame)
+		}
+
+		return resp
 	}
 
 	if len(infos) > 0 {

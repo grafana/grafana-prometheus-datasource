@@ -3,6 +3,7 @@ package querydata
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"testing"
@@ -295,4 +296,20 @@ func TestProcessExemplars(t *testing.T) {
 		require.Len(t, result.Frames, 1)
 		assert.Equal(t, "Expr: up\nStep: 15s", result.Frames[0].Meta.ExecutedQueryString)
 	})
+
+}
+
+func TestQueryData_parseResponse_errorDetails(t *testing.T) {
+	qd := QueryData{exemplarSampler: exemplar.NewStandardDeviationSampler}
+
+	resBody := `{"status":"error","errorType":"execution","error":"query failed","errorDetails":{"category":"adaptive_metrics_incompatible_query"}}`
+	res := &http.Response{Body: io.NopCloser(bytes.NewBufferString(resBody)), StatusCode: 422, Header: http.Header{}}
+
+	result := qd.parseResponse(context.Background(), &models.Query{}, res, models.InstantQueryType)
+
+	require.EqualError(t, result.Error, "execution: query failed")
+	require.Len(t, result.Frames, 1)
+	custom, ok := result.Frames[0].Meta.Custom.(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, json.RawMessage(`{"category":"adaptive_metrics_incompatible_query"}`), custom["errorDetails"])
 }
