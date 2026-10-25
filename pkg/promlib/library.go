@@ -19,8 +19,9 @@ import (
 )
 
 type Service struct {
-	im     instancemgmt.InstanceManager
-	logger log.Logger
+	im       instancemgmt.InstanceManager
+	instance *instance
+	logger   log.Logger
 }
 
 type instance struct {
@@ -32,6 +33,7 @@ type ExtendOptions func(ctx context.Context, settings backend.DataSourceInstance
 
 const searchResponseLimitBytes int64 = 100 * 1024 * 1024
 
+// NewService creates a service that manages multiple datasource instances for in-process use.
 func NewService(httpClientProvider *sdkhttpclient.Provider, plog log.Logger, extendOptions ExtendOptions) *Service {
 	if httpClientProvider == nil {
 		httpClientProvider = sdkhttpclient.NewProvider()
@@ -42,11 +44,22 @@ func NewService(httpClientProvider *sdkhttpclient.Provider, plog log.Logger, ext
 	}
 }
 
-// Dispose here tells plugin SDK that plugin wants to clean up resources when a new instance
-// created. As soon as datasource settings change detected by SDK old datasource instance will
-// be disposed and a new one will be created using NewSampleDatasource factory function.
+// NewDatasourceService creates a service for one datasource whose lifecycle is
+// managed by the caller. Use this with datasource.Manage to avoid nesting managers.
+func NewDatasourceService(ctx context.Context, settings backend.DataSourceInstanceSettings, httpClientProvider *sdkhttpclient.Provider, plog log.Logger, extendOptions ExtendOptions) (*Service, error) {
+	if httpClientProvider == nil {
+		httpClientProvider = sdkhttpclient.NewProvider()
+	}
+	i, err := newInstanceSettings(httpClientProvider, plog, extendOptions)(ctx, settings)
+	if err != nil {
+		return nil, err
+	}
+	in := i.(instance)
+	return &Service{instance: &in, logger: plog}, nil
+}
+
+// Dispose currently logs disposal without releasing resources.
 func (s *Service) Dispose() {
-	// Clean up datasource instance resources.
 	s.logger.Debug("Disposing the instance...")
 }
 
@@ -162,6 +175,9 @@ func (s *Service) CallResource(ctx context.Context, req *backend.CallResourceReq
 }
 
 func (s *Service) getInstance(ctx context.Context, pluginCtx backend.PluginContext) (*instance, error) {
+	if s.instance != nil {
+		return s.instance, nil
+	}
 	i, err := s.im.Get(ctx, pluginCtx)
 	if err != nil {
 		return nil, err
