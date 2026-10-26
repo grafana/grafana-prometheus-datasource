@@ -44,6 +44,8 @@ export function useQueryEditorInsertion({ registrar, onCommit }: UseQueryEditorI
         }
         const start = model.getPositionAt(from);
         const end = model.getPositionAt(to);
+        // Undo stops on both sides keep one undo from also taking back what the user typed just before.
+        editor.pushUndoStop();
         editor.executeEdits('add-to-query', [
           {
             range: {
@@ -56,6 +58,7 @@ export function useQueryEditorInsertion({ registrar, onCommit }: UseQueryEditorI
             forceMoveMarkers: true,
           },
         ]);
+        editor.pushUndoStop();
         editor.setPosition(model.getPositionAt(from + text.length));
         editor.focus();
         // The field reports its value only on blur or run, so the edit is committed here.

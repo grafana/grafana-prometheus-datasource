@@ -23,6 +23,7 @@ function createEditor(initialValue: string, selection = { from: 0, to: 0 }) {
   let value = initialValue;
   let cursor = selection;
   let focusListener: VoidFunction | undefined;
+  const history: string[] = [];
   const toPosition = (offset: number): Position => ({ lineNumber: 1, column: offset + 1 });
   const model = {
     getValue: () => value,
@@ -44,6 +45,11 @@ function createEditor(initialValue: string, selection = { from: 0, to: 0 }) {
     executeEdits: (_source: string, edits: Array<{ range: Range; text: string }>) => {
       const [{ range, text }] = edits;
       value = value.slice(0, range.startColumn - 1) + text + value.slice(range.endColumn - 1);
+      history.push(`edit:${text}`);
+    },
+    pushUndoStop: () => {
+      history.push('undo-stop');
+      return true;
     },
     setPosition: (position: Position) => {
       cursor = { from: position.column - 1, to: position.column - 1 };
@@ -55,6 +61,7 @@ function createEditor(initialValue: string, selection = { from: 0, to: 0 }) {
     editor: editor as unknown as MonacoEditor,
     focus: () => focusListener?.(),
     getCursor: () => cursor,
+    getHistory: () => history,
     focusSpy: editor.focus,
   };
 }
@@ -96,6 +103,17 @@ describe('useQueryEditorInsertion', () => {
     expect(onCommit).toHaveBeenCalledWith('rate(http_requests_total[5m])');
     expect(fake.getCursor()).toEqual({ from: 24, to: 24 });
     expect(fake.focusSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('makes the insertion its own undo step', () => {
+    const { registrar, targets } = createRegistrar();
+    const fake = createEditor('rate([5m])');
+    const { result } = renderHook(() => useQueryEditorInsertion({ registrar, onCommit: jest.fn() }));
+
+    act(() => result.current(fake.editor));
+    act(() => targets[0].replaceRange(5, 5, 'up'));
+
+    expect(fake.getHistory()).toEqual(['undo-stop', 'edit:up', 'undo-stop']);
   });
 
   it('unregisters when the registrar goes away and on unmount', () => {
