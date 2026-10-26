@@ -13,6 +13,7 @@ import (
 
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/client"
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/instrumentation"
+	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/middleware"
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/models"
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/querydata"
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/resource"
@@ -67,6 +68,13 @@ func newInstanceSettings(httpClientProvider *sdkhttpclient.Provider, log log.Log
 			float64(jsonData.MaxSamplesProcessedWarningThreshold),
 			float64(jsonData.MaxSamplesProcessedErrorThreshold),
 			bool(jsonData.QueryStatsEnabled),
+			middleware.OAuth2ClientCredentialsConfig{
+				Enabled:      bool(jsonData.OAuth2ClientCredentialsEnabled),
+				ClientID:     string(jsonData.OAuth2ClientCredentialsID),
+				ClientSecret: settings.DecryptedSecureJSONData["oauth2ClientSecret"],
+				TokenURL:     string(jsonData.OAuth2ClientCredentialsTokenURL),
+				Scopes:       []string(jsonData.OAuth2ClientCredentialsScopes),
+			},
 			log,
 		)
 		if err != nil {
