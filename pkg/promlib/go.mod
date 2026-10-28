@@ -1,9 +1,9 @@
 module github.com/grafana/grafana-prometheus-datasource/pkg/promlib
 
-go 1.27.1
+go 1.27.3
 
 require (
-	github.com/andybalholm/brotli v1.2.6
+	github.com/andybalholm/brotli v1.2.7
 	github.com/grafana/dskit v0.0.0-20260928073014-b6a53f6bee29
 	github.com/grafana/grafana-plugin-sdk-go v0.297.0
 	github.com/grafana/grafana/apps/scope v0.0.0-20260930131613-fc95ee9133b2

@@ -3,9 +3,12 @@ import { type QueryEditorProps } from '@grafana/data';
 
 import { type PrometheusDatasource } from '../datasource';
 import { type QueryEditorCoauthoringRegistrationV1 } from '../query_coauthoring/internalCoauthoringContract';
+import { type QueryEditorInsertionRegistrationV1 } from '../query_insertion/internalInsertionContract';
 import { type PromOptions, type PromQuery } from '../types';
 
 export type PromQueryEditorProps = QueryEditorProps<PrometheusDatasource, PromQuery, PromOptions> & {
   /** @internal */
   unstable_queryEditorCoauthoringV1?: QueryEditorCoauthoringRegistrationV1<PromQuery>;
+  /** @internal */
+  unstable_queryEditorInsertionV1?: QueryEditorInsertionRegistrationV1;
 };

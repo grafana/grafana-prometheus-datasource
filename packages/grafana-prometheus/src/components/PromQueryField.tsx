@@ -18,6 +18,7 @@ import { clearButtonStyles, Icon, useTheme2 } from '@grafana/ui';
 import { type PrometheusDatasource } from '../datasource';
 import { getInitHints } from '../query_hints';
 import { type QueryEditorCoauthoringRegistrationV1 } from '../query_coauthoring/internalCoauthoringContract';
+import { type QueryEditorInsertionRegistrationV1 } from '../query_insertion/internalInsertionContract';
 import { type PromOptions, type PromQuery } from '../types';
 
 import { MetricsBrowser } from './metrics-browser/MetricsBrowser';
@@ -29,6 +30,8 @@ interface PromQueryFieldProps extends QueryEditorProps<PrometheusDatasource, Pro
   hideMetricsBrowser?: boolean;
   /** @internal */
   unstable_queryEditorCoauthoringV1?: QueryEditorCoauthoringRegistrationV1<PromQuery>;
+  /** @internal */
+  unstable_queryEditorInsertionV1?: QueryEditorInsertionRegistrationV1;
   'data-testid'?: string;
 }
 
@@ -46,6 +49,7 @@ export const PromQueryField = (props: PromQueryFieldProps) => {
     onRunQuery,
     hideMetricsBrowser = false,
     unstable_queryEditorCoauthoringV1,
+    unstable_queryEditorInsertionV1,
   } = props;
 
   const theme = useTheme2();
@@ -149,6 +153,7 @@ export const PromQueryField = (props: PromQueryFieldProps) => {
             timeRange={range ?? getDefaultTimeRange()}
             createQueryForCoauthoring={(value) => ({ ...query, expr: value })}
             unstable_queryEditorCoauthoringV1={unstable_queryEditorCoauthoringV1}
+            unstable_queryEditorInsertionV1={unstable_queryEditorInsertionV1}
           />
         </div>
       </div>
