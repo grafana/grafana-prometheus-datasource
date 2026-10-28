@@ -1,5 +1,6 @@
 import { type SyntaxNode, type Tree } from '@lezer/common';
 import {
+  AggregateExpr,
   AggregateModifier,
   By,
   GroupingLabels,
@@ -61,7 +62,7 @@ export interface FiltersMigrationUsageOptions {
 
 type Position =
   | { kind: 'filter'; key: string; operator: string; selectorFrom: number }
-  | { kind: 'groupBy' }
+  | { kind: 'groupBy'; aggregationFrom: number }
   | { kind: 'other' };
 
 const unsafe = (reason: string): FiltersMigrationUsage => ({ kind: 'unsafe', reason });
@@ -72,11 +73,12 @@ const unsafe = (reason: string): FiltersMigrationUsage => ({ kind: 'unsafe', rea
  * - not referenced anywhere in the query -> `undefined`;
  * - referenced from a field other than `expr` (legendFormat, interval, ...) -> `unsafe`, since
  *   migrating the variable away would silently change that field;
- * - every occurrence in `expr` is a whole label-matcher value on the same key, and every selector
- *   in `expr` has such a matcher -> `filter`, or every occurrence is a `by(...)` label -> `groupBy`;
- * - anything else (other positions, mixed shapes, two keys, a format that changes the value, an
- *   unparsable expression) -> `unsafe`. Reporting only one of several conflicting usages would hide
- *   the rest from the caller, so any disagreement within the query counts as unsafe.
+ * - every occurrence in `expr` is a whole label-matcher value with the same key and operator, and
+ *   every selector in `expr` has such a matcher -> `filter`;
+ * - every occurrence is a `by(...)` label, and every aggregation in `expr` has one -> `groupBy`;
+ * - anything else (other positions, mixed shapes, two keys or operators, a format that changes the
+ *   value, an unparsable expression) -> `unsafe`. Reporting only one of several conflicting usages
+ *   would hide the rest from the caller, so any disagreement within the query counts as unsafe.
  */
 export function classifyFiltersMigrationUsage(
   query: PromQuery,
@@ -117,6 +119,12 @@ export function classifyFiltersMigrationUsage(
 
   const filters = positions.filter((p): p is Extract<Position, { kind: 'filter' }> => p.kind === 'filter');
   if (filters.length === 0) {
+    // Group by keys are added to every aggregation in the query, so one without the variable (the
+    // total in a ratio, an outer max) would change meaning once the variable is migrated.
+    const groupedAggregations = new Set(positions.map((p) => (p.kind === 'groupBy' ? p.aggregationFrom : undefined)));
+    if (nodeStarts(tree, AggregateExpr).some((from) => !groupedAggregations.has(from))) {
+      return unsafe('query has an aggregation the variable does not group by');
+    }
     return { kind: 'groupBy' };
   }
   if (new Set(filters.map((f) => f.key)).size > 1) {
@@ -125,12 +133,14 @@ export function classifyFiltersMigrationUsage(
   // An ad hoc filter applies to every selector in the query, so a selector without the matcher
   // (the denominator of a ratio, say) would change meaning once the variable is migrated.
   const filteredSelectors = new Set(filters.map((f) => f.selectorFrom));
-  if (vectorSelectorStarts(tree).some((from) => !filteredSelectors.has(from))) {
+  if (nodeStarts(tree, VectorSelector).some((from) => !filteredSelectors.has(from))) {
     return unsafe('query has a selector the variable does not filter');
   }
+  // The migrated filter has a single operator, so `job="$job"` next to `job!="$job"` would flip one of them.
+  if (new Set(filters.map((f) => f.operator)).size > 1) {
+    return unsafe('variable is used with more than one matcher operator within this query');
+  }
 
-  // Occurrences agreeing on the key may still differ in operator (one "=", one "=~"). The caller only
-  // disqualifies on disagreeing keys, so the first operator is reported rather than adding a rule.
   return { kind: 'filter', key: filters[0].key, operator: filters[0].operator };
 }
 
@@ -142,11 +152,11 @@ function occurrences(text: string, needle: string): number[] {
   return offsets;
 }
 
-function vectorSelectorStarts(tree: Tree): number[] {
+function nodeStarts(tree: Tree, typeId: number): number[] {
   const starts: number[] = [];
   tree.iterate({
     enter: (node) => {
-      if (node.type.id === VectorSelector) {
+      if (node.type.id === typeId) {
         starts.push(node.from);
       }
     },
@@ -183,9 +193,10 @@ function classifyOccurrence(tree: Tree, expr: string, from: number, to: number):
 
   if (node.type.id === LabelName && node.parent?.type.id === GroupingLabels) {
     const modifier = node.parent.parent;
+    const aggregation = modifier?.parent;
     const isWholeLabel = node.from === from && node.to === to;
-    return isWholeLabel && modifier?.type.id === AggregateModifier && modifier.getChild(By)
-      ? { kind: 'groupBy' }
+    return isWholeLabel && modifier?.type.id === AggregateModifier && modifier.getChild(By) && aggregation
+      ? { kind: 'groupBy', aggregationFrom: aggregation.from }
       : { kind: 'other' };
   }
 

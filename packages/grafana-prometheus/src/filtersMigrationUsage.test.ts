@@ -129,6 +129,24 @@ describe('classifyFiltersMigrationUsage', () => {
     it.each([['sum without ($groupby) (up)'], ['up / on ($groupby) up']])('rejects %s', (expr) => {
       expect(classify('groupby', expr)).toEqual(unsafe);
     });
+
+    it.each([
+      ['a ratio with an ungrouped total', 'sum by ($groupby) (up) / on() group_left sum(up)'],
+      ['an outer aggregation without it', 'max(sum by ($groupby) (up))'],
+      ['a without aggregation next to it', 'sum by ($groupby) (up) + on() group_left sum without (instance) (up)'],
+    ])('rejects %s, since the migrated group by would apply to every aggregation', (_, expr) => {
+      expect(classify('groupby', expr)).toEqual({
+        kind: 'unsafe',
+        reason: 'query has an aggregation the variable does not group by',
+      });
+    });
+
+    it.each([
+      ['sum by ($groupby) (rate(a[5m])) / sum by ($groupby) (rate(b[5m]))'],
+      ['max by ($groupby) (sum by ($groupby) (up))'],
+    ])('accepts %s, where every aggregation groups by it', (expr) => {
+      expect(classify('groupby', expr)).toEqual({ kind: 'groupBy' });
+    });
   });
 
   describe('other positions', () => {
@@ -146,20 +164,22 @@ describe('classifyFiltersMigrationUsage', () => {
       });
     });
 
-    it('tolerates differing operators as long as the key agrees', () => {
-      expect(classify('job', 'up{job="$job"} / down{job=~"$job"}')).toEqual({
-        kind: 'filter',
-        key: 'job',
-        operator: '=',
-      });
-    });
-
     it.each([
       ['two label keys', 'up{job="$job"} / down{instance="$job"}'],
       ['a filter and a groupBy label', 'sum by ($job) (up{job="$job"})'],
       ['a safe and an unsafe position', 'up{job="$job"} / $job'],
     ])('is unsafe for %s', (_, expr) => {
       expect(classify('job', expr)).toEqual(unsafe);
+    });
+
+    it.each([
+      ['an equality and a negated matcher', 'up{job="$job"} / down{job!="$job"}'],
+      ['an equality and a regex matcher', 'up{job="$job"} / down{job=~"$job"}'],
+    ])('is unsafe for %s, since the migrated filter has a single operator', (_, expr) => {
+      expect(classify('job', expr)).toEqual({
+        kind: 'unsafe',
+        reason: 'variable is used with more than one matcher operator within this query',
+      });
     });
   });
 
