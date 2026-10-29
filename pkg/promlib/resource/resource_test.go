@@ -342,35 +342,72 @@ func TestResource_ExecuteResponseSurvivesHTTPBoundary(t *testing.T) {
 }
 
 func TestResource_GetSuggestions(t *testing.T) {
-	mockClient, _, logger := setup()
-	settings := backend.DataSourceInstanceSettings{
-		ID:       1,
-		URL:      "http://localhost:9090",
-		JSONData: []byte(`{"httpMethod": "GET"}`),
+	for _, settingsCase := range []struct {
+		name       string
+		jsonData   string
+		wantMethod string
+	}{
+		{name: "default method", jsonData: `{}`, wantMethod: http.MethodPost},
+		{name: "GET", jsonData: `{"httpMethod":"GET"}`, wantMethod: http.MethodGet},
+		{name: "POST", jsonData: `{"httpMethod":"POST"}`, wantMethod: http.MethodPost},
+	} {
+		t.Run(settingsCase.name, func(t *testing.T) {
+			for _, labelName := range []string{"", "instance"} {
+				path := "/api/v1/labels"
+				wantMethod := settingsCase.wantMethod
+				if labelName != "" {
+					path = "/api/v1/label/" + labelName + "/values"
+					wantMethod = http.MethodGet
+				}
+				t.Run(path, func(t *testing.T) {
+					mockClient, settings, logger := setup()
+					settings.JSONData = []byte(settingsCase.jsonData)
+					mockClient.Transport.(*mockRoundTripper).customRoundTrip = func(req *http.Request) (*http.Response, error) {
+						assert.Equal(t, wantMethod, req.Method)
+						assert.Equal(t, path, req.URL.Path)
+						params := req.URL.Query()
+						assert.Equal(t, []string{`up{instance="localhost:9090",namespace="mimir-ops-03"}`}, params["match[]"])
+						assert.Equal(t, "1609459200", params.Get("start"))
+						assert.Equal(t, "1609462800", params.Get("end"))
+						assert.Equal(t, "10", params.Get("limit"))
+						status := http.StatusOK
+						if labelName != "" && req.Method != http.MethodGet {
+							status = http.StatusMethodNotAllowed
+						}
+						return &http.Response{
+							StatusCode: status,
+							Body:       io.NopCloser(bytes.NewReader([]byte(`{"status":"success","data":[]}`))),
+							Header:     make(http.Header),
+						}, nil
+					}
+					res, err := newResource(t, mockClient, settings, logger)
+					require.NoError(t, err)
+
+					body, err := json.Marshal(resource.SuggestionRequest{
+						LabelName: labelName,
+						Queries:   []string{"up"},
+						Scopes: []scope.ScopeFilter{
+							{Key: "namespace", Operator: scope.FilterOperatorEquals, Value: "mimir-ops-03"},
+						},
+						AdhocFilters: []scope.ScopeFilter{
+							{Key: "instance", Operator: scope.FilterOperatorEquals, Value: "localhost:9090"},
+						},
+						Start: "1609459200",
+						End:   "1609462800",
+						Limit: 10,
+					})
+					require.NoError(t, err)
+
+					resp, err := res.GetSuggestions(context.Background(), &backend.CallResourceRequest{
+						Method: http.MethodPost,
+						Body:   body,
+					})
+					require.NoError(t, err)
+					require.Equal(t, http.StatusOK, resp.Status)
+				})
+			}
+		})
 	}
-
-	res, err := newResource(t, mockClient, settings, logger)
-	require.NoError(t, err)
-
-	suggestionReq := resource.SuggestionRequest{
-		LabelName: "instance",
-		Queries:   []string{"up"},
-		Start:     "1609459200",
-		End:       "1609462800",
-		Limit:     10,
-	}
-
-	body, err := json.Marshal(suggestionReq)
-	require.NoError(t, err)
-
-	req := &backend.CallResourceRequest{
-		Body: body,
-	}
-	ctx := context.Background()
-
-	resp, err := res.GetSuggestions(ctx, req)
-	require.NoError(t, err)
-	assert.NotNil(t, resp)
 }
 
 func TestResource_GetSuggestionsForwardsCacheHeader(t *testing.T) {
