@@ -70,16 +70,21 @@ export function transformV2(
 ) {
   // migration for dataplane field name issue
   // update displayNameFromDS in the field config
+  // common labels depend only on the refId, so compute them once per refId instead of once per series (O(N²))
+  const commonLabelsByRefId = new Map<string, Labels>();
   response.data.forEach((f: DataFrame) => {
     const target = request.targets.find((t) => t.refId === f.refId);
     // check that the legend is selected as auto
     if (target && target.legendFormat === '__auto') {
       f.fields.forEach((field) => {
         if (field.labels?.__name__ && field.labels?.__name__ === field.name) {
-          const framesWithSameRefId = response.data.filter((frame: DataFrame) => frame.refId === target.refId);
-          // don't ignore all labels when we have only one frame -> we don't know which are static
-          const commonLabels =
-            framesWithSameRefId.length === 1 ? {} : findCommonLabels(getAllLabels(framesWithSameRefId));
+          let commonLabels = commonLabelsByRefId.get(target.refId);
+          if (!commonLabels) {
+            const framesWithSameRefId = response.data.filter((frame: DataFrame) => frame.refId === target.refId);
+            // don't ignore all labels when we have only one frame -> we don't know which are static
+            commonLabels = framesWithSameRefId.length === 1 ? {} : findCommonLabels(getAllLabels(framesWithSameRefId));
+            commonLabelsByRefId.set(target.refId, commonLabels);
+          }
           const fieldCopy = { ...field, name: TIME_SERIES_VALUE_FIELD_NAME };
           field.config.displayNameFromDS = getFieldDisplayName(fieldCopy, f, response.data, commonLabels);
         }
