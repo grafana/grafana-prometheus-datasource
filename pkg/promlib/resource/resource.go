@@ -197,6 +197,8 @@ func (r *Resource) GetSuggestions(ctx context.Context, req *backend.CallResource
 	}
 
 	if sugReq.LabelName != "" {
+		// Label-value endpoints only support GET, regardless of the datasource's configured method.
+		newReq.Method = http.MethodGet
 		// Get label values for the given name (key)
 		newReq.Path = "/api/v1/label/" + sugReq.LabelName + "/values"
 		newReq.URL = "/api/v1/label/" + sugReq.LabelName + "/values?" + values.Encode()
