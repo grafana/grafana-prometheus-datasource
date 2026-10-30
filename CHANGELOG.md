@@ -1,5 +1,13 @@
 # grafana-prometheus-datasource
 
+## 13.2.6
+
+⚙️ Chore: dependency updates
+
+🐛 Always send ad hoc group by keys to the backend. They were gated on the removed `groupByVariable` and `dashboardUnifiedDrilldownControls` feature toggles, so group by stopped applying to Prometheus queries. ([#404](https://github.com/grafana/grafana-prometheus-datasource/pull/404))
+
+🐛 Fix a connection freeze between Grafana and the plugin under heavy query load by updating google.golang.org/grpc to v1.85.0 ([grpc/grpc-go#9330](https://github.com/grpc/grpc-go/issues/9330)) ([#405](https://github.com/grafana/grafana-prometheus-datasource/pull/405))
+
 ## 13.2.5
 
 🐛 Bump backend dependency ([#400](https://github.com/grafana/grafana-prometheus-datasource/pull/400))
