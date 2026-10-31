@@ -4,11 +4,11 @@ go 1.27.3
 
 require (
 	github.com/grafana/dsconfig/schema v0.0.13
-	github.com/grafana/grafana-plugin-sdk-go v0.297.0
-	github.com/grafana/grafana-prometheus-datasource/pkg/promlib v0.0.22
+	github.com/grafana/grafana-plugin-sdk-go v0.298.0
+	github.com/grafana/grafana-prometheus-datasource/pkg/promlib v0.0.25
 	github.com/magefile/mage v1.17.2
 	github.com/stretchr/testify v1.12.1
-	k8s.io/kube-openapi v0.0.0-20260929181212-2cfbdf149b9a
+	k8s.io/kube-openapi v0.0.0-20261014044854-ca3452a79603
 )
 
 require (
@@ -24,7 +24,6 @@ require (
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
 	github.com/dennwc/varint v1.0.0 // indirect
-	github.com/emicklei/go-restful/v3 v3.14.0 // indirect
 	github.com/fatih/color v1.19.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.6 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
@@ -44,15 +43,15 @@ require (
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grafana/dsconfig/dsconfig v0.0.13 // indirect
-	github.com/grafana/dskit v0.0.0-20260928073014-b6a53f6bee29 // indirect
-	github.com/grafana/grafana/apps/scope v0.0.0-20260930131613-fc95ee9133b2 // indirect
-	github.com/grafana/grafana/pkg/apimachinery v0.0.0-20260930131954-55e5c6f545c0 // indirect
+	github.com/grafana/dskit v0.0.0-20261029160529-cea7bb80cb94 // indirect
+	github.com/grafana/grafana/apps/scope v0.0.0-20261031004213-a7c265f91c48 // indirect
+	github.com/grafana/grafana/pkg/apimachinery v0.0.0-20261031004213-a7c265f91c48 // indirect
 	github.com/grafana/otel-profiling-go v0.7.0 // indirect
 	github.com/grafana/pyroscope-go/godeltaprof v0.1.12 // indirect
 	github.com/grafana/regexp v0.0.0-20250905093917-f7b3be9d1853 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus v1.1.1 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.3.4 // indirect
-	github.com/grpc-ecosystem/grpc-gateway/v2 v2.31.0 // indirect
+	github.com/grpc-ecosystem/grpc-gateway/v2 v2.33.0 // indirect
 	github.com/hashicorp/go-hclog v1.6.3 // indirect
 	github.com/hashicorp/go-plugin v1.8.0 // indirect
 	github.com/hashicorp/yamux v0.1.2 // indirect
@@ -60,7 +59,7 @@ require (
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/jszwedko/go-datemath v0.1.1-0.20260113213115-7f666eef0523 // indirect
 	github.com/klauspost/compress v1.20.3 // indirect
-	github.com/klauspost/cpuid/v2 v2.4.0 // indirect
+	github.com/klauspost/cpuid/v2 v2.4.1 // indirect
 	github.com/mattetti/filebuffer v1.0.1 // indirect
 	github.com/mattn/go-colorable v0.1.16 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
@@ -78,10 +77,10 @@ require (
 	github.com/prometheus/client_golang v1.25.0 // indirect
 	github.com/prometheus/client_model v0.6.3 // indirect
 	github.com/prometheus/common v0.72.1 // indirect
-	github.com/prometheus/procfs v0.22.0 // indirect
-	github.com/prometheus/prometheus v0.315.0 // indirect
+	github.com/prometheus/procfs v0.23.0 // indirect
+	github.com/prometheus/prometheus v0.315.1 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
-	github.com/stretchr/objx v0.7.0 // indirect
+	github.com/stretchr/objx v0.8.0 // indirect
 	github.com/unknwon/bra v0.0.0-20200517080246-1e3013ecaff8 // indirect
 	github.com/unknwon/com v1.0.1 // indirect
 	github.com/unknwon/log v0.0.0-20200308114134-929b1006e34a // indirect
@@ -104,20 +103,21 @@ require (
 	go.uber.org/atomic v1.12.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
-	golang.org/x/exp v0.0.0-20260908205506-85c1c2202aba // indirect
-	golang.org/x/net v0.61.0 // indirect
+	golang.org/x/exp v0.0.0-20261014143641-f0251eb4aa3e // indirect
+	golang.org/x/net v0.62.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20261012220534-4341edf3f941 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20261012220534-4341edf3f941 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20261026165753-2ffab32bce7e // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20261026165753-2ffab32bce7e // indirect
 	google.golang.org/grpc v1.85.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
 	gopkg.in/fsnotify/fsnotify.v1 v1.4.7 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
-	k8s.io/apimachinery v0.37.1 // indirect
+	k8s.io/apimachinery v0.37.2 // indirect
+	k8s.io/apiserver v0.37.1 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
-	k8s.io/utils v0.0.0-20260707023825-cf1189d6abe3 // indirect
+	k8s.io/utils v0.0.0-20261023123148-ca04ba58ecab // indirect
 	sigs.k8s.io/json v0.0.0-20260909141634-11ed52e25bc5 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v6 v6.4.2 // indirect
