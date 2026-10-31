@@ -28,7 +28,7 @@ services:
   # produced the externalized-plugin 500s; vanilla Prometheus does not reliably
   # emit this shape, which is exactly why the original bug hid from tests.
   prometheus-gzip:
-    image: golang:1.26.7-alpine
+    image: golang:1.26.10-alpine@sha256:a2012b4a1d1f9f7e9f44e0d39b805a901e856b1dd80b4e6ee4338db547050308
     container_name: 'prometheus-gzip'
     depends_on:
       - prometheus
