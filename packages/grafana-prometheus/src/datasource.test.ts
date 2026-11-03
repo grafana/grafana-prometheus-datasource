@@ -1306,6 +1306,28 @@ describe('PrometheusDatasource2', () => {
     expect(Aexemplars).toBe(true);
     expect(BExpemplars).toBe(false);
   });
+
+  describe('processTargetV2', () => {
+    const target: PromQuery = { refId: 'A', expr: 'sum(up)' };
+    const request = {
+      targets: [target],
+      range: mockTimeRange,
+      timezone: 'utc',
+      panelId: 1,
+    } as unknown as DataQueryRequest<PromQuery>;
+
+    it('should pass the request group by keys to the target', () => {
+      const [processed] = ds.processTargetV2(target, { ...request, groupByKeys: ['job', 'instance'] });
+
+      expect(processed.groupByKeys).toEqual(['job', 'instance']);
+    });
+
+    it('should not set group by keys when the request has none', () => {
+      const [processed] = ds.processTargetV2(target, request);
+
+      expect(processed).not.toHaveProperty('groupByKeys');
+    });
+  });
 });
 
 describe('When querying prometheus via check headers X-Dashboard-Id X-Panel-Id and X-Dashboard-UID', () => {

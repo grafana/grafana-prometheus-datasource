@@ -1,5 +1,11 @@
 # Changelog
 
+## 13.2.3
+
+🐛 Let a host insert text at the Prometheus code editor's cursor through the internal unstable_queryEditorInsertionV1 prop. ([#390](https://github.com/grafana/grafana-prometheus-datasource/pull/390))
+
+🐛 Always send ad hoc group by keys to the backend. They were gated on the removed `groupByVariable` and `dashboardUnifiedDrilldownControls` feature toggles, so group by stopped applying to Prometheus queries. ([#404](https://github.com/grafana/grafana-prometheus-datasource/pull/404))
+
 ## 13.2.2
 
 🐛 Cap Metrics Explorer search results and show when the list is incomplete. ([#365](https://github.com/grafana/grafana-prometheus-datasource/pull/365))
