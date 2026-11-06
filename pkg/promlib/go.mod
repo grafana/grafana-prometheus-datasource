@@ -3,7 +3,7 @@ module github.com/grafana/grafana-prometheus-datasource/pkg/promlib
 go 1.27.3
 
 require (
-	github.com/andybalholm/brotli v1.2.6
+	github.com/andybalholm/brotli v1.2.7
 	github.com/grafana/dskit v0.0.0-20260928073014-b6a53f6bee29
 	github.com/grafana/grafana-plugin-sdk-go v0.297.0
 	github.com/grafana/grafana/apps/scope v0.0.0-20260930131613-fc95ee9133b2
@@ -109,7 +109,7 @@ require (
 	golang.org/x/text v0.43.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20261012220534-4341edf3f941 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20261012220534-4341edf3f941 // indirect
-	google.golang.org/grpc v1.86.0-dev // indirect
+	google.golang.org/grpc v1.85.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20260929181212-2cfbdf149b9a // indirect

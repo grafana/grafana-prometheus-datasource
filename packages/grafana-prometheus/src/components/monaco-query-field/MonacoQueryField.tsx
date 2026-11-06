@@ -18,6 +18,7 @@ import { installSuggestSelectionPreserver, refreshOpenSuggestions } from './mona
 import { placeHolderScopedVars, validateQuery } from './monaco-completion-provider/validation';
 import { language, languageConfiguration } from './promql';
 import { usePrometheusQueryCoauthoring } from './usePrometheusQueryCoauthoring';
+import { useQueryEditorInsertion } from './useQueryEditorInsertion';
 
 // How long (ms) the manual-trigger flag stays set after a Ctrl/Cmd+Space, so the
 // completion provider can distinguish an explicit request from typing-driven triggers.
@@ -131,6 +132,7 @@ const MonacoQueryField = (props: Props) => {
     timeRange,
     createQueryForCoauthoring,
     unstable_queryEditorCoauthoringV1,
+    unstable_queryEditorInsertionV1,
   } = props;
 
   const lpRef = useLatest(languageProvider);
@@ -151,6 +153,10 @@ const MonacoQueryField = (props: Props) => {
     registrar: unstable_queryEditorCoauthoringV1,
     timeRange,
     widgetId: `prometheus-query-coauthoring-${id}`,
+  });
+  const attachInsertion = useQueryEditorInsertion({
+    registrar: unstable_queryEditorInsertionV1,
+    onCommit: onBlur,
   });
 
   useEffect(() => {
@@ -179,6 +185,7 @@ const MonacoQueryField = (props: Props) => {
         }}
         onMount={(editor, monaco) => {
           attachCoauthoring(editor, monaco);
+          attachInsertion(editor);
 
           const isEditorFocused = editor.createContextKey<boolean>('isEditorFocused' + id, false);
           // we setup on-blur
