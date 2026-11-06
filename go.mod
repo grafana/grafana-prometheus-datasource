@@ -4,8 +4,8 @@ go 1.27.3
 
 require (
 	github.com/grafana/dsconfig/schema v0.0.13
-	github.com/grafana/grafana-plugin-sdk-go v0.297.0
-	github.com/grafana/grafana-prometheus-datasource/pkg/promlib v0.0.22
+	github.com/grafana/grafana-plugin-sdk-go v0.298.0
+	github.com/grafana/grafana-prometheus-datasource/pkg/promlib v0.0.25
 	github.com/magefile/mage v1.17.2
 	github.com/stretchr/testify v1.12.1
 	k8s.io/kube-openapi v0.0.0-20260929181212-2cfbdf149b9a
@@ -60,7 +60,7 @@ require (
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/jszwedko/go-datemath v0.1.1-0.20260113213115-7f666eef0523 // indirect
 	github.com/klauspost/compress v1.20.3 // indirect
-	github.com/klauspost/cpuid/v2 v2.4.0 // indirect
+	github.com/klauspost/cpuid/v2 v2.4.1 // indirect
 	github.com/mattetti/filebuffer v1.0.1 // indirect
 	github.com/mattn/go-colorable v0.1.16 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
@@ -105,7 +105,7 @@ require (
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/exp v0.0.0-20260908205506-85c1c2202aba // indirect
-	golang.org/x/net v0.61.0 // indirect
+	golang.org/x/net v0.62.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/text v0.43.0 // indirect

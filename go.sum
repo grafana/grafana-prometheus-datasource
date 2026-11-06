@@ -169,8 +169,8 @@ github.com/grafana/dsconfig/schema v0.0.13 h1:XSmm5nP9NkMx0J/W87myvzfOaK1VaEPExQ
 github.com/grafana/dsconfig/schema v0.0.13/go.mod h1:N/x7ChhNHeopMP3gsLYRt3bgTRzbnOGX2ATlLGFqPTk=
 github.com/grafana/dskit v0.0.0-20260928073014-b6a53f6bee29 h1:hTUx1kh6QgzSCbkSc5SyKaXFcFI0S/B2JIS5islwSt8=
 github.com/grafana/dskit v0.0.0-20260928073014-b6a53f6bee29/go.mod h1:JRfSXoPMy/K8sJ08PdQ9qStOIM18gr8Ayh7Wyi/3YQA=
-github.com/grafana/grafana-plugin-sdk-go v0.297.0 h1:uZlnm720OGH0VaaF3NuuOaJDrxTYx4qu3UHkzKZ+VPM=
-github.com/grafana/grafana-plugin-sdk-go v0.297.0/go.mod h1:OpS1VRORuEz7nFM+bZY+G/pKR1SO8rLARecM+7QaXGE=
+github.com/grafana/grafana-plugin-sdk-go v0.298.0 h1:Pv1QPfBYSykOO9SJmoNm2bQ3uFbtIaKgb74KlpP6OPA=
+github.com/grafana/grafana-plugin-sdk-go v0.298.0/go.mod h1:eOXMD6Vm+bNj2LxwgDLQ5r4ys9XVYnTIW9iBgTVIoH0=
 github.com/grafana/grafana/apps/scope v0.0.0-20260930131613-fc95ee9133b2 h1:3g0HfhnnReA0me6dKjZHTHhxf6mlBdHB4v37+KzcqHk=
 github.com/grafana/grafana/apps/scope v0.0.0-20260930131613-fc95ee9133b2/go.mod h1:SsEWBFNDmvieHLUhnVsD6lbWjOPUI/aFH75S9zO4GWE=
 github.com/grafana/grafana/pkg/apimachinery v0.0.0-20260930131954-55e5c6f545c0 h1:L2IUZ1JO2MzkY/1GpyKHmkAuUt46li5V3IZSqA6+DMw=
@@ -211,8 +211,8 @@ github.com/kisielk/errcheck v1.5.0/go.mod h1:pFxgyoBC7bSaBwPgfKdkLd5X25qrDl4LWUI
 github.com/kisielk/gotool v1.0.0/go.mod h1:XhKaO+MFFWcvkIS/tQcRk01m1F5IRFswLeQ+oQHNcck=
 github.com/klauspost/compress v1.20.3 h1:zWNoFqq/lSuYQRim3dUXlXeA0IqwuZGicdG5ZTfY5j4=
 github.com/klauspost/compress v1.20.3/go.mod h1:LUdAzn7YLVvxLpc7y3V1m40wESHTgc1422pwwBSKYuI=
-github.com/klauspost/cpuid/v2 v2.4.0 h1:S6Hrbc7+ywsr0r+RLapfGBHfyefhCTwEh3A0tV913Dw=
-github.com/klauspost/cpuid/v2 v2.4.0/go.mod h1:19jmZ9mjzoF//ddRSUsv0zfBTJWh3QJh9FNxZTMrGxU=
+github.com/klauspost/cpuid/v2 v2.4.1 h1:I9KxadAkvo+QjtcEE2f2tyfEvmIla/T0m+14PrZNl0U=
+github.com/klauspost/cpuid/v2 v2.4.1/go.mod h1:19jmZ9mjzoF//ddRSUsv0zfBTJWh3QJh9FNxZTMrGxU=
 github.com/kylelemons/godebug v1.1.0 h1:RPNrshWIDI6G2gRW9EHilWtl7Z6Sb1BR0xunSBf0SNc=
 github.com/kylelemons/godebug v1.1.0/go.mod h1:9/0rRGxNHcop5bhtWyNeEfOS8JIWk580+fNqagV/RAw=
 github.com/magefile/mage v1.17.2 h1:fyXVu1eadI8Ap1HCCNgEhJ5McIWiYhLR8uol64ZZc40=
@@ -385,8 +385,8 @@ golang.org/x/net v0.0.0-20190404232315-eb5bcb51f2a3/go.mod h1:t9HGtf8HONx5eT2rtn
 golang.org/x/net v0.0.0-20190620200207-3b0461eec859/go.mod h1:z5CRVTTTmAJ677TzLLGU+0bjPO0LkuOLi4/5GtJWs/s=
 golang.org/x/net v0.0.0-20200226121028-0de0cce0169b/go.mod h1:z5CRVTTTmAJ677TzLLGU+0bjPO0LkuOLi4/5GtJWs/s=
 golang.org/x/net v0.0.0-20201021035429-f5854403a974/go.mod h1:sp8m0HH+o8qH0wwXwYZr8TS3Oi6o0r6Gce1SSxlDquU=
-golang.org/x/net v0.61.0 h1:RR+6j/BTBCrggOLugxa+66R8FvoN6MHlzDlZIbN9YFw=
-golang.org/x/net v0.61.0/go.mod h1:WgDCOTH8iwtB66T4/GfI94AHo/hhdb7Hah9NDseQfiI=
+golang.org/x/net v0.62.0 h1:18ELalfM5+XNRwzM2nYqXsZQ9ByS1uhj2O/U7+5jqRY=
+golang.org/x/net v0.62.0/go.mod h1:WgDCOTH8iwtB66T4/GfI94AHo/hhdb7Hah9NDseQfiI=
 golang.org/x/oauth2 v0.37.0 h1:JUlcxA8oAtauLfiH8FX2/FkAWHAdi0QtGCGc+hofE98=
 golang.org/x/oauth2 v0.37.0/go.mod h1:IxwZNxUULJmpBFf9K/9NTMSIfZZuvuTy1gGxhigP/58=
 golang.org/x/sync v0.0.0-20190423024810-112230192c58/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
