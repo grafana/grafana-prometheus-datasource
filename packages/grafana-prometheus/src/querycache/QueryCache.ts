@@ -68,8 +68,10 @@ export class QueryCache<T extends SupportedQueryTypes> {
     overlapString: string;
     applyInterpolation?: ApplyInterpolation;
   }) {
-    const unverifiedOverlap = options.overlapString;
-    if (isValidDuration(unverifiedOverlap)) {
+    // Provisioning can set incrementalQueryOverlapWindow to a non-string (e.g. a number), so check the type before
+    // validating; anything that isn't a valid duration string falls back to the default.
+    const unverifiedOverlap: unknown = options.overlapString;
+    if (typeof unverifiedOverlap === 'string' && isValidDuration(unverifiedOverlap)) {
       const duration = parseDuration(unverifiedOverlap);
       this.overlapWindowMs = durationToMilliseconds(duration);
     } else {
