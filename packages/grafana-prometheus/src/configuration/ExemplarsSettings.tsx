@@ -17,9 +17,22 @@ type Props = {
   disabled?: boolean;
 };
 
-export function ExemplarsSettings({ options, onChange, disabled }: Props) {
+// Provisioning can set exemplarTraceIdDestinations to a non-array value. A single destination object is treated as a
+// one-item list so it stays visible and is saved back as an array; any other value is ignored.
+export function normalizeExemplarDestinations(options: unknown): ExemplarTraceIdDestination[] | undefined {
+  if (options == null || Array.isArray(options)) {
+    return options ?? undefined;
+  }
+  if (typeof options === 'object') {
+    return [options as ExemplarTraceIdDestination];
+  }
+  return undefined;
+}
+
+export function ExemplarsSettings({ options: rawOptions, onChange, disabled }: Props) {
   const theme = useTheme2();
   const styles = overhaulStyles(theme);
+  const options = normalizeExemplarDestinations(rawOptions);
   return (
     <div className={styles.sectionBottomPadding}>
       <ConfigSubSection
