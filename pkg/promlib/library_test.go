@@ -2,6 +2,7 @@ package promlib
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -66,6 +67,55 @@ func getMockPromTestSDKProvider(f *fakeHTTPClientProvider) *sdkhttpclient.Provid
 
 func mockExtendTransportOptions(ctx context.Context, settings backend.DataSourceInstanceSettings, clientOpts *sdkhttpclient.Options, log log.Logger) error {
 	return nil
+}
+
+func TestNewDatasourceService(t *testing.T) {
+	ctx := context.Background()
+	settings := *mockRequest().PluginContext.DataSourceInstanceSettings
+	logger := backend.NewLoggerWith("logger", "test")
+	t.Run("reuses a single instance without a manager", func(t *testing.T) {
+		calls := 0
+		s, err := NewDatasourceService(ctx, settings, nil, logger, func(_ context.Context, got backend.DataSourceInstanceSettings, opts *sdkhttpclient.Options, _ log.Logger) error {
+			calls++
+			require.Equal(t, settings, got)
+			return nil
+		})
+		require.NoError(t, err)
+		require.Nil(t, s.im)
+
+		for range 2 {
+			i, err := s.getInstance(ctx, backend.PluginContext{})
+			require.NoError(t, err)
+			require.Same(t, s.instance, i)
+		}
+		require.Equal(t, 1, calls)
+	})
+
+	t.Run("returns initialization errors", func(t *testing.T) {
+		s, err := NewDatasourceService(ctx, settings, nil, logger, func(context.Context, backend.DataSourceInstanceSettings, *sdkhttpclient.Options, log.Logger) error {
+			return errors.New("extension failed")
+		})
+		require.EqualError(t, err, "error extending transport options: extension failed")
+		require.Nil(t, s)
+	})
+}
+
+func TestServiceManagesMultipleDatasources(t *testing.T) {
+	s := NewService(nil, backend.NewLoggerWith("logger", "test"), nil)
+	ctx := context.Background()
+	firstSettings := *mockRequest().PluginContext.DataSourceInstanceSettings
+	firstSettings.ID = 1
+	firstContext := backend.PluginContext{DataSourceInstanceSettings: &firstSettings}
+	first, err := s.getInstance(ctx, firstContext)
+	require.NoError(t, err)
+	secondSettings := firstSettings
+	secondSettings.ID = 2
+	second, err := s.getInstance(ctx, backend.PluginContext{DataSourceInstanceSettings: &secondSettings})
+	require.NoError(t, err)
+	require.NotSame(t, first.queryData, second.queryData)
+	again, err := s.getInstance(ctx, firstContext)
+	require.NoError(t, err)
+	require.Same(t, first.queryData, again.queryData)
 }
 
 func TestService(t *testing.T) {
