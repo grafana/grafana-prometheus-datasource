@@ -73,7 +73,8 @@ func TestResource_Execute(t *testing.T) {
 	require.NoError(t, err)
 
 	req := &backend.CallResourceRequest{
-		URL: "/test",
+		Path: "/api/v1/labels",
+		URL:  "/api/v1/labels",
 	}
 	ctx := context.Background()
 
