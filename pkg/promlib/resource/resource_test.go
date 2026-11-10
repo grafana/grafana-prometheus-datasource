@@ -90,13 +90,49 @@ func TestResource_Execute(t *testing.T) {
 	require.NoError(t, err)
 
 	req := &backend.CallResourceRequest{
-		URL: "/test",
+		Path: "/api/v1/labels",
+		URL:  "/api/v1/labels",
 	}
 	ctx := context.Background()
 
 	resp, err := res.Execute(ctx, req)
 	require.NoError(t, err)
 	assert.NotNil(t, resp)
+}
+
+func TestResource_ExecuteRejectsDisallowedPath(t *testing.T) {
+	mockClient, settings, logger := setup()
+	res, err := newResource(t, mockClient, settings, logger)
+	require.NoError(t, err)
+
+	resp, err := res.Execute(context.Background(), &backend.CallResourceRequest{
+		Path: "-/reload",
+		URL:  "/-/reload",
+	})
+	require.NoError(t, err)
+	require.Equal(t, http.StatusForbidden, resp.Status)
+}
+
+func TestResource_GetSuggestionsRejectsLabelNamePathInjection(t *testing.T) {
+	mockClient, _, logger := setup()
+	settings := backend.DataSourceInstanceSettings{
+		ID:       1,
+		URL:      "http://localhost:9090",
+		JSONData: []byte(`{"httpMethod": "GET"}`),
+	}
+	res, err := newResource(t, mockClient, settings, logger)
+	require.NoError(t, err)
+
+	suggestionReq := resource.SuggestionRequest{
+		LabelName: "../../-/reload",
+		Queries:   []string{"up"},
+	}
+	body, err := json.Marshal(suggestionReq)
+	require.NoError(t, err)
+
+	resp, err := res.GetSuggestions(context.Background(), &backend.CallResourceRequest{Body: body})
+	require.NoError(t, err)
+	require.Equal(t, http.StatusForbidden, resp.Status)
 }
 
 func TestResource_ExecuteDecodesCompressedResponse(t *testing.T) {
@@ -119,7 +155,8 @@ func TestResource_ExecuteDecodesCompressedResponse(t *testing.T) {
 	require.NoError(t, err)
 
 	resp, err := res.Execute(context.Background(), &backend.CallResourceRequest{
-		URL: "/test",
+		Path: "/api/v1/labels",
+		URL:  "/api/v1/labels",
 	})
 
 	require.NoError(t, err)
@@ -176,7 +213,7 @@ func TestResource_ExecuteStripsFramingHeadersAcrossEncodings(t *testing.T) {
 			res, err := newResource(t, mockClient, settings, log.DefaultLogger)
 			require.NoError(t, err)
 
-			resp, err := res.Execute(context.Background(), &backend.CallResourceRequest{URL: "/api/v1/labels"})
+			resp, err := res.Execute(context.Background(), &backend.CallResourceRequest{Path: "/api/v1/labels", URL: "/api/v1/labels"})
 			require.NoError(t, err)
 
 			require.Equal(t, body, resp.Body, "body must be decoded to plaintext")
@@ -211,7 +248,7 @@ func TestResource_ExecuteReturnsErrorForUnexpectedEncoding(t *testing.T) {
 	res, err := resource.New(mockClient, settings, "GET", log.DefaultLogger)
 	require.NoError(t, err)
 
-	_, err = res.Execute(context.Background(), &backend.CallResourceRequest{URL: "/api/v1/labels"})
+	_, err = res.Execute(context.Background(), &backend.CallResourceRequest{Path: "/api/v1/labels", URL: "/api/v1/labels"})
 	require.ErrorContains(t, err, `unexpected encoding type "zstd"`)
 }
 
@@ -252,6 +289,7 @@ func TestResource_ExecutePinsAcceptEncodingToGzip(t *testing.T) {
 	require.NoError(t, err)
 
 	callReq := &backend.CallResourceRequest{
+		Path:    "/api/v1/labels",
 		URL:     "/api/v1/labels",
 		Headers: map[string][]string{"Accept-Encoding": {"gzip, deflate, br, zstd"}},
 	}
@@ -315,7 +353,7 @@ func TestResource_ExecuteResponseSurvivesHTTPBoundary(t *testing.T) {
 	res, err := newResource(t, pluginClient, settings, log.DefaultLogger)
 	require.NoError(t, err)
 
-	callResp, err := res.Execute(context.Background(), &backend.CallResourceRequest{URL: "/api/v1/labels"})
+	callResp, err := res.Execute(context.Background(), &backend.CallResourceRequest{Path: "/api/v1/labels", URL: "/api/v1/labels"})
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, callResp.Status)
 
