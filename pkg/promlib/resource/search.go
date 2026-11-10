@@ -25,7 +25,12 @@ func (r *Resource) ExecuteSearch(
 	req *backend.CallResourceRequest,
 	sender backend.CallResourceResponseSender,
 ) error {
-	r.log.FromContext(ctx).Debug("Sending search resource query", "URL", req.URL)
+	logger := r.log.FromContext(ctx)
+	if !isAllowedResourcePath(req.Path) {
+		return sender.Send(r.statusResponse(logger, req.Path, http.StatusForbidden, "the requested resource path is not supported by this datasource"))
+	}
+
+	logger.Debug("Sending search resource query", "URL", req.URL)
 
 	// QueryResource pins the upstream Accept-Encoding to gzip, which keeps the
 	// wire compressed while letting us decode it with a streaming gzip.Reader
