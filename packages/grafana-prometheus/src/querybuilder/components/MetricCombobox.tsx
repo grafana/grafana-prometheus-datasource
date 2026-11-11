@@ -1,5 +1,5 @@
 import { css } from '@emotion/css';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { type GrafanaTheme2, type SelectableValue, type TimeRange } from '@grafana/data';
 import { selectors } from '@grafana/e2e-selectors';
@@ -16,6 +16,7 @@ import { type PromVisualQuery } from '../types';
 
 import { formatKeyValueStrings, formatLabelFiltersToString } from './formatter';
 import { MetricsModal } from './metrics-modal/MetricsModal';
+import { promoteExactMatch } from './promoteExactMatch';
 
 export interface MetricComboboxProps {
   metricLookupDisabled: boolean;
@@ -101,6 +102,11 @@ export function MetricCombobox({
 
   useEffect(() => () => searchAbortControllerRef.current?.abort(), []);
 
+  // Every typed character reloads options, so options changing is the cue to
+  // re-check the typed input. Memoized so other re-renders keep arrow-key focus.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const displayedOptions = useMemo(() => promoteExactMatch(options, typedInputRef.current), [options]);
+
   const loadMetrics = useCallback(
     async (input: string) => {
       const requestId = ++requestIdRef.current;
@@ -159,7 +165,7 @@ export function MetricCombobox({
             'Select metric'
           )}
           width="auto"
-          options={options}
+          options={displayedOptions}
           value={query.metric ? { label: query.metric, value: query.metric } : null}
           onChange={onMetricChange}
           onOpenMenu={() => {
