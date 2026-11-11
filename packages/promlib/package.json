@@ -1,6 +1,6 @@
 {
   "name": "promlib",
-  "version": "0.0.25",
+  "version": "0.0.26",
   "packageManager": "npm@11.19.0",
   "private": true,
   "engines": {
