@@ -2,51 +2,44 @@ import { fireEvent, render, screen } from '@testing-library/react';
 
 import { type ExemplarTraceIdDestination } from '../types';
 
-import { ExemplarsSettings, normalizeExemplarDestinations } from './ExemplarsSettings';
+import { ExemplarsSettings } from './ExemplarsSettings';
 
 const destination: ExemplarTraceIdDestination = { name: 'traceID', url: 'https://example.com/${__value.raw}' };
 
-describe('normalizeExemplarDestinations', () => {
-  it('returns arrays and nullish values unchanged', () => {
-    expect(normalizeExemplarDestinations([destination])).toEqual([destination]);
-    expect(normalizeExemplarDestinations([])).toEqual([]);
-    expect(normalizeExemplarDestinations(undefined)).toBeUndefined();
-    expect(normalizeExemplarDestinations(null)).toBeUndefined();
-  });
-
-  it('wraps a single destination object in an array', () => {
-    expect(normalizeExemplarDestinations(destination)).toEqual([destination]);
-  });
-
-  it('ignores values that are neither arrays nor objects', () => {
-    expect(normalizeExemplarDestinations('traceID')).toBeUndefined();
-    expect(normalizeExemplarDestinations(123)).toBeUndefined();
-  });
-});
+// Provisioning can store a non-array value here despite the type.
+const asProvisioned = (value: unknown) => value as ExemplarTraceIdDestination[];
 
 describe('ExemplarsSettings', () => {
-  // Provisioning can store a non-array value here despite the type.
-  const asProvisioned = (value: unknown) => value as ExemplarTraceIdDestination[];
-
-  it('renders a single destination provisioned as an object instead of crashing', () => {
-    render(<ExemplarsSettings options={asProvisioned(destination)} onChange={() => {}} />);
+  it('renders destinations provisioned as a list', () => {
+    render(<ExemplarsSettings options={[destination]} onChange={() => {}} />);
 
     expect(screen.getByDisplayValue('traceID')).toBeInTheDocument();
+    expect(screen.queryByText('Exemplar destinations were ignored')).not.toBeInTheDocument();
   });
 
-  it('saves a destination provisioned as an object back as an array when adding another', () => {
+  it('does not warn when no destinations are configured', () => {
+    render(<ExemplarsSettings options={undefined} onChange={() => {}} />);
+
+    expect(screen.queryByText('Exemplar destinations were ignored')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['a single object', destination],
+    ['a string', 'traceID'],
+    ['a number', 123],
+  ])('ignores a destination provisioned as %s and shows a warning instead of crashing', (_, value) => {
+    render(<ExemplarsSettings options={asProvisioned(value)} onChange={() => {}} />);
+
+    expect(screen.getByText('Exemplar destinations were ignored')).toBeInTheDocument();
+    expect(screen.queryByDisplayValue('traceID')).not.toBeInTheDocument();
+  });
+
+  it('starts a new list when adding a destination after an ignored value', () => {
     const onChange = jest.fn();
     render(<ExemplarsSettings options={asProvisioned(destination)} onChange={onChange} />);
 
     fireEvent.click(screen.getByRole('button', { name: /add/i }));
 
-    expect(onChange).toHaveBeenCalledWith([destination, { name: 'traceID' }]);
-  });
-
-  it('renders without destinations when provisioned as a non-object value', () => {
-    render(<ExemplarsSettings options={asProvisioned('traceID')} onChange={() => {}} />);
-
-    expect(screen.queryByDisplayValue('traceID')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /add/i })).toBeInTheDocument();
+    expect(onChange).toHaveBeenCalledWith([{ name: 'traceID' }]);
   });
 });
