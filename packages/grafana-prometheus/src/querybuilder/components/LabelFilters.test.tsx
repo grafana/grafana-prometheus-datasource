@@ -23,6 +23,27 @@ describe('LabelFilters', () => {
     await waitFor(() => expect(screen.getAllByTestId(selectors.components.Select.option)).toHaveLength(1000));
   });
 
+  it('selects the exact label name on Enter when it sorts after partial matches', async () => {
+    setup({
+      onGetLabelNames: async () => [
+        { label: 'cronjob', value: 'cronjob' },
+        { label: 'job', value: 'job' },
+      ],
+    });
+
+    await openLabelNamesSelect();
+    await screen.findByText('cronjob');
+    const input = screen.getAllByRole('combobox')[0];
+    await userEvent.type(input, 'j');
+    await userEvent.type(input, 'ob');
+    await waitFor(() => expect(screen.getAllByTestId(selectors.components.Select.option)[0]).toHaveTextContent('job'));
+    await userEvent.keyboard('{Enter}');
+
+    await waitFor(() => expect(screen.queryByText('Select label')).not.toBeInTheDocument());
+    expect(screen.getByText('job')).toBeInTheDocument();
+    expect(screen.queryByText('cronjob')).not.toBeInTheDocument();
+  });
+
   it('renders empty input without labels', async () => {
     setup();
     expect(screen.getAllByText('Select label')).toHaveLength(1);

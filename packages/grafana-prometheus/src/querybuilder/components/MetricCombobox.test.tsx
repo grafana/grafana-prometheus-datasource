@@ -180,6 +180,20 @@ describe('MetricCombobox', () => {
     );
   });
 
+  it('selects the exact metric on Enter when it sorts after partial matches', async () => {
+    mockDatasource.languageProvider.queryLabelValues = jest.fn().mockResolvedValue(['up_time', 'upstream', 'up']);
+
+    render(<MetricCombobox {...defaultProps} />);
+
+    const combobox = screen.getByRole('combobox');
+    await userEvent.click(combobox);
+    await userEvent.type(combobox, 'up');
+    await screen.findByRole('option', { name: 'up_time' });
+    await userEvent.keyboard('{Enter}');
+
+    expect(mockOnChange).toHaveBeenCalledWith(expect.objectContaining({ metric: 'up' }));
+  });
+
   it('uses fuzzy metric search when the Search API is enabled', async () => {
     const searchMetricNames = jest.fn().mockResolvedValue({
       results: [{ name: 'http_requests_total' }],
