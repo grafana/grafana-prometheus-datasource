@@ -153,6 +153,8 @@
       "exemplars-settings": {
         "add": "Add",
         "no-exemplars-configurations": "No exemplars configurations",
+        "text-destinations-not-a-list": "The provisioned exemplarTraceIdDestinations value is not a list. Wrap each destination in a list item.",
+        "title-destinations-not-a-list": "Exemplar destinations were ignored",
         "title-exemplars": "Exemplars"
       },
       "prom-settings": {

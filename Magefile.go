@@ -4,6 +4,8 @@
 package main
 
 import (
+	"os"
+
 	build "github.com/grafana/grafana-plugin-sdk-go/build"
 	"github.com/magefile/mage/mg"
 	"github.com/magefile/mage/sh"
@@ -11,6 +13,14 @@ import (
 
 // Default configures the default target.
 var Default = BuildAll
+
+// Frozen FIPS 140-3 crypto module. Runtime FIPS disabled by default in go.mod.
+// Set GOFIPS140 in the environment to build with another module version (or off).
+func init() {
+	if _, ok := os.LookupEnv("GOFIPS140"); !ok {
+		os.Setenv("GOFIPS140", "v1.26.0")
+	}
+}
 
 // BuildAll builds all default targets plus linux/s390x and windows/arm64,
 // to support bundling with Grafana builds on those platforms. This overrides
