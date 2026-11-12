@@ -443,7 +443,7 @@ export class PrometheusDatasource
       }));
     }
 
-    if (config.featureToggles.groupByVariable || config.featureToggles.dashboardUnifiedDrilldownControls) {
+    if (request.groupByKeys) {
       processedTarget.groupByKeys = request.groupByKeys;
     }
 

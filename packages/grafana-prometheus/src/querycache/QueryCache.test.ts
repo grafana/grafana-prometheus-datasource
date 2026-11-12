@@ -71,6 +71,27 @@ describe('QueryCache: Generic', function () {
     expect(storage).toBeInstanceOf(QueryCache);
   });
 
+  it('uses the given overlap window when it is a valid duration', () => {
+    const storage = new QueryCache({
+      getTargetSignature: () => '',
+      overlapString: '5m',
+    });
+    expect(storage['overlapWindowMs']).toBe(5 * 60 * 1000);
+  });
+
+  it.each([
+    ['a number', 10],
+    ['an object', { value: '5m' }],
+    ['an invalid string', 'not-a-duration'],
+  ])('falls back to the default overlap window when it is %s', (_, overlap) => {
+    const storage = new QueryCache({
+      getTargetSignature: () => '',
+      // Provisioning can store a non-string value here despite the type.
+      overlapString: overlap as unknown as string,
+    });
+    expect(storage['overlapWindowMs']).toBe(10 * 60 * 1000);
+  });
+
   it('will not modify or crash with empty response', () => {
     const storage = new QueryCache({
       getTargetSignature: () => '',

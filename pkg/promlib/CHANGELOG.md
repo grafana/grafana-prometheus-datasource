@@ -1,5 +1,27 @@
 # promlib
 
+## 0.0.26
+
+🐛 resource path backend allowlist ([#426](https://github.com/grafana/grafana-prometheus-datasource/pull/426))
+
+🐛 Fix label-value suggestions returning HTTP 405 for data sources configured to use POST. ([#406](https://github.com/grafana/grafana-prometheus-datasource/pull/406))
+
+## 0.0.25
+
+🐛 Fix a connection freeze between Grafana and the plugin under heavy query load by updating google.golang.org/grpc to v1.85.0 ([grpc/grpc-go#9330](https://github.com/grpc/grpc-go/issues/9330)) ([#405](https://github.com/grafana/grafana-prometheus-datasource/pull/405))
+
+## 0.0.24
+
+🐛 Bump brotli v1.2.7 ([#400](https://github.com/grafana/grafana-prometheus-datasource/pull/400))
+
+🐛 Disable publish workflows ([#354](https://github.com/grafana/grafana-prometheus-datasource/pull/354))
+
+## 0.0.23
+
+🐛 Keep the error source of failed resource and Search API requests. Timeouts, cancellations, connection errors and other downstream errors from these requests are now reported as downstream, not as plugin errors. ([#388](https://github.com/grafana/grafana-prometheus-datasource/pull/388))
+
+🐛 Update Go to 1.27.3.
+
 ## 0.0.22
 
 🐛 Fix security vulnerabilities (CVE-2026-84445) ([#371](https://github.com/grafana/grafana-prometheus-datasource/pull/371))
