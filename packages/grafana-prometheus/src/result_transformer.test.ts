@@ -3,6 +3,7 @@ import {
   cacheFieldDisplayNames,
   createDataFrame,
   FieldType,
+  type DataFrame,
   type DataQueryRequest,
   type DataQueryResponse,
   type PreferredVisualisationType,
@@ -322,6 +323,42 @@ describe('Prometheus Result Transformer', () => {
         ],
         state: 'Done',
       });
+    });
+
+    it('legendFormat auto removes common labels per refId', () => {
+      const request = {
+        targets: [
+          { format: 'time_series', refId: 'A', legendFormat: '__auto' },
+          { format: 'time_series', refId: 'B', legendFormat: '__auto' },
+        ],
+      } as unknown as DataQueryRequest<PromQuery>;
+      const frame = (refId: string, labels: Record<string, string>) => ({
+        fields: [
+          { name: 'Time', type: 'time', values: [1], typeInfo: { frame: 'time.Time' } },
+          { name: 'up', labels: { __name__: 'up', ...labels }, config: {}, values: [1] },
+        ],
+        length: 1,
+        refId,
+        meta: { type: 'timeseries-multi', typeVersion: [0, 1] },
+      });
+      const response = {
+        state: 'Done',
+        data: [
+          frame('A', { job: 'a', instance: '1' }),
+          frame('A', { job: 'a', instance: '2' }),
+          frame('B', { job: 'b1', instance: '3' }),
+          frame('B', { job: 'b2', instance: '3' }),
+        ],
+      } as unknown as DataQueryResponse;
+
+      const series = transformV2(response, request, {});
+
+      expect(series.data.map((f: DataFrame) => f.fields[1].config.displayNameFromDS)).toEqual([
+        '{instance="1"}',
+        '{instance="2"}',
+        '{job="b1"}',
+        '{job="b2"}',
+      ]);
     });
 
     it('results with table format should be transformed to table dataFrames', () => {
