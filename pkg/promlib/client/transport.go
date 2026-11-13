@@ -21,6 +21,7 @@ func CreateTransportOptions(
 	maxSamplesProcessedWarningThreshold float64,
 	maxSamplesProcessedErrorThreshold float64,
 	queryStatsEnabled bool,
+	oauth2Cfg middleware.OAuth2ClientCredentialsConfig,
 	logger log.Logger,
 ) (*sdkhttpclient.Options, error) {
 	opts, err := settings.HTTPClientOptions(ctx)
@@ -33,6 +34,9 @@ func CreateTransportOptions(
 	}
 	if httpMethod == http.MethodGet {
 		middlewares = append(middlewares, middleware.ForceHttpGet(logger))
+	}
+	if oauth2Cfg.Enabled {
+		middlewares = append(middlewares, middleware.OAuth2ClientCredentials(logger, oauth2Cfg))
 	}
 	opts.Middlewares = middlewares
 

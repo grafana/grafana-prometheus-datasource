@@ -21,6 +21,7 @@ import (
 	"github.com/grafana/grafana-plugin-sdk-go/data"
 
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/client"
+	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/middleware"
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/models"
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/querydata"
 )
@@ -603,6 +604,7 @@ func setup() (*testContext, error) {
 		float64(jsonData.MaxSamplesProcessedWarningThreshold),
 		float64(jsonData.MaxSamplesProcessedErrorThreshold),
 		bool(jsonData.QueryStatsEnabled),
+		middleware.OAuth2ClientCredentialsConfig{},
 		log.NewWithLevel(log.Info),
 	)
 	if err != nil {
