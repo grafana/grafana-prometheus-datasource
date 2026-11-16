@@ -51,6 +51,7 @@ import {
 import { getPrometheusTime, getRangeSnapInterval } from './language_utils';
 import { PrometheusMetricFindQuery } from './metric_find_query';
 import { getQueryHints } from './query_hints';
+import { createPrometheusCoauthoringLanguage } from './query_coauthoring/language';
 import { renderLabelsWithoutBrackets } from './querybuilder/shared/rendering/labels';
 import { type QueryBuilderLabelFilter, type QueryEditorMode } from './querybuilder/shared/types';
 import { type CacheRequestInfo, defaultPrometheusQueryOverlapWindow, QueryCache } from './querycache/QueryCache';
@@ -139,6 +140,11 @@ export class PrometheusDatasource
     // LANGUAGE PROVIDER
     // This needs to be the last thing we initialize.
     this.languageProvider = languageProvider ?? new PrometheusLanguageProvider(this);
+  }
+
+  /** @internal Query Coauthoring v2; independent of the mounted editor. */
+  queryCoauthoring() {
+    return createPrometheusCoauthoringLanguage(this);
   }
 
   /**

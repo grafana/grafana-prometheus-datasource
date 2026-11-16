@@ -1,6 +1,7 @@
-import { type DataQuery } from '@grafana/data';
+import { type DataQuery } from '@grafana/schema';
 
 import { type PromMetricsMetadata } from '../types';
+import { type QueryCoauthoringLanguageDescription } from './queryCoauthoringContracts';
 
 import {
   type QueryEditorCoauthoringInvocationV1,
@@ -113,35 +114,12 @@ export function createPrometheusCoauthoringIntelligence<TQuery extends DataQuery
   const readInvocation = async (
     invocation: PrometheusCoauthoringCapturedInvocation<TQuery>
   ): Promise<QueryEditorCoauthoringInvocationV1<TQuery>> => {
-    const metricNames = extractMetricNames(interpolate(invocation.query)).slice(0, MAX_CONTEXT_METRICS);
-    let cachedMetadata: PromMetricsMetadata = {};
-    try {
-      cachedMetadata = retrieveMetricsMetadata();
-    } catch {
-      // Cached metadata is optional enrichment and must not prevent the remaining context from loading.
-    }
-    const metadataPromise = metricNames.some((name) => !cachedMetadata[name])
-      ? Promise.resolve()
-          .then(queryMetricsMetadata)
-          .then((freshMetadata) => ({ ...cachedMetadata, ...freshMetadata }))
-          .catch(() => cachedMetadata)
-      : Promise.resolve(cachedMetadata);
-    const metricLabelsPromise = Promise.all(
-      metricNames.slice(0, MAX_LABEL_METRICS).map(async (name) => {
-        const labels = await Promise.resolve()
-          .then(() => queryMetricLabels(name))
-          .catch(() => []);
-        return [
-          name,
-          labels
-            .filter((label) => label !== '__name__')
-            .sort()
-            .slice(0, QUERY_COAUTHORING_MAX_CONTEXT_LABELS),
-        ] as const;
-      })
-    );
-    const [metadata, metricLabelEntries] = await Promise.all([metadataPromise, metricLabelsPromise]);
-    const metricLabels = new Map(metricLabelEntries);
+    const description = await describePrometheusQuery(invocation.query, {
+      interpolate,
+      retrieveMetricsMetadata,
+      queryMetricsMetadata,
+      queryMetricLabels,
+    });
 
     return {
       baseline: invocation.baseline,
@@ -149,21 +127,8 @@ export function createPrometheusCoauthoringIntelligence<TQuery extends DataQuery
         revision: invocation.revision,
         query: invocation.query,
         focusRanges: invocation.focusRanges,
-        language: { id: 'promql', displayName: 'PromQL', guidance: PROMQL_COAUTHORING_GUIDANCE },
-        metadata: metricNames.map((name) => {
-          const item = metadata[name];
-          const labels = metricLabels.get(name);
-          return {
-            kind: 'metric',
-            name,
-            attributes: {
-              ...(item?.type ? { type: item.type } : {}),
-              ...(item?.help ? { help: item.help.slice(0, MAX_METADATA_HELP_LENGTH) } : {}),
-              ...(item?.unit ? { unit: item.unit } : {}),
-              ...(labels?.length ? { labels } : {}),
-            },
-          };
-        }),
+        language: description.language,
+        metadata: description.metadata ?? [],
       },
     };
   };
@@ -199,5 +164,68 @@ export function createPrometheusCoauthoringIntelligence<TQuery extends DataQuery
         })),
       };
     },
+  };
+}
+
+/** Metadata shared by the private v1 adapter and the editor-independent v2 language capability. @internal */
+export async function describePrometheusQuery(
+  query: string,
+  {
+    interpolate,
+    retrieveMetricsMetadata,
+    queryMetricsMetadata,
+    queryMetricLabels,
+  }: Pick<
+    CreateIntelligenceOptions<DataQuery>,
+    'interpolate' | 'retrieveMetricsMetadata' | 'queryMetricsMetadata' | 'queryMetricLabels'
+  >
+): Promise<QueryCoauthoringLanguageDescription> {
+  const metricNames = extractMetricNames(interpolate(query)).slice(0, MAX_CONTEXT_METRICS);
+  let cachedMetadata: PromMetricsMetadata = {};
+  try {
+    cachedMetadata = retrieveMetricsMetadata();
+  } catch {
+    // Cached metadata is optional enrichment and must not prevent the remaining context from loading.
+  }
+  const metadataPromise = metricNames.some((name) => !cachedMetadata[name])
+    ? Promise.resolve()
+        .then(queryMetricsMetadata)
+        .then((freshMetadata) => ({ ...cachedMetadata, ...freshMetadata }))
+        .catch(() => cachedMetadata)
+    : Promise.resolve(cachedMetadata);
+  const metricLabelsPromise = Promise.all(
+    metricNames.slice(0, MAX_LABEL_METRICS).map(async (name) => {
+      const labels = await Promise.resolve()
+        .then(() => queryMetricLabels(name))
+        .catch(() => []);
+      return [
+        name,
+        labels
+          .filter((label) => label !== '__name__')
+          .sort()
+          .slice(0, QUERY_COAUTHORING_MAX_CONTEXT_LABELS),
+      ] as const;
+    })
+  );
+  const [metadata, metricLabelEntries] = await Promise.all([metadataPromise, metricLabelsPromise]);
+  const metricLabels = new Map(metricLabelEntries);
+
+  return {
+    text: query,
+    language: { id: 'promql', displayName: 'PromQL', guidance: [...PROMQL_COAUTHORING_GUIDANCE] },
+    metadata: metricNames.map((name) => {
+      const item = metadata[name];
+      const labels = metricLabels.get(name);
+      return {
+        kind: 'metric',
+        name,
+        attributes: {
+          ...(item?.type ? { type: item.type } : {}),
+          ...(item?.help ? { help: item.help.slice(0, MAX_METADATA_HELP_LENGTH) } : {}),
+          ...(item?.unit ? { unit: item.unit } : {}),
+          ...(labels?.length ? { labels } : {}),
+        },
+      };
+    }),
   };
 }

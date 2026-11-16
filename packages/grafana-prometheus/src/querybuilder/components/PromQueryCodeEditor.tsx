@@ -21,6 +21,7 @@ export function PromQueryCodeEditor(props: PromQueryCodeEditorProps) {
     data,
     app,
     showExplain,
+    queryCoauthoring,
     unstable_queryEditorCoauthoringV1,
     unstable_queryEditorInsertionV1,
   } = props;
@@ -41,6 +42,7 @@ export function PromQueryCodeEditor(props: PromQueryCodeEditorProps) {
         history={[]}
         data={data}
         app={app}
+        queryCoauthoring={queryCoauthoring}
         unstable_queryEditorCoauthoringV1={unstable_queryEditorCoauthoringV1}
         unstable_queryEditorInsertionV1={unstable_queryEditorInsertionV1}
       />
