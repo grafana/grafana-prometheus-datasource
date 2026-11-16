@@ -1,13 +1,12 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { useEffect, useRef } from 'react';
+import { of } from 'rxjs';
 
-import { type TemplateSrv } from '@grafana/runtime';
+import { getBackendSrv, setBackendSrv, type TemplateSrv } from '@grafana/runtime';
 import { type DataSourceInstanceSettings } from '@grafana/data';
 import { type Monaco, type MonacoEditor } from '@grafana/ui';
 
 import { PrometheusDatasource } from '../../datasource';
-import { EmptyLanguageProviderMock } from '../../language_provider.mock';
-import { type PrometheusLanguageProviderInterface } from '../../language_provider';
 import {
   type QueryCoauthoringEditorHandle,
   type QueryCoauthoringEditorHost,
@@ -17,6 +16,7 @@ import { type PromQuery } from '../../types';
 import { createCoauthoringMonaco } from '../../test/monacoCoauthoring';
 import { PromQueryCodeEditor } from './PromQueryCodeEditor';
 
+const originalBackend = getBackendSrv();
 let mockMonaco = createCoauthoringMonaco();
 jest.mock('@grafana/ui', () => ({
   ...jest.requireActual('@grafana/ui'),
@@ -68,8 +68,7 @@ function createHost() {
 function setup(host = createHost()) {
   const datasource = new PrometheusDatasource(
     { uid: 'prom', url: '', jsonData: { disableMetricsLookup: true } } as unknown as DataSourceInstanceSettings,
-    { replace: (value: string) => value } as TemplateSrv,
-    new EmptyLanguageProviderMock() as unknown as PrometheusLanguageProviderInterface
+    { replace: (value: string) => value } as TemplateSrv
   );
   const props = {
     datasource,
@@ -84,8 +83,13 @@ function setup(host = createHost()) {
 }
 
 beforeEach(() => {
+  setBackendSrv({ ...originalBackend, fetch: jest.fn(() => of({ data: { data: {} } })) } as unknown as ReturnType<
+    typeof getBackendSrv
+  >);
   mockMonaco = createCoauthoringMonaco();
 });
+
+afterEach(() => setBackendSrv(originalBackend));
 
 it('registers a versioned handle, reports current ranges and forwards shortcuts with or without a selection', () => {
   const { handle, host, unregister, unmount } = setup();

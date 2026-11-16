@@ -135,6 +135,5 @@ export function createCoauthoringMonaco(initialValue = 'up') {
       emit(next ? 'focus' : 'blur');
     },
     shortcut: () => actions.forEach((action) => action.run(editor)),
-    listenerCount: () => Array.from(callbacks.values()).reduce((total, listeners) => total + listeners.size, 0),
   };
 }

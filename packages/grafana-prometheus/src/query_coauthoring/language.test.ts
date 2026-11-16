@@ -1,11 +1,35 @@
-import { of } from 'rxjs';
+import { type Observable, of, Subject } from 'rxjs';
 
 import { type DataSourceInstanceSettings } from '@grafana/data';
 import { getBackendSrv, setBackendSrv, type BackendSrvRequest, type TemplateSrv } from '@grafana/runtime';
 
 import { PrometheusDatasource } from '../datasource';
 import { QueryEditorMode } from '../querybuilder/shared/types';
-import { type PromOptions } from '../types';
+import { type PromMetricsMetadata, type PromOptions } from '../types';
+
+const originalBackend = getBackendSrv();
+const fetch = jest.fn<Observable<unknown>, [BackendSrvRequest]>();
+
+function respond(metadata: PromMetricsMetadata = {}, labels: string[] = []) {
+  fetch.mockImplementation((request) =>
+    of({
+      data: {
+        status: 'success',
+        data: request.url.endsWith('/metadata')
+          ? Object.fromEntries(Object.entries(metadata).map(([name, item]) => [name, [item]]))
+          : labels,
+      },
+    })
+  );
+}
+
+beforeEach(() => {
+  fetch.mockReset();
+  respond();
+  setBackendSrv({ ...originalBackend, fetch } as unknown as ReturnType<typeof getBackendSrv>);
+});
+
+afterEach(() => setBackendSrv(originalBackend));
 
 function setup() {
   return new PrometheusDatasource(
@@ -17,11 +41,13 @@ function setup() {
 describe('Prometheus datasource coauthoring language', () => {
   it('describes authored PromQL with guidance and relevant metric metadata', async () => {
     const ds = setup();
-    ds.languageProvider.retrieveMetricsMetadata = () => ({
-      http_requests_total: { type: 'counter', help: 'Request count', unit: 'requests' },
-      unrelated: { type: 'gauge', help: 'Excluded' },
-    });
-    ds.languageProvider.queryLabelKeys = async () => ['job', '__name__', 'handler'];
+    respond(
+      {
+        http_requests_total: { type: 'counter', help: 'Request count', unit: 'requests' },
+        unrelated: { type: 'gauge', help: 'Excluded' },
+      },
+      ['job', '__name__', 'handler']
+    );
     await expect(
       ds.queryCoauthoring().describe({ refId: 'A', expr: 'rate(http_requests_total[5m])' }, {})
     ).resolves.toEqual({
@@ -92,15 +118,12 @@ describe('language rejection and cancellation', () => {
 
   it('does not start metadata work for an aborted description', async () => {
     const ds = setup();
-    const metadata = jest.spyOn(ds.languageProvider, 'queryMetricsMetadata');
-    const labels = jest.spyOn(ds.languageProvider, 'queryLabelKeys');
     const controller = new AbortController();
     controller.abort();
     await expect(
       ds.queryCoauthoring().describe({ refId: 'A', expr: 'up' }, { signal: controller.signal })
     ).rejects.toMatchObject({ name: 'AbortError' });
-    expect(metadata).not.toHaveBeenCalled();
-    expect(labels).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
   });
 });
 
@@ -112,12 +135,18 @@ describe('language metadata budgets', () => {
       metricNames.map((name) => [name, { type: 'gauge', help: 'h'.repeat(600), unit: 'bytes' }])
     );
     const labelKeys = ['__name__', ...Array.from({ length: 40 }, (_, i) => `label_${i}`)];
-    ds.languageProvider.retrieveMetricsMetadata = () => metadata;
-    const labels = jest.spyOn(ds.languageProvider, 'queryLabelKeys').mockResolvedValue(labelKeys);
+    respond(metadata, labelKeys);
+    await ds.languageProvider.queryMetricsMetadata();
+    fetch.mockClear();
     const result = await ds.queryCoauthoring().describe({ refId: 'A', expr: metricNames.join(' + ') }, {});
     expect(result.metadata).toHaveLength(20);
-    expect(labels).toHaveBeenCalledTimes(5);
-    expect(labels).toHaveBeenCalledWith(expect.anything(), '{__name__="metric_0"}', 30);
+    expect(fetch).toHaveBeenCalledTimes(5);
+    expect(fetch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: expect.stringContaining('/labels'),
+        data: expect.objectContaining({ 'match[]': '{__name__="metric_0"}', limit: 30 }),
+      })
+    );
     expect(result.metadata?.[0].attributes).toEqual({
       type: 'gauge',
       help: 'h'.repeat(500),
@@ -132,28 +161,30 @@ describe('language metadata budgets', () => {
 
   it('uses cached metadata with lookups disabled and makes no requests', async () => {
     const ds = setup();
+    respond({ up: { type: 'gauge', help: '' } });
+    await ds.languageProvider.queryMetricsMetadata();
+    fetch.mockClear();
     ds.lookupsDisabled = true;
-    ds.languageProvider.retrieveMetricsMetadata = () => ({ up: { type: 'gauge', help: '' } });
-    const labels = jest.spyOn(ds.languageProvider, 'queryLabelKeys');
-    const metadata = jest.spyOn(ds.languageProvider, 'queryMetricsMetadata');
     const result = await ds.queryCoauthoring().describe({ refId: 'A', expr: 'up + missing' }, {});
     expect(result.metadata).toEqual([
       { kind: 'metric', name: 'up', attributes: { type: 'gauge' } },
       { kind: 'metric', name: 'missing', attributes: {} },
     ]);
-    expect(labels).not.toHaveBeenCalled();
-    expect(metadata).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it('cancels while a cache-backed metadata lookup is still pending', async () => {
     const ds = setup();
-    ds.languageProvider.queryMetricsMetadata = () => new Promise(() => {});
-    ds.languageProvider.queryLabelKeys = async () => [];
+    const pending = new Subject<unknown>();
+    fetch.mockReturnValue(pending);
     const controller = new AbortController();
     const result = ds.queryCoauthoring().describe({ refId: 'A', expr: 'up' }, { signal: controller.signal });
     await Promise.resolve();
     controller.abort();
     await expect(result).rejects.toMatchObject({ name: 'AbortError' });
+    expect(fetch).toHaveBeenCalled();
+    pending.next({ data: { status: 'success', data: [] } });
+    pending.complete();
   });
 
   it('returns authored template text and prepares against interpolated PromQL', async () => {
@@ -169,48 +200,37 @@ describe('language metadata budgets', () => {
 });
 
 it('describes through the real language provider and resource clients, including in an inheriting datasource', async () => {
-  const originalBackend = getBackendSrv();
-  const requests: BackendSrvRequest[] = [];
-  setBackendSrv({
-    ...originalBackend,
-    fetch: jest.fn((request: BackendSrvRequest) => {
-      requests.push(request);
-      const data = request.url.endsWith('/metadata')
-        ? { http_requests_total: [{ type: 'counter', help: 'Requests', unit: 'requests' }] }
-        : ['__name__', 'handler', 'job'];
-      return of({ data: { status: 'success', data } });
-    }),
-  } as unknown as ReturnType<typeof getBackendSrv>);
-  try {
-    class InheritedDatasource extends PrometheusDatasource {}
-    const datasource = new InheritedDatasource(
-      { uid: 'inherited', url: '/prom', jsonData: { httpMethod: 'GET' } } as DataSourceInstanceSettings<PromOptions>,
-      { replace: (text: string) => text } as TemplateSrv
-    );
-    datasource.type = 'inheriting-prometheus-plugin';
-    const language = datasource.queryCoauthoring();
-    const result = await language.describe({ refId: 'A', expr: 'rate(http_requests_total[5m])' }, {});
-    expect(result.metadata).toEqual([
-      {
-        kind: 'metric',
-        name: 'http_requests_total',
-        attributes: { type: 'counter', help: 'Requests', unit: 'requests', labels: ['handler', 'job'] },
-      },
-    ]);
-    expect(requests).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ url: expect.stringContaining('/resources/api/v1/metadata') }),
-        expect.objectContaining({
-          url: expect.stringContaining('/resources/api/v1/labels'),
-          params: expect.objectContaining({ 'match[]': '{__name__="http_requests_total"}', limit: 30 }),
-        }),
-      ])
-    );
-    expect(language.prepare({ refId: 'A', expr: 'up', hide: true }, 'sum(up)')).toMatchObject({
-      status: 'ready',
-      query: { refId: 'A', expr: 'sum(up)', hide: true },
-    });
-  } finally {
-    setBackendSrv(originalBackend);
-  }
+  respond({ http_requests_total: { type: 'counter', help: 'Requests', unit: 'requests' } }, [
+    '__name__',
+    'handler',
+    'job',
+  ]);
+  class InheritedDatasource extends PrometheusDatasource {}
+  const datasource = new InheritedDatasource(
+    { uid: 'inherited', url: '/prom', jsonData: { httpMethod: 'GET' } } as DataSourceInstanceSettings<PromOptions>,
+    { replace: (text: string) => text } as TemplateSrv
+  );
+  datasource.type = 'inheriting-prometheus-plugin';
+  const language = datasource.queryCoauthoring();
+  const result = await language.describe({ refId: 'A', expr: 'rate(http_requests_total[5m])' }, {});
+  expect(result.metadata).toEqual([
+    {
+      kind: 'metric',
+      name: 'http_requests_total',
+      attributes: { type: 'counter', help: 'Requests', unit: 'requests', labels: ['handler', 'job'] },
+    },
+  ]);
+  expect(fetch.mock.calls.map(([request]) => request)).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ url: expect.stringContaining('/resources/api/v1/metadata') }),
+      expect.objectContaining({
+        url: expect.stringContaining('/resources/api/v1/labels'),
+        params: expect.objectContaining({ 'match[]': '{__name__="http_requests_total"}', limit: 30 }),
+      }),
+    ])
+  );
+  expect(language.prepare({ refId: 'A', expr: 'up', hide: true }, 'sum(up)')).toMatchObject({
+    status: 'ready',
+    query: { refId: 'A', expr: 'sum(up)', hide: true },
+  });
 });
