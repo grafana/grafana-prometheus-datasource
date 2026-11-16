@@ -1,26 +1,19 @@
 # Prometheus query coauthoring
 
 This folder supports the inline v1 flow and Query Coauthoring v2 in the floating Assistant.
-Both use the same PromQL metadata, validation and diffing code. For the exact Core reference,
-contract lifetime and review checklist, see [CONTEXT.md](CONTEXT.md).
+Both share PromQL metadata, validation and diffing code.
 
 ## Coauthoring v2
 
-The shared `PrometheusDatasource.queryCoauthoring()` capability describes queries and prepares typed changes
-without a mounted editor. Code Mode separately accepts the optional `queryCoauthoring` host prop.
+`PrometheusDatasource.queryCoauthoring()` provides PromQL context and prepares typed query changes without
+requiring a mounted editor. Code Mode accepts an optional `queryCoauthoring` host to report selections,
+forward shortcuts and display the line marks Core requests. Core owns the session and panel previews;
+the floating Assistant owns chat. Proposed text arrives through normal query props, while typing reports a manual edit.
 
-1. The editor reports selections and forwards `Cmd/Ctrl + .` to Core. With no highlight, Core focuses the whole query.
-2. Core owns entry and the panel-edit session. The floating Assistant owns chat and proposal generation.
-3. Core calls the datasource's `describe` and `prepare` methods to obtain PromQL context and validate proposals.
-4. Core previews proposed queries through ordinary editor props and calls `showChanges` to tint changed lines.
-   Typing clears those marks and reports the edited query; Core handles preview cancellation, Accept and Undo.
-
-Core offers v2 only while `queryeditor.coauthoringUi` and `grafana.visualDesignRefresh` are enabled and an entry
-listener is registered. Without a listener, the existing inline v1 path remains available. The shared datasource
-and Code Mode modules give inheriting plugins v2 support without plugin-ID checks.
-
-The v2 contracts remain private structural copies from Core. This is the documented exception to the v1
-promotion rule below; removal criteria and the reference commit are in [CONTEXT.md](CONTEXT.md).
+A supported v2 host takes precedence over the v1 adapter. Without it, the v1 path remains available.
+Inheriting plugins receive v2 through the shared datasource and editor modules, without plugin-ID checks.
+The [private contract copy](queryCoauthoringContracts.ts) records its Core source and removal criteria;
+v2 intentionally keeps these copies private rather than applying the v1 promotion rule below.
 
 ## Inline v1 (compatibility path)
 
