@@ -65,3 +65,39 @@ Existing intelligence, structure and v1 adapter tests remain compatibility cover
 A separate real-Monaco browser probe can validate DOM marks and keyboard input; it
 is not a substitute for the built plugin running inside Core or hosted Assistant
 acceptance. Delivery validation and its limits are recorded in the PR description.
+
+## Reviewing and trying v2
+
+Suggested review order:
+
+1. `queryCoauthoringContracts.ts` and `language.ts`: the private boundary and datasource behavior.
+2. `registerCoauthoringEditor.ts` and `usePrometheusQueryCoauthoring.ts` in
+   [`../components/monaco-query-field`](../components/monaco-query-field/README.md): editor facts and v1/v2 switching.
+3. `language.test.ts` and `PromQueryCodeEditor.coauthoring.test.tsx`: field preservation, HTTP metadata,
+   proposed-text updates and cleanup. The `intelligence.ts` change shares existing metadata enrichment between v1 and v2.
+
+From the repository root, run the focused contract and compatibility tests:
+
+```sh
+npx jest --selectProjects library --runInBand --testPathPattern='query_coauthoring|PromQueryCodeEditor.coauthoring|PrometheusQueryCoauthoringAdapter|usePrometheusQueryCoauthoring|MonacoQueryField.test'
+```
+
+For a full smoke test, use the Core reference above and follow the
+[external plugin setup](../../../../DEVELOPMENT.md#running-locally-against-a-local-grafanagrafana-checkout).
+Open a panel in PanelEditNext with a working Prometheus query in Code Mode. Core needs both
+`queryeditor.coauthoringUi` and `grafana.visualDesignRefresh` enabled through its feature-flag provider,
+plus a registered `queryCoauthoring.onEnterRequested` listener. A compatible floating Assistant supplies that
+listener. Flags alone leave v2 inactive; the stock Compose image may not contain the required Core work.
+A Core development listener can exercise entry and host wiring without Assistant chat, but cannot by itself
+validate Assistant proposals.
+
+Expected smoke checks:
+
+- Highlight text, then invoke from the selection action and `Cmd/Ctrl + .`; repeat the shortcut without a highlight.
+- Preview and switch proposal Options. Check proposed text and line tints; ending preview clears the tints.
+- Type during a preview. The edited proposed row should become normal query state and its tints should clear.
+- Move focus outside the editor and switch applications; selection actions should not remain over an inactive editor.
+- Remove the v2 listener with coauthoring still enabled. Verify inline v1 works, then restore v2 and check for duplicate actions.
+
+This is a review checklist, not a record of completed Core/plugin acceptance. The built plugin still needs
+validation against the actual Core Surface and hosted Assistant; the local contract tests and Monaco probe cover narrower boundaries.

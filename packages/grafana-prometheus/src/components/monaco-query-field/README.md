@@ -14,24 +14,26 @@ wrapper needs the same props as the sync component, the prop type lives on its o
 
 ## Query coauthoring
 
-Three files in this folder implement the Monaco half of the query coauthoring experiment. The contract, the
-end-to-end data flow, and the Core/Prometheus ownership split are documented in
-[`../../query_coauthoring/README.md`](../../query_coauthoring/README.md) — read that first. In short: Grafana's
-query row owns the UI, the Assistant request, and the panel preview; this folder owns the editor events, the
-anchored DOM node the Core surface is portalled into, and the handoff to the PromQL layer.
+This folder supports inline v1 and floating-Assistant v2. Start with the
+[coauthoring overview](../../query_coauthoring/README.md) for both data flows and
+[CONTEXT.md](../../query_coauthoring/CONTEXT.md) for the v2 reference and review checklist.
+Core owns entry UI and panel previews; the floating Assistant owns v2 chat. This folder reports editor facts
+and provides the selection anchor. The v1 path also provides the portal target for Core's inline UI.
 
-- **`usePrometheusQueryCoauthoring.ts`** — the React lifecycle. It returns the Monaco `onMount` handler, creates
-  and disposes the adapter when the editor mounts, registers the adapter with Core's private registrar, and
-  keeps the portal class name current. Everything else is read through refs so the adapter survives re-renders.
-  This is the whole surface area the experiment adds to `MonacoQueryField`: one hook call and one mount handoff,
-  so it can be removed without unpicking the ordinary editor lifecycle.
+- **`usePrometheusQueryCoauthoring.ts`** — the React lifecycle. It returns the Monaco `onMount` handler and
+  follows host/editor changes. A supported v2 host registers the editor handle and suppresses the v1 adapter;
+  removing it allows v1 to register again. Current query values are read through refs across re-renders.
 
-- **`MonacoQueryCoauthoringHost.ts`** — the editor-side surface. It settles selection changes into a stable
+- **`registerCoauthoringEditor.ts`** — the v2 handle. It reports selection ranges and an anchor, forwards the
+  shortcut, and replaces or clears whole-line change marks. Props-driven proposed text is distinguished from
+  typing using the current query prop. Disposal releases the host registration, marks, widget and listeners.
+
+- **`MonacoQueryCoauthoringHost.ts`** — the v1 editor-side surface. It settles selection changes into a stable
   `hidden` / `selection` / `invoked` mode, registers the `Cmd/Ctrl + .` action, and manages a Monaco content
   widget whose DOM node is the portal target Core renders into. It also keeps that widget inside the visual
   viewport, which Monaco does not do for overflowing content widgets. No PromQL knowledge lives here.
 
-- **`PrometheusQueryCoauthoringAdapter.ts`** — the adapter Core actually holds. It joins the host's editor
+- **`PrometheusQueryCoauthoringAdapter.ts`** — the v1 adapter Core holds. It joins the host's editor
   events to the PromQL intelligence layer, tracks the active invocation and its id, and translates host modes
   into `QueryEditorCoauthoringSnapshotV1`. Invocation ids are what make stale proposals cheap to reject: every
   `readInvocation`/`prepareProposal` call must name the invocation that is still current.
