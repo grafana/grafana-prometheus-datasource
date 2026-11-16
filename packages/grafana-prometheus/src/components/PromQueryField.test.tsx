@@ -2,7 +2,7 @@
 import { getByTestId, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-import { CoreApp, type DataFrame, dateTime, LoadingState, type PanelData } from '@grafana/data';
+import { CoreApp, createDataFrame, type DataFrame, dateTime, LoadingState, type PanelData } from '@grafana/data';
 
 import { type PrometheusDatasource } from '../datasource';
 import * as queryHints from '../query_hints';
@@ -136,6 +136,19 @@ describe('PromQueryField', () => {
 
     expect(screen.getByText('Query hint')).toBeInTheDocument();
     expect(screen.queryByText('Initial hint')).not.toBeInTheDocument();
+  });
+
+  it('passes the data frames to getQueryHints without converting them', async () => {
+    const props = defaultProps;
+    props.datasource.lookupsDisabled = true;
+    const getQueryHints = jest.fn().mockReturnValue([]);
+    props.datasource.getQueryHints = getQueryHints;
+    const series = [createDataFrame({ fields: [{ name: 'Value', values: [1] }] })];
+    render(<PromQueryField {...props} data={{ series, state: LoadingState.Done } as PanelData} />);
+
+    await screen.findByRole('button');
+
+    expect(getQueryHints).toHaveBeenCalledWith(props.query, series);
   });
 
   it('should not run query onBlur', async () => {
