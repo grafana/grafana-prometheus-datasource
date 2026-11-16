@@ -2,14 +2,7 @@
 import { css, cx } from '@emotion/css';
 import { type ReactNode, useCallback, useEffect, useState } from 'react';
 
-import {
-  type DataFrame,
-  getDefaultTimeRange,
-  isDataFrame,
-  type QueryEditorProps,
-  type QueryHint,
-  toLegacyResponseData,
-} from '@grafana/data';
+import { type DataFrame, getDefaultTimeRange, type QueryEditorProps, type QueryHint } from '@grafana/data';
 import { selectors } from '@grafana/e2e-selectors';
 import { t, Trans } from '@grafana/i18n';
 import { reportInteraction } from '@grafana/runtime';
@@ -68,8 +61,7 @@ export const PromQueryField = (props: PromQueryFieldProps) => {
         return;
       }
 
-      const result = isDataFrame(series[0]) ? series.map(toLegacyResponseData) : series;
-      const queryHints = datasource.getQueryHints(query, result);
+      const queryHints = datasource.getQueryHints(query, series);
       let queryHint = queryHints.length > 0 ? queryHints[0] : null;
 
       setHint(queryHint ?? initHint);

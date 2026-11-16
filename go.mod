@@ -2,6 +2,9 @@ module github.com/grafana/grafana-prometheus-datasource
 
 go 1.27.3
 
+// FIPS mode off by default, enable with GODEBUG=fips140=on
+godebug fips140=off
+
 require (
 	github.com/grafana/dsconfig/schema v0.0.13
 	github.com/grafana/grafana-plugin-sdk-go v0.297.0

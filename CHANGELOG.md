@@ -2,6 +2,16 @@
 
 ## 13.2.6
 
+🐛 Enable publish-and-deployed ([#426](https://github.com/grafana/grafana-prometheus-datasource/pull/426))
+
+🐛 Fix config editor crash when exemplarTraceIdDestinations is provisioned as a non-array value. The value is now ignored, matching the backend, and a warning is shown. ([#418](https://github.com/grafana/grafana-prometheus-datasource/pull/418))
+
+🐛 Fix query editor crash when incrementalQueryOverlapWindow is provisioned as a non-string value. ([#417](https://github.com/grafana/grafana-prometheus-datasource/pull/417))
+
+🐛 resource path backend allowlist ([#426](https://github.com/grafana/grafana-prometheus-datasource/pull/426))
+
+🐛 Fix label-value suggestions returning HTTP 405 for data sources configured to use POST. ([#406](https://github.com/grafana/grafana-prometheus-datasource/pull/406))
+
 ⚙️ Chore: dependency updates
 
 🐛 Always send ad hoc group by keys to the backend. They were gated on the removed `groupByVariable` and `dashboardUnifiedDrilldownControls` feature toggles, so group by stopped applying to Prometheus queries. ([#404](https://github.com/grafana/grafana-prometheus-datasource/pull/404))
