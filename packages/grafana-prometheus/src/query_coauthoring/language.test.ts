@@ -1,3 +1,4 @@
+import { cloneDeep } from 'lodash';
 import { type Observable, of, Subject } from 'rxjs';
 
 import { type DataSourceInstanceSettings } from '@grafana/data';
@@ -5,7 +6,9 @@ import { getBackendSrv, setBackendSrv, type BackendSrvRequest, type TemplateSrv 
 
 import { PrometheusDatasource } from '../datasource';
 import { QueryEditorMode } from '../querybuilder/shared/types';
-import { type PromMetricsMetadata, type PromOptions } from '../types';
+import { type PromMetricsMetadata, type PromOptions, type PromQuery } from '../types';
+
+import { type QueryCoauthoringLanguage } from './queryCoauthoringContracts';
 
 const originalBackend = getBackendSrv();
 const fetch = jest.fn<Observable<unknown>, [BackendSrvRequest]>();
@@ -39,6 +42,59 @@ function setup() {
 }
 
 describe('Prometheus datasource coauthoring language', () => {
+  it.each([
+    { refId: 'A', expr: 'up', editorMode: QueryEditorMode.Code },
+    { refId: 'A', expr: 'sum(up)', editorMode: QueryEditorMode.Builder },
+    { refId: 'A', expr: '' },
+    { refId: 'A', expr: 'sum(' },
+    { refId: 'A', expr: 'rate(up[$__rate_interval])' },
+  ])('reports editability synchronously without validating or mutating draft $expr', (draft) => {
+    const ds = setup();
+    const language = ds.queryCoauthoring();
+    const describe = jest.spyOn(language, 'describe');
+    const prepare = jest.spyOn(language, 'prepare');
+    const query = Object.freeze({
+      ...draft,
+      datasource: Object.freeze({ uid: 'prom', type: 'prometheus' }),
+      hide: true,
+      instant: true,
+      range: false,
+      legendFormat: '{{job}}',
+      futureField: Object.freeze({ nested: Object.freeze(['preserve me']) }),
+    });
+    const before = cloneDeep(query);
+
+    expect(language.version).toBe(1);
+    expect(language.getQuerySupport?.(query)).toEqual({ editable: true });
+    expect(query).toEqual(before);
+    expect(describe).not.toHaveBeenCalled();
+    expect(prepare).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('keeps describe and prepare usable by a language1 consumer ignoring the optional support hook', async () => {
+    const language = setup().queryCoauthoring();
+    const support = jest.spyOn(language, 'getQuerySupport');
+    // This is the language1 shape before getQuerySupport was added, as consumed by older Core.
+    const legacy: Omit<QueryCoauthoringLanguage<PromQuery>, 'getQuerySupport'> = language;
+    const query = { refId: 'A', expr: 'up', hide: true };
+    expect(legacy.version).toBe(1);
+    expect((await legacy.describe(query, {})).text).toBe('up');
+    expect(legacy.prepare(query, 'sum(up)')).toMatchObject({
+      status: 'ready',
+      query: { ...query, expr: 'sum(up)' },
+    });
+    expect(support).not.toHaveBeenCalled();
+
+    // An adapter implementing only the old members still satisfies language1.
+    const olderAdapter: QueryCoauthoringLanguage<PromQuery> = {
+      version: legacy.version,
+      describe: legacy.describe,
+      prepare: legacy.prepare,
+    };
+    expect(olderAdapter.getQuerySupport).toBeUndefined();
+  });
+
   it('describes authored PromQL with guidance and relevant metric metadata', async () => {
     const ds = setup();
     respond(
@@ -212,6 +268,8 @@ it('describes through the real language provider and resource clients, including
   );
   datasource.type = 'inheriting-prometheus-plugin';
   const language = datasource.queryCoauthoring();
+  expect(language.getQuerySupport?.({ refId: 'A', expr: 'up' })).toEqual({ editable: true });
+  expect(fetch).not.toHaveBeenCalled();
   const result = await language.describe({ refId: 'A', expr: 'rate(http_requests_total[5m])' }, {});
   expect(result.metadata).toEqual([
     {

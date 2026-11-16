@@ -15,6 +15,9 @@ export function createPrometheusCoauthoringLanguage(
 ): QueryCoauthoringLanguage<PromQuery> {
   return {
     version: 1,
+    getQuerySupport() {
+      return { editable: true };
+    },
     async describe(query, { signal }) {
       const assertActive = () => {
         if (signal?.aborted) {

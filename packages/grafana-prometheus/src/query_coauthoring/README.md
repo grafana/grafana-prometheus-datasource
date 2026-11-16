@@ -10,6 +10,11 @@ requiring a mounted editor. Code Mode accepts an optional `queryCoauthoring` hos
 forward shortcuts and display the line marks Core requests. Core owns the session and panel previews;
 the floating Assistant owns chat. Proposed text arrives through normal query props, while typing reports a manual edit.
 
+The language stays at version 1 and exposes optional synchronous, nonmutating `getQuerySupport(query)`.
+PromQL returns `{ editable: true }`, including for drafts whose text still needs validation by `prepare`.
+New Core treats an absent hook as unknown, `false` as read-only, and throwing or malformed results as
+operational support failures. Descriptions remain usable independently of editability.
+
 A supported v2 host takes precedence over the v1 adapter. Without it, the v1 path remains available.
 Inheriting plugins receive v2 through the shared datasource and editor modules, without plugin-ID checks.
 The [private contract copy](queryCoauthoringContracts.ts) records its Core source and removal criteria;

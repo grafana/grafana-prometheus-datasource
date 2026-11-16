@@ -4,7 +4,7 @@ import { type DataQuery } from '@grafana/schema';
  * Private structural copies used by Prometheus for Query Coauthoring v2.
  * Source: grafana/grafana, public/app/features/dashboard-scene/panel-edit/PanelEditNext/
  * QueryEditor/coauthoring/queryCoauthoringContracts.ts
- * Reference: 1d13fcb5fc8690bde026ab42f06749dd373dec78 (PR #137907).
+ * Reference: a2bd0ed280428d8ef5a4d9bd24729b510e6f246b (PR #137907, language support addition).
  * Coordinate mirrored changes or bump the contract version. Remove these copies once
  * this repository pins a Grafana release containing the promoted language/editor contracts.
  * Do not add these contracts to published DataSourceApi or QueryEditorProps interfaces.
@@ -34,6 +34,8 @@ export type QueryCoauthoringPrepareResult<TQuery extends DataQuery = DataQuery> 
 
 export interface QueryCoauthoringLanguage<TQuery extends DataQuery = DataQuery> {
   readonly version: 1;
+  /** Synchronous, nonmutating editability check. Absence means unknown, not editable. */
+  getQuerySupport?(query: TQuery): { editable: boolean };
   describe(query: TQuery, options: { signal?: AbortSignal }): Promise<QueryCoauthoringLanguageDescription>;
   prepare(baseline: TQuery, text: string): QueryCoauthoringPrepareResult<TQuery>;
 }
