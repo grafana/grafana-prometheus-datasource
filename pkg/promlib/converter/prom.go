@@ -2,6 +2,7 @@ package converter
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -21,10 +22,20 @@ func logf(format string, a ...any) {
 }
 
 type Options struct {
+	// MaxSeries is the most series a matrix or vector result may hold. Zero means no limit.
+	MaxSeries int
 }
+
+// ErrMaxSeriesExceeded is the error for a result with more series than Options.MaxSeries.
+// Its text is a stable token for callers that see only the error message.
+var ErrMaxSeriesExceeded = errors.New("err-prometheus-max-series-per-query")
 
 func rspErr(e error) backend.DataResponse {
 	return backend.DataResponse{Error: e, ErrorSource: status.SourceDownstream}
+}
+
+func maxSeriesExceeded(limit int) backend.DataResponse {
+	return rspErr(fmt.Errorf("query returned more than %d series, the series limit of this Grafana instance (%w)", limit, ErrMaxSeriesExceeded))
 }
 
 // ReadPrometheusStyleResult will read results from a prometheus or loki server and return data frames
@@ -626,12 +637,17 @@ func readScalar(iter *sdkjsoniter.Iterator) backend.DataResponse {
 func readMatrixOrVectorMulti(iter *sdkjsoniter.Iterator, resultType string, opt Options) backend.DataResponse {
 	rsp := backend.DataResponse{}
 	size := 0
+	seriesCount := 0
 	previousHistogramSize := -1
 	histogramCapacityHint := 0
 
 	for more, err := iter.ReadArray(); more; more, err = iter.ReadArray() {
 		if err != nil {
 			return rspErr(err)
+		}
+		seriesCount++
+		if opt.MaxSeries > 0 && seriesCount > opt.MaxSeries {
+			return maxSeriesExceeded(opt.MaxSeries)
 		}
 
 		// First read all values to temporary storage
