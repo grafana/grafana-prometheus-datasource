@@ -22,4 +22,24 @@ test.describe('Query editor', () => {
     await expect(queryRow.getByRole('radio', { name: 'Builder' })).toBeVisible();
     await expect(queryRow.getByRole('radio', { name: 'Code' })).toBeVisible();
   });
+
+  test('selects the exact metric match on Enter in Builder mode', async ({ explorePage, page, selectors }) => {
+    await explorePage.datasource.set('prometheus-direct');
+
+    const queryRow = getQueryEditorRow(page, 'A');
+    await queryRow.getByRole('radio', { name: 'Builder' }).click();
+
+    // Prometheus scrapes itself and Grafana, so many metric names contain `up` and sort
+    // ahead of the exact `up` match (for example `analytics_summaries_rollup_duration_seconds`).
+    const metricSelect = queryRow.getByTestId(
+      selectors.components.DataSource.Prometheus.queryEditor.builder.metricSelect
+    );
+    await metricSelect.click();
+    await page.keyboard.type('up');
+    await expect(page.getByRole('option', { name: 'up', exact: true })).toBeVisible();
+    await expect(page.getByRole('option').first()).toHaveText('up');
+
+    await page.keyboard.press('Enter');
+    await expect(metricSelect).toHaveText('up');
+  });
 });

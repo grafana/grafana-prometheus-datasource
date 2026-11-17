@@ -11,6 +11,8 @@ import { AsyncSelect, Select } from '@grafana/ui';
 import { truncateResult } from '../../language_utils';
 import { type QueryBuilderLabelFilter } from '../shared/types';
 
+import { promoteExactMatch } from './promoteExactMatch';
+
 interface LabelFilterItemProps {
   defaultOp: string;
   item: Partial<QueryBuilderLabelFilter>;
@@ -72,7 +74,7 @@ export function LabelFilterItem({
   };
 
   const labelValueSearch = debounce(
-    (query: string) => getLabelValuesAutofillSuggestions(query, item.label),
+    async (query: string) => promoteExactMatch(await getLabelValuesAutofillSuggestions(query, item.label), query),
     debounceDuration
   );
 
@@ -85,7 +87,7 @@ export function LabelFilterItem({
     const results = allLabels.filter((label) => {
       return label.value.includes(query);
     });
-    return truncateResult(results);
+    return truncateResult(promoteExactMatch(results, query));
   }, debounceDuration);
 
   const itemValue = item?.value ?? '';
