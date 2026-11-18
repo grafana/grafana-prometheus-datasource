@@ -1,5 +1,12 @@
 # Changelog
 
+## 13.2.4
+
+### Patch Changes
+
+🐛 Fix browser freeze when a query with the Auto legend returns many series ([#395](https://github.com/grafana/grafana-prometheus-datasource/pull/395))
+🐛 Select the exact match on Enter in the query builder metric, label name and label value fields, instead of the first option in sorted order. ([#430](https://github.com/grafana/grafana-prometheus-datasource/pull/430))
+
 ## 13.2.3
 
 🐛 Fix config editor crash when exemplarTraceIdDestinations is provisioned as a non-array value. The value is now ignored, matching the backend, and a warning is shown. ([#418](https://github.com/grafana/grafana-prometheus-datasource/pull/418))
