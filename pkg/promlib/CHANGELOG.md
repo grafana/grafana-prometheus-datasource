@@ -1,5 +1,9 @@
 # promlib
 
+## 0.0.27
+
+🐛 Fix security vulnerability (CVE-2026-78661)
+
 ## 0.0.26
 
 🐛 resource path backend allowlist ([#426](https://github.com/grafana/grafana-prometheus-datasource/pull/426))
