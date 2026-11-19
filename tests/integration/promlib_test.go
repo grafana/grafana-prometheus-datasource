@@ -34,7 +34,7 @@ type session struct {
 }
 
 // newSession serves the Mimir protobuf flag from a fake OFREP host, as Grafana does for a standalone plugin.
-func newSession(t *testing.T, tgt target, flagOn bool) *session {
+func newSession(t testing.TB, tgt target, flagOn bool) *session {
 	t.Helper()
 	host := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = fmt.Fprintf(w, `{"key":"prometheus.mimir-protobuf-responses","value":%t,"reason":"TARGETING_MATCH","variant":"v"}`, flagOn)
