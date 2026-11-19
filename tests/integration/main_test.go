@@ -22,15 +22,16 @@ import (
 )
 
 type target struct {
-	name     string
-	queryURL string
-	writeURL string
+	name            string
+	queryURL        string
+	writeURL        string
+	answersProtobuf bool
 }
 
 var targets = []target{
 	{name: "prometheus", queryURL: "http://localhost:39090", writeURL: "http://localhost:39090/api/v1/write"},
 	{name: "prometheus-2.40", queryURL: "http://localhost:39040", writeURL: "http://localhost:39040/api/v1/write"},
-	{name: "mimir", queryURL: "http://localhost:39009/prometheus", writeURL: "http://localhost:39009/api/v1/push"},
+	{name: "mimir", queryURL: "http://localhost:39009/prometheus", writeURL: "http://localhost:39009/api/v1/push", answersProtobuf: true},
 	{name: "cortex", queryURL: "http://localhost:39010/prometheus", writeURL: "http://localhost:39010/api/v1/push"},
 	{name: "thanos", queryURL: "http://localhost:39904", writeURL: "http://localhost:39291/api/v1/receive"},
 }
