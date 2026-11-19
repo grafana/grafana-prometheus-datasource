@@ -14,14 +14,11 @@ import (
 )
 
 type mockLib struct {
-	queryDataFn         func(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error)
-	callResourceFn      func(ctx context.Context, req *backend.CallResourceRequest, sender backend.CallResourceResponseSender) error
-	getBuildInfoFn      func(ctx context.Context, req promlib.BuildInfoRequest) (*promlib.BuildInfoResponse, error)
-	getHeuristicsFn     func(ctx context.Context, req promlib.HeuristicsRequest) (*promlib.Heuristics, error)
-	checkHealthFn       func(ctx context.Context, req *backend.CheckHealthRequest) (*backend.CheckHealthResult, error)
-	validateAdmissionFn func(ctx context.Context, req *backend.AdmissionRequest) (*backend.ValidationResponse, error)
-	mutateAdmissionFn   func(ctx context.Context, req *backend.AdmissionRequest) (*backend.MutationResponse, error)
-	convertObjectsFn    func(ctx context.Context, req *backend.ConversionRequest) (*backend.ConversionResponse, error)
+	queryDataFn     func(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error)
+	callResourceFn  func(ctx context.Context, req *backend.CallResourceRequest, sender backend.CallResourceResponseSender) error
+	getBuildInfoFn  func(ctx context.Context, req promlib.BuildInfoRequest) (*promlib.BuildInfoResponse, error)
+	getHeuristicsFn func(ctx context.Context, req promlib.HeuristicsRequest) (*promlib.Heuristics, error)
+	checkHealthFn   func(ctx context.Context, req *backend.CheckHealthRequest) (*backend.CheckHealthResult, error)
 }
 
 func (m *mockLib) QueryData(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
@@ -38,15 +35,6 @@ func (m *mockLib) GetHeuristics(ctx context.Context, req promlib.HeuristicsReque
 }
 func (m *mockLib) CheckHealth(ctx context.Context, req *backend.CheckHealthRequest) (*backend.CheckHealthResult, error) {
 	return m.checkHealthFn(ctx, req)
-}
-func (m *mockLib) ValidateAdmission(ctx context.Context, req *backend.AdmissionRequest) (*backend.ValidationResponse, error) {
-	return m.validateAdmissionFn(ctx, req)
-}
-func (m *mockLib) MutateAdmission(ctx context.Context, req *backend.AdmissionRequest) (*backend.MutationResponse, error) {
-	return m.mutateAdmissionFn(ctx, req)
-}
-func (m *mockLib) ConvertObjects(ctx context.Context, req *backend.ConversionRequest) (*backend.ConversionResponse, error) {
-	return m.convertObjectsFn(ctx, req)
 }
 
 func TestProvideService(t *testing.T) {
@@ -147,40 +135,4 @@ func TestCheckHealth_Error(t *testing.T) {
 	}}
 	_, err := svc.CheckHealth(context.Background(), &backend.CheckHealthRequest{})
 	assert.ErrorIs(t, err, wantErr)
-}
-
-func TestValidateAdmission(t *testing.T) {
-	want := &backend.ValidationResponse{Allowed: true}
-	svc := &Service{lib: &mockLib{
-		validateAdmissionFn: func(_ context.Context, _ *backend.AdmissionRequest) (*backend.ValidationResponse, error) {
-			return want, nil
-		},
-	}}
-	got, err := svc.ValidateAdmission(context.Background(), &backend.AdmissionRequest{})
-	require.NoError(t, err)
-	assert.Same(t, want, got)
-}
-
-func TestMutateAdmission(t *testing.T) {
-	want := &backend.MutationResponse{Allowed: true}
-	svc := &Service{lib: &mockLib{
-		mutateAdmissionFn: func(_ context.Context, _ *backend.AdmissionRequest) (*backend.MutationResponse, error) {
-			return want, nil
-		},
-	}}
-	got, err := svc.MutateAdmission(context.Background(), &backend.AdmissionRequest{})
-	require.NoError(t, err)
-	assert.Same(t, want, got)
-}
-
-func TestConvertObjects(t *testing.T) {
-	want := &backend.ConversionResponse{}
-	svc := &Service{lib: &mockLib{
-		convertObjectsFn: func(_ context.Context, _ *backend.ConversionRequest) (*backend.ConversionResponse, error) {
-			return want, nil
-		},
-	}}
-	got, err := svc.ConvertObjects(context.Background(), &backend.ConversionRequest{})
-	require.NoError(t, err)
-	assert.Same(t, want, got)
 }

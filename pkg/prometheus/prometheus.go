@@ -15,9 +15,6 @@ type prometheusLib interface {
 	GetBuildInfo(ctx context.Context, req promlib.BuildInfoRequest) (*promlib.BuildInfoResponse, error)
 	GetHeuristics(ctx context.Context, req promlib.HeuristicsRequest) (*promlib.Heuristics, error)
 	CheckHealth(ctx context.Context, req *backend.CheckHealthRequest) (*backend.CheckHealthResult, error)
-	ValidateAdmission(ctx context.Context, req *backend.AdmissionRequest) (*backend.ValidationResponse, error)
-	MutateAdmission(ctx context.Context, req *backend.AdmissionRequest) (*backend.MutationResponse, error)
-	ConvertObjects(ctx context.Context, req *backend.ConversionRequest) (*backend.ConversionResponse, error)
 }
 
 type Service struct {
@@ -51,15 +48,4 @@ func (s *Service) GetHeuristics(ctx context.Context, req promlib.HeuristicsReque
 func (s *Service) CheckHealth(ctx context.Context, req *backend.CheckHealthRequest) (*backend.CheckHealthResult,
 	error) {
 	return s.lib.CheckHealth(ctx, req)
-}
-
-func (s *Service) ValidateAdmission(ctx context.Context, req *backend.AdmissionRequest) (*backend.ValidationResponse, error) {
-	return s.lib.ValidateAdmission(ctx, req)
-}
-
-func (s *Service) MutateAdmission(ctx context.Context, req *backend.AdmissionRequest) (*backend.MutationResponse, error) {
-	return s.lib.MutateAdmission(ctx, req)
-}
-func (s *Service) ConvertObjects(ctx context.Context, req *backend.ConversionRequest) (*backend.ConversionResponse, error) {
-	return s.lib.ConvertObjects(ctx, req)
 }
