@@ -52,7 +52,9 @@ func (s *QueryData) parseResponse(ctx context.Context, q *models.Query, res *htt
 		// Query requests are always constructed fresh inside the plugin (client.go)
 		// with no external Accept-Encoding, so Go's transparent decompression applies.
 		iter := jsoniter.Parse(jsoniter.ConfigDefault, res.Body, 1024)
-		r := converter.ReadPrometheusStyleResult(iter, converter.Options{})
+		r := converter.ReadPrometheusStyleResult(iter, converter.Options{
+			LongVector: q.LongVector && queryType == models.InstantQueryType,
+		})
 		r.Status = backend.Status(res.StatusCode)
 
 		// Add frame to attach metadata
@@ -62,7 +64,11 @@ func (s *QueryData) parseResponse(ctx context.Context, q *models.Query, res *htt
 
 		// The ExecutedQueryString can be viewed in QueryInspector in UI
 		for i, frame := range r.Frames {
-			addMetadataToMultiFrame(q, frame)
+			if frame.Meta != nil && frame.Meta.Type == data.FrameTypeNumericLong {
+				addMetadataToLongFrame(q, frame)
+			} else {
+				addMetadataToMultiFrame(q, frame)
+			}
 			if i == 0 {
 				frame.Meta.ExecutedQueryString = executedQueryString(q)
 				if frame.Meta.Custom == nil {
@@ -261,6 +267,15 @@ func addMetadataToMultiFrame(q *models.Query, frame *data.Frame) {
 	valueField := frame.Fields[1]
 	if n, ok := valueField.Labels["__name__"]; ok {
 		valueField.Name = n
+	}
+}
+
+// addMetadataToLongFrame sets no DisplayNameFromDS, because every series shares the one value column.
+func addMetadataToLongFrame(q *models.Query, frame *data.Frame) {
+	frame.Fields[0].Config = &data.FieldConfig{Interval: float64(q.Step.Milliseconds())}
+	filterable := true
+	for _, f := range frame.Fields[1 : len(frame.Fields)-1] {
+		f.Config = &data.FieldConfig{Filterable: &filterable}
 	}
 }
 

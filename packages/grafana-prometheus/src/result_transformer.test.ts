@@ -2,6 +2,7 @@
 import {
   cacheFieldDisplayNames,
   createDataFrame,
+  DataFrameType,
   FieldType,
   type DataFrame,
   type DataQueryRequest,
@@ -1503,6 +1504,99 @@ describe('Prometheus Result Transformer', () => {
       expect(transformedTableDataFrames[1].meta).toBeTruthy();
       expect(transformedTableDataFrames[0].meta?.executedQueryString).toEqual(executedQueryForRefA);
       expect(transformedTableDataFrames[1].meta?.executedQueryString).toEqual(executedQueryForRefB);
+    });
+
+    describe('numeric-long frames', () => {
+      interface Sample {
+        labels: Record<string, string>;
+        time: number;
+        value: number;
+      }
+
+      const seriesFrames = (refId: string, samples: Sample[]) =>
+        samples.map(({ labels, time, value }) =>
+          createDataFrame({
+            refId,
+            meta: { type: DataFrameType.NumericMulti, custom: { resultType: 'vector' } },
+            fields: [
+              { name: 'Time', type: FieldType.time, values: [time], config: { interval: 15000 } },
+              { name: 'Value', type: FieldType.number, values: [value], labels },
+            ],
+          })
+        );
+
+      // The backend orders label columns as transformDFToTable does: first seen, sorted within each series.
+      const longFrame = (refId: string, samples: Sample[]) => {
+        const keys = samples.reduce<string[]>(
+          (acc, { labels }) => [
+            ...acc,
+            ...Object.keys(labels)
+              .sort()
+              .filter((key) => !acc.includes(key)),
+          ],
+          []
+        );
+        return createDataFrame({
+          refId,
+          meta: { type: DataFrameType.NumericLong, custom: { resultType: 'vector' } },
+          fields: [
+            { name: 'Time', type: FieldType.time, values: samples.map((s) => s.time), config: { interval: 15000 } },
+            ...keys.map((key) => ({
+              name: key,
+              type: FieldType.string,
+              values: samples.map((s) => s.labels[key] ?? ''),
+              config: { filterable: true },
+            })),
+            { name: 'Value', type: FieldType.number, values: samples.map((s) => s.value) },
+          ],
+        });
+      };
+
+      const shape = (frame: DataFrame) => ({
+        refId: frame.refId,
+        length: frame.length,
+        preferredVisualisationType: frame.meta?.preferredVisualisationType,
+        fields: frame.fields.map(({ name, type, values, config }) => ({ name, type, values: [...values], config })),
+      });
+
+      const ragged: Sample[] = [
+        { labels: { job: 'a' }, time: 1000, value: 1 },
+        { labels: { instance: 'i', job: 'b' }, time: 1000, value: Number.NaN },
+        { labels: { az: 'z' }, time: 1000, value: Number.POSITIVE_INFINITY },
+      ];
+      const unsorted: Sample[] = [
+        { labels: { id: '1' }, time: 3000, value: 1 },
+        { labels: { id: '2' }, time: 1000, value: 2 },
+        { labels: { id: '3' }, time: 2000, value: 3 },
+      ];
+
+      it.each([
+        ['ragged label sets', ragged],
+        ['times out of order', unsorted],
+      ])('builds the same table as one frame per series: %s', (_, samples) => {
+        const fromSeries = transformDFToTable(seriesFrames('A', samples));
+        const fromLong = transformDFToTable([longFrame('A', samples)]);
+
+        expect(fromLong.map(shape)).toEqual(fromSeries.map(shape));
+      });
+
+      it('names the value column by refId across long and per-series frames', () => {
+        const fromSeries = transformDFToTable([...seriesFrames('A', ragged), ...seriesFrames('B', unsorted)]);
+        const fromMixed = transformDFToTable([longFrame('A', ragged), ...seriesFrames('B', unsorted)]);
+
+        expect(fromMixed.map(shape)).toEqual(fromSeries.map(shape));
+        expect(fromMixed.map((frame) => frame.fields[frame.fields.length - 1].name)).toEqual(['Value #A', 'Value #B']);
+      });
+
+      it('keeps per-series frames of the same refId in their own table', () => {
+        const histogram = seriesFrames('A', [{ labels: { job: 'h' }, time: 1000, value: 3 }]);
+        const tables = transformDFToTable([longFrame('A', ragged), ...histogram]);
+
+        expect(tables.map(shape)).toEqual([
+          ...transformDFToTable(seriesFrames('A', ragged)).map(shape),
+          ...transformDFToTable(histogram).map(shape),
+        ]);
+      });
     });
   });
 

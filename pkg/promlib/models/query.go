@@ -173,6 +173,8 @@ type QueryModel struct {
 	// Timezone offset to align start & end time on backend
 	UtcOffsetSec int64  `json:"utcOffsetSec,omitempty"`
 	Interval     string `json:"interval,omitempty"`
+	// Return an instant query result as one numeric-long frame (Time, label columns, Value) instead of one frame per series
+	LongVector bool `json:"longVector,omitempty"`
 }
 
 type TimeRange struct {
@@ -193,6 +195,7 @@ type Query struct {
 	RangeQuery    bool
 	ExemplarQuery bool
 	UtcOffsetSec  int64
+	LongVector    bool
 
 	Scopes []scope.ScopeSpec
 }
@@ -209,6 +212,7 @@ type internalQueryModel struct {
 	// Timezone offset to align start & end time on backend
 	UtcOffsetSec int64  `json:"utcOffsetSec,omitempty"`
 	Interval     string `json:"interval,omitempty"`
+	LongVector   bool   `json:"longVector,omitempty"`
 }
 
 func Parse(ctx context.Context, log glog.Logger, span trace.Span, query backend.DataQuery, dsScrapeInterval string, intervalCalculator intervalv2.Calculator, fromAlert bool) (*Query, error) {
@@ -276,6 +280,8 @@ func Parse(ctx context.Context, log glog.Logger, span trace.Span, query backend.
 	// We never want to run exemplar query for alerting
 	if fromAlert {
 		model.Exemplar = false
+		// Alert evaluation reads one frame per series.
+		model.LongVector = false
 	}
 
 	span.SetAttributes(
@@ -295,6 +301,7 @@ func Parse(ctx context.Context, log glog.Logger, span trace.Span, query backend.
 		RangeQuery:    model.Range,
 		ExemplarQuery: model.Exemplar,
 		UtcOffsetSec:  model.UtcOffsetSec,
+		LongVector:    model.LongVector,
 	}, nil
 }
 
