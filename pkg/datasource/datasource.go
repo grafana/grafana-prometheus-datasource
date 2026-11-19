@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
+	sdkdatasource "github.com/grafana/grafana-plugin-sdk-go/backend/datasource"
 	sdkhttpclient "github.com/grafana/grafana-plugin-sdk-go/backend/httpclient"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
 	"github.com/grafana/grafana-plugin-sdk-go/config"
@@ -11,16 +12,24 @@ import (
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib"
 )
 
-func NewDatasource(ctx context.Context, dsInstanceSettings backend.DataSourceInstanceSettings) (instancemgmt.Instance, error) {
-	plog := backend.NewLoggerWith("logger", "tsdb.prometheus")
-	plog.Debug("Initializing")
-	return &Datasource{
-		Service: promlib.NewService(sdkhttpclient.NewProvider(), plog, nil),
-	}, nil
+// NewInstanceFactory returns the function that datasource.Manage calls to create the instance of each data source.
+func NewInstanceFactory() sdkdatasource.InstanceFactoryFunc {
+	newService := promlib.NewServiceFactory(sdkhttpclient.NewProvider(), backend.NewLoggerWith("logger", "tsdb.prometheus"), nil)
+	return func(ctx context.Context, settings backend.DataSourceInstanceSettings) (instancemgmt.Instance, error) {
+		s, err := newService(ctx, settings)
+		if err != nil {
+			return nil, err
+		}
+		return &Datasource{Service: s}, nil
+	}
 }
 
 type Datasource struct {
 	Service *promlib.Service
+}
+
+func (d *Datasource) Dispose() {
+	d.Service.Dispose()
 }
 
 func (d *Datasource) QueryData(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
