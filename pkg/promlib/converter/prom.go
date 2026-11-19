@@ -107,24 +107,23 @@ l1Fields:
 		}
 	}
 
-	if len(infos) > 0 {
-		warnings = append(warnings, infos...)
-	}
-
-	if len(warnings) > 0 {
-		if len(rsp.Frames) == 0 {
-			rsp.Frames = append(rsp.Frames, data.NewFrame("Warnings"))
-		}
-
-		for _, frame := range rsp.Frames {
-			if frame.Meta == nil {
-				frame.Meta = &data.FrameMeta{}
-			}
-			frame.Meta.Notices = warnings
-		}
-	}
-
+	attachNotices(&rsp, append(warnings, infos...))
 	return rsp
+}
+
+func attachNotices(rsp *backend.DataResponse, notices []data.Notice) {
+	if len(notices) == 0 {
+		return
+	}
+	if len(rsp.Frames) == 0 {
+		rsp.Frames = append(rsp.Frames, data.NewFrame("Warnings"))
+	}
+	for _, frame := range rsp.Frames {
+		if frame.Meta == nil {
+			frame.Meta = &data.FrameMeta{}
+		}
+		frame.Meta.Notices = notices
+	}
 }
 
 func readAnnotations(iter *sdkjsoniter.Iterator, sevLevel data.NoticeSeverity) ([]data.Notice, error) {
@@ -638,8 +637,7 @@ func readMatrixOrVectorMulti(iter *sdkjsoniter.Iterator, resultType string, opt 
 	rsp := backend.DataResponse{}
 	size := 0
 	seriesCount := 0
-	previousHistogramSize := -1
-	histogramCapacityHint := 0
+	histogramHint := newHistogramSizeHint()
 
 	for more, err := iter.ReadArray(); more; more, err = iter.ReadArray() {
 		if err != nil {
@@ -689,7 +687,7 @@ func readMatrixOrVectorMulti(iter *sdkjsoniter.Iterator, resultType string, opt 
 
 			case "histogram":
 				if histogram == nil {
-					histogram = newHistogramInfo(histogramCapacityHint)
+					histogram = newHistogramInfo(histogramHint.size)
 				}
 				err = readHistogram(iter, histogram)
 				if err != nil {
@@ -698,7 +696,7 @@ func readMatrixOrVectorMulti(iter *sdkjsoniter.Iterator, resultType string, opt 
 
 			case "histograms":
 				if histogram == nil {
-					histogram = newHistogramInfo(histogramCapacityHint)
+					histogram = newHistogramInfo(histogramHint.size)
 				}
 				for more, err := iter.ReadArray(); more; more, err = iter.ReadArray() {
 					if err != nil {
@@ -718,41 +716,61 @@ func readMatrixOrVectorMulti(iter *sdkjsoniter.Iterator, resultType string, opt 
 		}
 
 		if histogram != nil {
-			frame := data.NewFrame("",
-				data.NewField("xMax", labels, histogram.times),
-				data.NewField("yMin", labels, histogram.yMins),
-				data.NewField("yMax", labels, histogram.yMaxes),
-				data.NewField("count", labels, histogram.counts),
-				data.NewField("yLayout", labels, histogram.yLayouts),
-			)
-			frame.Meta = &data.FrameMeta{
-				Type: "heatmap-cells",
-			}
-			rsp.Frames = append(rsp.Frames, frame)
-			histogramSize := len(histogram.times)
-			// Require two equal series before preallocating so sharply ragged responses do not overallocate.
-			if histogramSize == previousHistogramSize {
-				histogramCapacityHint = histogramSize
-			} else {
-				histogramCapacityHint = 0
-			}
-			previousHistogramSize = histogramSize
+			rsp.Frames = append(rsp.Frames, newHeatmapFrame(labels, histogram))
+			histogramHint.observe(len(histogram.times))
 		} else {
-			frame := data.NewFrame("", data.NewField(data.TimeSeriesTimeFieldName, nil, tempTimes), data.NewField(data.TimeSeriesValueFieldName, labels, tempValues))
-			frame.Meta = &data.FrameMeta{
-				Type:        data.FrameTypeTimeSeriesMulti,
-				Custom:      resultTypeToCustomMeta(resultType),
-				TypeVersion: data.FrameTypeVersion{0, 1},
-			}
-			if resultType == "vector" {
-				frame.Meta.Type = data.FrameTypeNumericMulti
-			}
-			rsp.Frames = append(rsp.Frames, frame)
+			rsp.Frames = append(rsp.Frames, newSeriesFrame(resultType, labels, tempTimes, tempValues))
 			size = len(tempTimes)
 		}
 	}
 
 	return rsp
+}
+
+func newSeriesFrame(resultType string, labels data.Labels, times []time.Time, values []float64) *data.Frame {
+	frame := data.NewFrame("", data.NewField(data.TimeSeriesTimeFieldName, nil, times), data.NewField(data.TimeSeriesValueFieldName, labels, values))
+	frame.Meta = &data.FrameMeta{
+		Type:        data.FrameTypeTimeSeriesMulti,
+		Custom:      resultTypeToCustomMeta(resultType),
+		TypeVersion: data.FrameTypeVersion{0, 1},
+	}
+	if resultType == "vector" {
+		frame.Meta.Type = data.FrameTypeNumericMulti
+	}
+	return frame
+}
+
+func newHeatmapFrame(labels data.Labels, histogram *histogramInfo) *data.Frame {
+	frame := data.NewFrame("",
+		data.NewField("xMax", labels, histogram.times),
+		data.NewField("yMin", labels, histogram.yMins),
+		data.NewField("yMax", labels, histogram.yMaxes),
+		data.NewField("count", labels, histogram.counts),
+		data.NewField("yLayout", labels, histogram.yLayouts),
+	)
+	frame.Meta = &data.FrameMeta{
+		Type: "heatmap-cells",
+	}
+	return frame
+}
+
+// histogramSizeHint presizes histogram fields only after two series of equal size, so sharply ragged responses do not overallocate.
+type histogramSizeHint struct {
+	previous int
+	size     int
+}
+
+func newHistogramSizeHint() histogramSizeHint {
+	return histogramSizeHint{previous: -1}
+}
+
+func (h *histogramSizeHint) observe(size int) {
+	if size == h.previous {
+		h.size = size
+	} else {
+		h.size = 0
+	}
+	h.previous = size
 }
 
 func readTimeValuePair(iter *sdkjsoniter.Iterator) (time.Time, float64, error) {

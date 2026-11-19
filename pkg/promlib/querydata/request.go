@@ -55,8 +55,9 @@ func New(
 	timeInterval string,
 	plog log.Logger,
 	featureToggles backend.FeatureToggles,
+	clientOpts ...client.Option,
 ) (*QueryData, error) {
-	promClient := client.NewClient(httpClient, httpMethod, settings.URL, queryTimeout)
+	promClient := client.NewClient(httpClient, httpMethod, settings.URL, queryTimeout, clientOpts...)
 
 	// standard deviation sampler is the default for backwards compatibility
 	exemplarSampler := exemplar.NewStandardDeviationSampler
