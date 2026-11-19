@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 	"github.com/grafana/grafana-plugin-sdk-go/config"
 	"github.com/open-feature/go-sdk-contrib/providers/ofrep"
@@ -22,7 +21,11 @@ const (
 	ofrepDefaultCacheTTL = time.Minute
 )
 
-// mimirProtobufResponsesEnabled evaluates flagMimirProtobufResponses for the request's namespace. Any discovery or
+// processEvaluationContext holds no stack, because per-stack contexts at Prometheus traffic cost about 16,000 OFREP
+// requests a second. Rules can target the cluster attribute that the Grafana Cloud relay adds.
+var processEvaluationContext = openfeature.NewEvaluationContext("grafana-prometheus-datasource", nil)
+
+// mimirProtobufResponsesEnabled evaluates flagMimirProtobufResponses for this plugin process. Any discovery or
 // evaluation error turns it off.
 func (f *ofrepFlags) mimirProtobufResponsesEnabled(ctx context.Context, logger log.Logger) bool {
 	of, err := config.GrafanaConfigFromContext(ctx).OpenFeature()
@@ -30,17 +33,7 @@ func (f *ofrepFlags) mimirProtobufResponsesEnabled(ctx context.Context, logger l
 	if err != nil || of.ProviderType != "ofrep" {
 		return false
 	}
-	evalCtx := flagEvaluationContext(backend.PluginConfigFromContext(ctx), of.ContextAttrs)
-	return f.isEnabled(ctx, logger, of, flagMimirProtobufResponses, evalCtx)
-}
-
-// flagEvaluationContext targets the plugin namespace and adds the host's OpenFeature context attributes.
-func flagEvaluationContext(pluginCtx backend.PluginContext, hostAttrs map[string]string) openfeature.EvaluationContext {
-	attrs := make(map[string]any, len(hostAttrs))
-	for k, v := range hostAttrs {
-		attrs[k] = v
-	}
-	return openfeature.NewEvaluationContext(cmp.Or(pluginCtx.Namespace, hostAttrs["namespace"]), attrs)
+	return f.isEnabled(ctx, logger, of, flagMimirProtobufResponses, processEvaluationContext)
 }
 
 // ofrepFlags evaluates flags against the host's OFREP endpoint and caches each answer for the host's TTL. A failed
