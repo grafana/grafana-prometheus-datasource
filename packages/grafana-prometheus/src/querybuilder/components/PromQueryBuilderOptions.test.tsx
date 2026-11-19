@@ -43,6 +43,34 @@ describe('PromQueryBuilderOptions', () => {
     expect(screen.getByLabelText('Both')).toBeChecked();
   });
 
+  // CoreApp.Notebook only exists in newer @grafana/data than the one this package builds against.
+  const NOTEBOOK_APP = 'notebook' as CoreApp;
+
+  it.each([NOTEBOOK_APP, CoreApp.Dashboard, CoreApp.UnifiedAlerting])(
+    'renders a "Both" query without crashing and keeps it selected for %s',
+    async (app) => {
+      setup({ instant: true, range: true }, app);
+
+      await userEvent.click(screen.getByRole('button', { name: /Options/ }));
+
+      expect(screen.getByLabelText('Both')).toBeChecked();
+    }
+  );
+
+  it('does not offer "Both" for Notebook when the query is not already "Both"', async () => {
+    setup({ instant: false, range: true }, NOTEBOOK_APP);
+
+    await userEvent.click(screen.getByRole('button', { name: /Options/ }));
+
+    expect(screen.queryByLabelText('Both')).not.toBeInTheDocument();
+  });
+
+  it('does not crash on a "Both" query when uiOptions.disableTypeBoth is true', () => {
+    setup({ instant: true, range: true }, CoreApp.PanelEditor, { disableTypeBoth: true });
+
+    expect(screen.getByText('Type: Both')).toBeInTheDocument();
+  });
+
   it('Legend format default to Auto', () => {
     setup();
     expect(screen.getByText('Legend: Auto')).toBeInTheDocument();
