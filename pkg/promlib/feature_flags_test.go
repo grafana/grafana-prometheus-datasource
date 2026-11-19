@@ -89,7 +89,7 @@ func TestMimirProtobufResponsesEnabled(t *testing.T) {
 		f := newOFREPFlags()
 		assert.True(t, f.mimirProtobufResponsesEnabled(ctx, logger))
 		assert.True(t, f.mimirProtobufResponsesEnabled(ctx, logger))
-		assert.Equal(t, []map[string]any{{"targetingKey": "stacks-1", "slug": "mystack"}}, host.requests())
+		assert.Equal(t, []map[string]any{{"targetingKey": "grafana-prometheus-datasource"}}, host.requests(), "no stack attributes")
 	})
 
 	t.Run("off when the host serves false", func(t *testing.T) {
@@ -131,21 +131,12 @@ func TestMimirProtobufResponsesEnabled(t *testing.T) {
 		assert.Len(t, host.requests(), 2)
 	})
 
-	t.Run("caches per targeting key", func(t *testing.T) {
+	t.Run("evaluates once for every stack", func(t *testing.T) {
 		host, ctx := ofrepHost(t, "ofrep")
 		f := newOFREPFlags()
 		f.mimirProtobufResponsesEnabled(ctx, logger)
 		f.mimirProtobufResponsesEnabled(backend.WithPluginContext(ctx, backend.PluginContext{Namespace: "stacks-2"}), logger)
-		assert.Len(t, host.requests(), 2)
-	})
-
-	t.Run("falls back to the host namespace attribute", func(t *testing.T) {
-		host, ctx := ofrepHost(t, "ofrep")
-		of, err := config.GrafanaConfigFromContext(ctx).OpenFeature()
-		require.NoError(t, err)
-		ctx = withOpenFeatureConfig(context.Background(), "ofrep", of.URL, `{"namespace":"stacks-3"}`)
-		assert.True(t, newOFREPFlags().mimirProtobufResponsesEnabled(ctx, logger))
-		assert.Equal(t, []map[string]any{{"targetingKey": "stacks-3", "namespace": "stacks-3"}}, host.requests())
+		assert.Len(t, host.requests(), 1)
 	})
 
 	t.Run("a cancelled caller still caches the answer", func(t *testing.T) {
