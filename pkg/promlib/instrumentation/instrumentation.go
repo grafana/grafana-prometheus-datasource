@@ -34,11 +34,7 @@ const (
 )
 
 func UpdateQueryDataMetrics(err error, resp *backend.QueryDataResponse) {
-	status := StatusOK
-	if err != nil {
-		status = StatusError
-	}
-
+	status := backend.RequestStatusFromQueryDataResponse(resp, err).String()
 	errorSource := getErrorSource(err, resp)
 
 	pluginRequestCounter.WithLabelValues(EndpointQueryData, status, errorSource).Inc()
@@ -79,7 +75,13 @@ func getErrorSource(err error, resp *backend.QueryDataResponse) string {
 
 func getErrorSourceForResponse(res backend.DataResponse) string {
 	if res.Error != nil {
-		return PluginSource
+		if res.ErrorSource != backend.ErrorSourceDownstream {
+			return PluginSource
+		}
+		if isAuthStatus(res.Status) {
+			return ExternalSource
+		}
+		return DatabaseSource
 	}
 
 	if res.Status >= 500 {
@@ -87,8 +89,7 @@ func getErrorSourceForResponse(res backend.DataResponse) string {
 	}
 
 	if res.Status >= 400 {
-		// Those error codes are related to authentication and authorization.
-		if res.Status == 401 || res.Status == 402 || res.Status == 403 || res.Status == 407 {
+		if isAuthStatus(res.Status) {
 			return ExternalSource
 		}
 
@@ -96,4 +97,8 @@ func getErrorSourceForResponse(res backend.DataResponse) string {
 	}
 
 	return NoneSource
+}
+
+func isAuthStatus(status backend.Status) bool {
+	return status == 401 || status == 402 || status == 403 || status == 407
 }
