@@ -12,6 +12,7 @@ import (
 	"time"
 
 	apiv1 "github.com/prometheus/client_golang/api/prometheus/v1"
+	"github.com/prometheus/client_golang/prometheus"
 	p "github.com/prometheus/common/model"
 	"github.com/stretchr/testify/require"
 
@@ -373,16 +374,20 @@ func TestPrometheus_parseTimeSeriesResponse(t *testing.T) {
 			t.Run(tc.name+" returns every series", func(t *testing.T) {
 				tctx, err := setup()
 				require.NoError(t, err)
+				before := seriesLimitExceededCount(t)
 				rsp := executeInstantWithConfig(t, tctx, query, qr, map[string]string{"GF_SERIES_LIMIT": tc.limit})
 				require.NoError(t, rsp.Error)
 				require.Len(t, rsp.Frames, tc.wantFrames)
+				require.Equal(t, before, seriesLimitExceededCount(t))
 			})
 		}
 
 		t.Run("below the series count fails the query", func(t *testing.T) {
 			tctx, err := setup()
 			require.NoError(t, err)
+			before := seriesLimitExceededCount(t)
 			rsp := executeInstantWithConfig(t, tctx, query, qr, map[string]string{"GF_SERIES_LIMIT": "2"})
+			require.Equal(t, before+1, seriesLimitExceededCount(t))
 			require.ErrorIs(t, rsp.Error, converter.ErrMaxSeriesExceeded)
 			require.ErrorContains(t, rsp.Error, "more than 2 series")
 			require.Equal(t, backend.ErrorSourceDownstream, rsp.ErrorSource)
@@ -599,6 +604,19 @@ func executeInstantWithConfig(t *testing.T, tctx *testContext, query backend.Dat
 	res, err := tctx.queryData.Execute(config.WithGrafanaConfig(context.Background(), grafanaCfg), &req)
 	require.NoError(t, err)
 	return res.Responses[query.RefID]
+}
+
+func seriesLimitExceededCount(t *testing.T) float64 {
+	t.Helper()
+	families, err := prometheus.DefaultGatherer.Gather()
+	require.NoError(t, err)
+	for _, mf := range families {
+		if mf.GetName() == "grafana_prometheus_plugin_backend_series_limit_exceeded_count" {
+			return mf.GetMetric()[0].GetCounter().GetValue()
+		}
+	}
+	t.Fatal("series limit counter is not registered")
+	return 0
 }
 
 type apiResponse struct {
