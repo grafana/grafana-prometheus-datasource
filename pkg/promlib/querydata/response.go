@@ -2,6 +2,7 @@ package querydata
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,14 +12,32 @@ import (
 	"time"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
+	"github.com/grafana/grafana-plugin-sdk-go/config"
 	"github.com/grafana/grafana-plugin-sdk-go/data"
 	jsoniter "github.com/json-iterator/go"
 
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/converter"
+	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/instrumentation"
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/models"
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/querydata/exemplar"
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/utils"
 )
+
+// seriesLimitConfigKey carries the [dataproxy] series_limit setting from Grafana.
+const seriesLimitConfigKey = "GF_SERIES_LIMIT"
+
+func (s *QueryData) seriesLimit(ctx context.Context) int {
+	raw := config.GrafanaConfigFromContext(ctx).Get(seriesLimitConfigKey)
+	if raw == "" {
+		return 0
+	}
+	limit, err := strconv.Atoi(raw)
+	if err != nil || limit < 0 {
+		s.log.FromContext(ctx).Warn("Ignoring invalid series limit", "key", seriesLimitConfigKey, "value", raw)
+		return 0
+	}
+	return limit
+}
 
 func (s *QueryData) parseResponse(ctx context.Context, q *models.Query, res *http.Response, queryType models.TimeSeriesQueryType) backend.DataResponse {
 	defer func() {
@@ -52,7 +71,10 @@ func (s *QueryData) parseResponse(ctx context.Context, q *models.Query, res *htt
 		// Query requests are always constructed fresh inside the plugin (client.go)
 		// with no external Accept-Encoding, so Go's transparent decompression applies.
 		iter := jsoniter.Parse(jsoniter.ConfigDefault, res.Body, 1024)
-		r := converter.ReadPrometheusStyleResult(iter, converter.Options{})
+		r := converter.ReadPrometheusStyleResult(iter, converter.Options{MaxSeries: s.seriesLimit(ctx)})
+		if errors.Is(r.Error, converter.ErrMaxSeriesExceeded) {
+			instrumentation.UpdateSeriesLimitExceededMetrics()
+		}
 		r.Status = backend.Status(res.StatusCode)
 
 		// Add frame to attach metadata
