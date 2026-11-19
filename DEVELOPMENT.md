@@ -166,6 +166,14 @@ npm run typecheck        # typescript type checking
 mage test                # go backend tests (includes the schema conformance suite)
 ```
 
+The integration tests run promlib against Prometheus, Mimir, Cortex and Thanos in containers. The versions are in `tests/integration/docker-compose.yaml`.
+
+```bash
+docker compose -f tests/integration/docker-compose.yaml up -d
+go test -tags integration -count=1 ./tests/integration/...
+docker compose -f tests/integration/docker-compose.yaml down -v
+```
+
 ---
 
 ## Data source configuration schema
