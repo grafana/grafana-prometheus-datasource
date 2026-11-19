@@ -40,6 +40,13 @@ ruler_storage:
     directory: /data/rules
 limits:
   enable_native_histograms: true
+  # BenchmarkQueryData writes 26,100 new series on every run, at more than the default ingestion rate.
+  max_series_per_metric: 0
+  max_series_per_user: 0
+  max_global_series_per_metric: 0
+  max_global_series_per_user: 0
+  ingestion_rate: 1000000
+  ingestion_burst_size: 2000000
 # Cortex needs explicit addresses when -target lists several modules.
 querier:
   store_gateway_addresses: 127.0.0.1:9095

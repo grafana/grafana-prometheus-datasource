@@ -174,6 +174,11 @@ func write(ctx context.Context, u string, body []byte) error {
 
 func visible(ctx context.Context, queryURL string, want int) error {
 	q := url.Values{"query": {fmt.Sprintf(`count({__name__=~"it_.+",run=%q})`, run)}, "time": {strconv.FormatInt(anchor.Unix(), 10)}}
+	return queryCount(ctx, queryURL, q, want)
+}
+
+// queryCount runs an instant count query and checks that its one result is want.
+func queryCount(ctx context.Context, queryURL string, q url.Values, want int) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, queryURL+"/api/v1/query?"+q.Encode(), nil)
 	if err != nil {
 		return fmt.Errorf("new request: %w", err)
