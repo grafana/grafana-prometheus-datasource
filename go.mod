@@ -9,7 +9,9 @@ require (
 	github.com/grafana/dsconfig/schema v0.0.13
 	github.com/grafana/grafana-plugin-sdk-go v0.302.0
 	github.com/grafana/grafana-prometheus-datasource/pkg/promlib v0.0.22
+	github.com/klauspost/compress v1.20.3
 	github.com/magefile/mage v1.17.2
+	github.com/prometheus/prometheus v0.315.0
 	github.com/stretchr/testify v1.12.1
 	k8s.io/kube-openapi v0.0.0-20260929181212-2cfbdf149b9a
 )
@@ -62,7 +64,6 @@ require (
 	github.com/jaegertracing/jaeger-idl v0.14.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/jszwedko/go-datemath v0.1.1-0.20260113213115-7f666eef0523 // indirect
-	github.com/klauspost/compress v1.20.3 // indirect
 	github.com/klauspost/cpuid/v2 v2.4.2 // indirect
 	github.com/mattetti/filebuffer v1.0.1 // indirect
 	github.com/mattn/go-colorable v0.1.16 // indirect
@@ -83,7 +84,6 @@ require (
 	github.com/prometheus/client_model v0.6.3 // indirect
 	github.com/prometheus/common v0.74.0 // indirect
 	github.com/prometheus/procfs v0.23.0 // indirect
-	github.com/prometheus/prometheus v0.315.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/stretchr/objx v0.7.0 // indirect
 	github.com/unknwon/bra v0.0.0-20200517080246-1e3013ecaff8 // indirect

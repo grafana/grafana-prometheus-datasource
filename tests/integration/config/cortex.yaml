@@ -1,0 +1,47 @@
+auth_enabled: false
+server:
+  http_listen_port: 9009
+  grpc_listen_port: 9095
+  log_level: warn
+distributor:
+  shard_by_all_labels: true
+  ring:
+    kvstore:
+      store: inmemory
+ingester:
+  lifecycler:
+    final_sleep: 0s
+    min_ready_duration: 0s
+    ring:
+      replication_factor: 1
+      kvstore:
+        store: inmemory
+blocks_storage:
+  backend: filesystem
+  filesystem:
+    dir: /data/blocks
+  tsdb:
+    dir: /data/tsdb
+  bucket_store:
+    sync_dir: /data/sync
+compactor:
+  data_dir: /data/compactor
+  sharding_ring:
+    kvstore:
+      store: inmemory
+store_gateway:
+  sharding_ring:
+    replication_factor: 1
+    kvstore:
+      store: inmemory
+ruler_storage:
+  backend: local
+  local:
+    directory: /data/rules
+limits:
+  enable_native_histograms: true
+# Cortex needs explicit addresses when -target lists several modules.
+querier:
+  store_gateway_addresses: 127.0.0.1:9095
+frontend_worker:
+  frontend_address: 127.0.0.1:9095
