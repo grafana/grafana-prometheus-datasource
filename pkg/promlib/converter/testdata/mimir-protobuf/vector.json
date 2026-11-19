@@ -1,0 +1,1 @@
+{"status":"success","data":{"resultType":"vector","result":[{"metric":{"__name__":"up","empty_next":"x","job":"a \"quoted\" \\ value","unicode":"✓ ünïcødé"},"value":[1795097051.127,"42"]},{"metric":{},"value":[1795097051.127,"7"]}]}}

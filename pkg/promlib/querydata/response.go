@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"sort"
 	"strconv"
@@ -39,6 +40,11 @@ func (s *QueryData) seriesLimit(ctx context.Context) int {
 	return limit
 }
 
+func isMimirProtobuf(contentType string) bool {
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	return err == nil && mediaType == converter.MimirProtobufMediaType
+}
+
 func (s *QueryData) parseResponse(ctx context.Context, q *models.Query, res *http.Response, queryType models.TimeSeriesQueryType) backend.DataResponse {
 	defer func() {
 		if err := res.Body.Close(); err != nil {
@@ -70,8 +76,15 @@ func (s *QueryData) parseResponse(ctx context.Context, q *models.Query, res *htt
 		// decompress it.
 		// Query requests are always constructed fresh inside the plugin (client.go)
 		// with no external Accept-Encoding, so Go's transparent decompression applies.
-		iter := jsoniter.Parse(jsoniter.ConfigDefault, res.Body, 1024)
-		r := converter.ReadPrometheusStyleResult(iter, converter.Options{MaxSeries: s.seriesLimit(ctx)})
+		opt := converter.Options{MaxSeries: s.seriesLimit(ctx)}
+		var r backend.DataResponse
+		if isMimirProtobuf(res.Header.Get("Content-Type")) {
+			instrumentation.UpdateQueryResponseFormatMetrics(instrumentation.FormatMimirProtobuf)
+			r = converter.ReadMimirProtobufResult(res.Body, opt)
+		} else {
+			instrumentation.UpdateQueryResponseFormatMetrics(instrumentation.FormatJSON)
+			r = converter.ReadPrometheusStyleResult(jsoniter.Parse(jsoniter.ConfigDefault, res.Body, 1024), opt)
+		}
 		if errors.Is(r.Error, converter.ErrMaxSeriesExceeded) {
 			instrumentation.UpdateSeriesLimitExceededMetrics()
 		}

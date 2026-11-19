@@ -13,6 +13,7 @@ import (
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 
+	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/converter"
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/models"
 )
 
@@ -28,10 +29,30 @@ type Client struct {
 	method       string
 	baseUrl      string
 	queryTimeout string
+	// acceptMimirProtobuf reports, for each instant or range query, whether to accept Mimir's protobuf response.
+	acceptMimirProtobuf func(context.Context) bool
 }
 
-func NewClient(d doer, method, baseUrl, queryTimeout string) *Client {
-	return &Client{doer: d, method: method, baseUrl: baseUrl, queryTimeout: queryTimeout}
+// mimirProtobufAccept prefers Mimir's protobuf response and keeps JSON for servers that do not have it.
+const mimirProtobufAccept = converter.MimirProtobufMediaType + ", application/json;q=0.9"
+
+// Option configures a Client.
+type Option func(*Client)
+
+// WithMimirProtobuf makes instant and range queries accept Mimir's protobuf response, with JSON as the fallback,
+// when enabled returns true for the query's context.
+func WithMimirProtobuf(enabled func(context.Context) bool) Option {
+	return func(c *Client) {
+		c.acceptMimirProtobuf = enabled
+	}
+}
+
+func NewClient(d doer, method, baseUrl, queryTimeout string, opts ...Option) *Client {
+	c := &Client{doer: d, method: method, baseUrl: baseUrl, queryTimeout: queryTimeout}
+	for _, opt := range opts {
+		opt(c)
+	}
+	return c
 }
 
 func (c *Client) QueryRange(ctx context.Context, q *models.Query) (*http.Response, error) {
@@ -50,6 +71,7 @@ func (c *Client) QueryRange(ctx context.Context, q *models.Query) (*http.Respons
 	if err != nil {
 		return nil, err
 	}
+	c.setQueryAccept(req)
 
 	return c.doer.Do(req)
 }
@@ -69,8 +91,15 @@ func (c *Client) QueryInstant(ctx context.Context, q *models.Query) (*http.Respo
 	if err != nil {
 		return nil, err
 	}
+	c.setQueryAccept(req)
 
 	return c.doer.Do(req)
+}
+
+func (c *Client) setQueryAccept(req *http.Request) {
+	if c.acceptMimirProtobuf != nil && c.acceptMimirProtobuf(req.Context()) {
+		req.Header.Set("Accept", mimirProtobufAccept)
+	}
 }
 
 func (c *Client) QueryExemplars(ctx context.Context, q *models.Query) (*http.Response, error) {

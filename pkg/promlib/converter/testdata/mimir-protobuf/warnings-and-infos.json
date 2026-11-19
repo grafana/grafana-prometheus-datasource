@@ -1,0 +1,1 @@
+{"status":"success","data":{"resultType":"matrix","result":[{"metric":{"__name__":"up","empty_next":"x","job":"a \"quoted\" \\ value","unicode":"✓ ünïcødé"},"values":[[1795097051.127,"1"]]}]},"warnings":["w1","w2"],"infos":["PromQL info: metric might not be a counter"]}
