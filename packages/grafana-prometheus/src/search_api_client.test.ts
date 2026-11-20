@@ -24,6 +24,12 @@ const datasource = {
   getAdjustedInterval: jest.fn().mockReturnValue({ start: '1681300260', end: '1681300320' }),
   getTimeRangeParams: jest.fn().mockReturnValue({ start: '1681300260', end: '1681300320' }),
   interpolateString: jest.fn((value: string) => value),
+  buildResourcesDatasourceUrl: jest.fn(
+    (path: string) => `/apis/prometheus.datasource.grafana.app/v0alpha1/resources/${path}`
+  ),
+  getRequestHeaders: jest
+    .fn()
+    .mockReturnValue({ 'X-Plugin-Id': 'prometheus', 'X-Datasource-Uid': 'prometheus/primary' }),
   hasLabelsMatchAPISupport,
 } as unknown as PrometheusDatasource;
 
@@ -58,6 +64,39 @@ describe('SearchApiClient', () => {
     expect(client.metrics).toEqual(['up']);
     expect(client.labelKeys).toEqual(['instance', 'job']);
     expect(chunkedMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('builds the search URL with buildResourcesDatasourceUrl and sends datasource headers', async () => {
+    chunkedMock.mockReturnValue(searchResultsStream([{ name: 'up' }]));
+    const client = new SearchApiClient(jest.fn(), datasource);
+
+    await client.queryMetrics(timeRange, 20);
+
+    expect(datasource.buildResourcesDatasourceUrl).toHaveBeenCalledWith('api/v1/search/metric_names');
+    expect(chunkedMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: 'apis/prometheus.datasource.grafana.app/v0alpha1/resources/api/v1/search/metric_names',
+        headers: expect.objectContaining({ 'X-Plugin-Id': 'prometheus', 'X-Datasource-Uid': 'prometheus/primary' }),
+      })
+    );
+  });
+
+  it('falls back to the legacy URL when buildResourcesDatasourceUrl is unavailable', async () => {
+    chunkedMock.mockReturnValue(searchResultsStream([{ name: 'up' }]));
+    const legacy = {
+      ...datasource,
+      buildResourcesDatasourceUrl: undefined,
+      getRequestHeaders: undefined,
+    } as unknown as PrometheusDatasource;
+    const client = new SearchApiClient(jest.fn(), legacy);
+
+    await client.queryMetrics(timeRange, 20);
+
+    expect(chunkedMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: 'api/datasources/uid/prometheus%2Fprimary/resources/api/v1/search/metric_names',
+      })
+    );
   });
 
   it('adapts metric records and identifies histogram metrics', async () => {
@@ -263,7 +302,7 @@ describe('SearchApiClient', () => {
 
     expect(result.results).toEqual([{ name: 'http_requests_total', score: 0.9, type: 'counter', help: 'Requests' }]);
     expect(chunkedMock).toHaveBeenCalledWith({
-      url: 'api/datasources/uid/prometheus%2Fprimary/resources/api/v1/search/metric_names',
+      url: 'apis/prometheus.datasource.grafana.app/v0alpha1/resources/api/v1/search/metric_names',
       method: 'GET',
       params: {
         start: '1681300260',
@@ -277,7 +316,7 @@ describe('SearchApiClient', () => {
         batch_size: '100',
         include_metadata: true,
       },
-      headers: {},
+      headers: { 'X-Plugin-Id': 'prometheus', 'X-Datasource-Uid': 'prometheus/primary' },
     });
   });
 
@@ -404,7 +443,9 @@ describe('SearchApiClient', () => {
 
     await client.searchMetricNames(timeRange, 'up');
 
-    expect(chunkedMock).toHaveBeenCalledWith(expect.objectContaining({ headers: {} }));
+    expect(chunkedMock).toHaveBeenCalledWith(
+      expect.objectContaining({ headers: expect.not.objectContaining({ 'X-Grafana-Org-Id': expect.anything() }) })
+    );
   });
 
   it.each([
