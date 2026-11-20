@@ -3,10 +3,10 @@ package promlib
 import (
 	"cmp"
 	"context"
-	"maps"
 	"sync"
 	"time"
 
+	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 	"github.com/grafana/grafana-plugin-sdk-go/config"
 	"github.com/open-feature/go-sdk-contrib/providers/ofrep"
@@ -21,10 +21,6 @@ const (
 	ofrepDefaultCacheTTL = time.Minute
 )
 
-// processEvaluationContext holds no stack, because per-stack contexts at Prometheus traffic cost about 16,000 OFREP
-// requests a second. Rules can target the cluster attribute that the Grafana Cloud relay adds.
-var processEvaluationContext = openfeature.NewEvaluationContext("grafana-prometheus-datasource", nil)
-
 // mimirProtobufResponsesEnabled evaluates flagMimirProtobufResponses for this plugin process. Any discovery or
 // evaluation error turns it off.
 func (f *ofrepFlags) mimirProtobufResponsesEnabled(ctx context.Context, logger log.Logger) bool {
@@ -33,7 +29,9 @@ func (f *ofrepFlags) mimirProtobufResponsesEnabled(ctx context.Context, logger l
 	if err != nil || of.ProviderType != "ofrep" {
 		return false
 	}
-	return f.isEnabled(ctx, logger, of, flagMimirProtobufResponses, processEvaluationContext)
+	// The targeting key is the plugin ID and not the stack, because per-stack keys at Prometheus traffic cost about
+	// 16,000 OFREP requests a second. Rules can target each plugin that embeds promlib, and the cluster the relay adds.
+	return f.isEnabled(ctx, logger, of, flagMimirProtobufResponses, backend.PluginConfigFromContext(ctx).PluginID)
 }
 
 // ofrepFlags evaluates flags against the host's OFREP endpoint and caches each answer for the host's TTL. A failed
@@ -54,8 +52,8 @@ func newOFREPFlags() *ofrepFlags {
 	return &ofrepFlags{providers: map[string]*ofrep.Provider{}, answers: map[string]ofrepAnswer{}}
 }
 
-func (f *ofrepFlags) isEnabled(ctx context.Context, logger log.Logger, of config.OpenFeatureConfig, flag string, evalCtx openfeature.EvaluationContext) bool {
-	key := flag + "|" + of.URL + "|" + evalCtx.TargetingKey()
+func (f *ofrepFlags) isEnabled(ctx context.Context, logger log.Logger, of config.OpenFeatureConfig, flag, targetingKey string) bool {
+	key := flag + "|" + of.URL + "|" + targetingKey
 	if a, fresh := f.answer(key); fresh {
 		return a.enabled
 	}
@@ -63,8 +61,7 @@ func (f *ofrepFlags) isEnabled(ctx context.Context, logger log.Logger, of config
 		if a, fresh := f.answer(key); fresh {
 			return a, nil
 		}
-		flat := openfeature.FlattenedContext{openfeature.TargetingKey: evalCtx.TargetingKey()}
-		maps.Copy(flat, evalCtx.Attributes())
+		flat := openfeature.FlattenedContext{openfeature.TargetingKey: targetingKey}
 		// Every caller in the TTL window shares the answer, so one caller's cancellation must not fail it.
 		detail := f.provider(of.URL).BooleanEvaluation(context.WithoutCancel(ctx), flag, false, flat)
 

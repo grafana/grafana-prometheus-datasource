@@ -51,7 +51,7 @@ func newSession(t testing.TB, tgt target, flagOn bool) *session {
 	}
 	s := &session{
 		svc:  promlib.NewService(sdkhttpclient.NewProvider(), sdklog.NewNullLogger(), nil),
-		pCtx: backend.PluginContext{OrgID: 1, Namespace: "stacks-1", GrafanaConfig: cfg, DataSourceInstanceSettings: settings},
+		pCtx: backend.PluginContext{OrgID: 1, PluginID: "prometheus", Namespace: "stacks-1", GrafanaConfig: cfg, DataSourceInstanceSettings: settings},
 	}
 	t.Cleanup(s.svc.Dispose)
 	ctx := config.WithGrafanaConfig(backend.WithPluginContext(t.Context(), s.pCtx), cfg)
