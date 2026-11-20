@@ -97,6 +97,35 @@ func TestService(t *testing.T) {
 		})
 	})
 
+	t.Run("NewServiceFactory sends the same request as NewService", func(t *testing.T) {
+		logger := backend.NewLoggerWith("logger", "test")
+		send := func(t *testing.T, newService func(*sdkhttpclient.Provider) *Service) *http.Request {
+			t.Helper()
+			f := &fakeHTTPClientProvider{}
+			service := newService(getMockPromTestSDKProvider(f))
+			require.NoError(t, service.CallResource(context.Background(), mockRequest(), &fakeSender{}))
+			return f.Roundtripper.Req
+		}
+
+		want := send(t, func(p *sdkhttpclient.Provider) *Service {
+			return NewService(p, logger, mockExtendTransportOptions)
+		})
+		got := send(t, func(p *sdkhttpclient.Provider) *Service {
+			service, err := NewServiceFactory(p, logger, mockExtendTransportOptions)(context.Background(), *mockRequest().PluginContext.DataSourceInstanceSettings)
+			require.NoError(t, err)
+			return service
+		})
+
+		require.Equal(t, want.Method, got.Method)
+		require.Equal(t, want.URL.String(), got.URL.String())
+		require.Equal(t, want.Header, got.Header)
+		wantBody, err := io.ReadAll(want.Body)
+		require.NoError(t, err)
+		gotBody, err := io.ReadAll(got.Body)
+		require.NoError(t, err)
+		require.Equal(t, wantBody, gotBody)
+	})
+
 	t.Run("no extendOptions function provided", func(t *testing.T) {
 		f := &fakeHTTPClientProvider{}
 		httpProvider := getMockPromTestSDKProvider(f)
