@@ -636,6 +636,7 @@ func TestReadMimirProtobufResultMalformed(t *testing.T) {
 		"custom bounds too short":     {Schema: histogram.CustomBucketsSchema, PositiveSpans: []histogram.Span{{Length: 3}}, PositiveBuckets: []float64{1, 2, 3}, CustomValues: []float64{1}},
 		"custom negative offset":      {Schema: histogram.CustomBucketsSchema, PositiveSpans: []histogram.Span{{Offset: -1, Length: 1}}, PositiveBuckets: []float64{1}, CustomValues: []float64{1}},
 		"custom with negative bucket": {Schema: histogram.CustomBucketsSchema, NegativeSpans: []histogram.Span{{Length: 1}}, NegativeBuckets: []float64{1}, CustomValues: []float64{1}},
+		"custom with zero count":      {Schema: histogram.CustomBucketsSchema, ZeroCount: 1, PositiveSpans: []histogram.Span{{Length: 1}}, PositiveBuckets: []float64{1}, CustomValues: []float64{1}},
 	}
 	for name, h := range badHistograms {
 		t.Run(name, func(t *testing.T) {

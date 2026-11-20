@@ -454,7 +454,7 @@ func bucketBoundaries(b histogram.Bucket[float64]) int8 {
 	}
 }
 
-// checkHistogramLayout rejects a histogram whose spans, buckets and custom bounds would make bucket iteration panic.
+// checkHistogramLayout rejects a histogram that would make bucket iteration panic.
 func checkHistogramLayout(fh *histogram.FloatHistogram) error {
 	spanBuckets := func(spans []histogram.Span) int {
 		n := 0
@@ -469,6 +469,9 @@ func checkHistogramLayout(fh *histogram.FloatHistogram) error {
 			return nil
 		}
 	case histogram.IsCustomBucketsSchema(fh.Schema):
+		if fh.ZeroCount != 0 {
+			return fmt.Errorf("%w: histogram with custom buckets has a zero count", errMalformedProtobuf)
+		}
 		if len(fh.NegativeSpans) > 0 || len(fh.NegativeBuckets) > 0 || spanBuckets(fh.PositiveSpans) != len(fh.PositiveBuckets) {
 			break
 		}
