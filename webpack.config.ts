@@ -7,6 +7,7 @@ import CopyWebpackPlugin from 'copy-webpack-plugin';
 
 
 import grafanaConfig, { Env } from './.config/webpack/webpack.config';
+import { schemaCopyPatterns } from './scripts/schema-copy-patterns';
 
 // Resolve packages via Node's own resolution algorithm instead of assuming a
 // fixed root `node_modules/<pkg>` path. Hoisting layout differs across
@@ -46,14 +47,8 @@ const config = async (env: Env): Promise<Configuration> => {
       // TODO: remove once grafana/plugin-tools@951defa ships and this plugin runs
       //  `npx @grafana/create-plugin@latest update` (switches to react/jsx-runtime).
       new webpack.ProvidePlugin({ React: 'react' }),
-      new CopyWebpackPlugin({
-        patterns: [
-          { from: '../pkg/schema/dsconfig.json', to: './schema/dsconfig.json' },
-          { from: '../pkg/schema/schema.gen.json', to: './schema/v0alpha1.json' },
-          { from: '../pkg/schema/settings.gen.json', to: './schema/v0alpha1/settings.json' },
-          { from: '../pkg/schema/settings.examples.gen.json', to: './schema/v0alpha1/settings.examples.json' },
-        ],
-      }),
+      // Schema files for dist/schema, including the query type schema.
+      new CopyWebpackPlugin({ patterns: schemaCopyPatterns }),
     ],
   });
 };
