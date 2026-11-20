@@ -249,3 +249,39 @@ func assertNumericStringValues(t *testing.T, field *data.Field) {
 	assert.Equal(t, math.Inf(1), field.At(3))
 	assert.Equal(t, math.Inf(-1), field.At(4))
 }
+
+func TestReadPrometheusStyleResultMaxSeries(t *testing.T) {
+	read := func(t *testing.T, name string, maxSeries int) backend.DataResponse {
+		t.Helper()
+		// nolint:gosec
+		f, err := os.Open(path.Join("testdata", name+".json"))
+		require.NoError(t, err)
+		defer func() { _ = f.Close() }()
+		return ReadPrometheusStyleResult(jsoniter.Parse(sdkjsoniter.ConfigDefault, f, 1024), Options{MaxSeries: maxSeries})
+	}
+
+	t.Run("series count at the limit is returned in full", func(t *testing.T) {
+		rsp := read(t, "prom-vector", 5)
+		require.NoError(t, rsp.Error)
+		require.Len(t, rsp.Frames, 5)
+	})
+
+	t.Run("zero means no limit", func(t *testing.T) {
+		rsp := read(t, "prom-vector", 0)
+		require.NoError(t, rsp.Error)
+		require.Len(t, rsp.Frames, 5)
+	})
+
+	t.Run("series count over the limit fails without frames", func(t *testing.T) {
+		for _, name := range []string{"prom-vector", "prom-matrix", "prom-matrix-histogram-partitioned"} {
+			t.Run(name, func(t *testing.T) {
+				rsp := read(t, name, 1)
+				require.ErrorIs(t, rsp.Error, ErrMaxSeriesExceeded)
+				require.ErrorContains(t, rsp.Error, "more than 1 series")
+				require.ErrorContains(t, rsp.Error, "err-prometheus-max-series-per-query")
+				require.Equal(t, backend.ErrorSourceDownstream, rsp.ErrorSource)
+				require.Empty(t, rsp.Frames)
+			})
+		}
+	})
+}

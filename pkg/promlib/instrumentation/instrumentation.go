@@ -18,6 +18,12 @@ var (
 		Name:      "prometheus_plugin_backend_jsondata_lenient_type_count",
 		Help:      "The total amount of datasource jsonData values that did not match their declared type",
 	}, []string{"from", "to", "outcome"})
+
+	seriesLimitExceededCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: "grafana",
+		Name:      "prometheus_plugin_backend_series_limit_exceeded_count",
+		Help:      "The total amount of query results that held more series than the series limit",
+	})
 )
 
 const (
@@ -48,6 +54,11 @@ func UpdateQueryDataMetrics(err error, resp *backend.QueryDataResponse) {
 // type. outcome is "coerced" when the value could still be read, "dropped" when it could not.
 func UpdateJsonDataLenientTypeMetrics(fromValueType, toValueType, outcome string) {
 	jsonDataLenientTypeCounter.WithLabelValues(fromValueType, toValueType, outcome).Inc()
+}
+
+// UpdateSeriesLimitExceededMetrics records a query result that held more series than the series limit.
+func UpdateSeriesLimitExceededMetrics() {
+	seriesLimitExceededCounter.Inc()
 }
 
 func getErrorSource(err error, resp *backend.QueryDataResponse) string {
