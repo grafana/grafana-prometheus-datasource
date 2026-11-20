@@ -22,15 +22,16 @@ import (
 )
 
 type target struct {
-	name     string
-	queryURL string
-	writeURL string
+	name            string
+	queryURL        string
+	writeURL        string
+	answersProtobuf bool
 }
 
 var targets = []target{
 	{name: "prometheus", queryURL: "http://localhost:39090", writeURL: "http://localhost:39090/api/v1/write"},
 	{name: "prometheus-2.40", queryURL: "http://localhost:39040", writeURL: "http://localhost:39040/api/v1/write"},
-	{name: "mimir", queryURL: "http://localhost:39009/prometheus", writeURL: "http://localhost:39009/api/v1/push"},
+	{name: "mimir", queryURL: "http://localhost:39009/prometheus", writeURL: "http://localhost:39009/api/v1/push", answersProtobuf: true},
 	{name: "cortex", queryURL: "http://localhost:39010/prometheus", writeURL: "http://localhost:39010/api/v1/push"},
 	{name: "thanos", queryURL: "http://localhost:39904", writeURL: "http://localhost:39291/api/v1/receive"},
 }
@@ -173,6 +174,11 @@ func write(ctx context.Context, u string, body []byte) error {
 
 func visible(ctx context.Context, queryURL string, want int) error {
 	q := url.Values{"query": {fmt.Sprintf(`count({__name__=~"it_.+",run=%q})`, run)}, "time": {strconv.FormatInt(anchor.Unix(), 10)}}
+	return queryCount(ctx, queryURL, q, want)
+}
+
+// queryCount runs an instant count query and checks that its one result is want.
+func queryCount(ctx context.Context, queryURL string, q url.Values, want int) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, queryURL+"/api/v1/query?"+q.Encode(), nil)
 	if err != nil {
 		return fmt.Errorf("new request: %w", err)

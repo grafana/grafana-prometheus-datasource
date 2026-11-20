@@ -41,3 +41,8 @@ ruler_storage:
     dir: /data/rules
 limits:
   native_histograms_ingestion_enabled: true
+  # BenchmarkQueryData writes 26,100 new series on every run, at more than the default ingestion rate.
+  max_global_series_per_user: 0
+  max_global_series_per_metric: 0
+  ingestion_rate: 1000000
+  ingestion_burst_size: 2000000

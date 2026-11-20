@@ -193,3 +193,40 @@ func TestClient(t *testing.T) {
 		})
 	})
 }
+
+func TestClientMimirProtobufAccept(t *testing.T) {
+	q := &models.Query{Expr: "up", Start: time.Unix(0, 0), End: time.Unix(60, 0), Step: time.Second}
+	calls := map[string]func(*Client) (*http.Response, error){
+		"range":   func(c *Client) (*http.Response, error) { return c.QueryRange(context.Background(), q) },
+		"instant": func(c *Client) (*http.Response, error) { return c.QueryInstant(context.Background(), q) },
+		"exemplars": func(c *Client) (*http.Response, error) {
+			return c.QueryExemplars(context.Background(), q)
+		},
+		"resource": func(c *Client) (*http.Response, error) {
+			return c.QueryResource(context.Background(), &backend.CallResourceRequest{Path: "api/v1/query", Method: http.MethodGet, URL: "api/v1/query?query=up"})
+		},
+	}
+	tests := []struct {
+		name    string
+		opts    []Option
+		accepts map[string]bool
+	}{
+		{name: "without the option", accepts: map[string]bool{}},
+		{name: "option off", opts: []Option{WithMimirProtobuf(func(context.Context) bool { return false })}, accepts: map[string]bool{}},
+		{name: "option on", opts: []Option{WithMimirProtobuf(func(context.Context) bool { return true })}, accepts: map[string]bool{"range": true, "instant": true}},
+	}
+	for _, tt := range tests {
+		for name, call := range calls {
+			t.Run(tt.name+"/"+name, func(t *testing.T) {
+				doer := &MockDoer{}
+				_, err := call(NewClient(doer, http.MethodPost, "http://localhost:9090", "", tt.opts...))
+				require.NoError(t, err)
+				want := ""
+				if tt.accepts[name] {
+					want = "application/vnd.mimir.queryresponse+protobuf, application/json;q=0.9"
+				}
+				require.Equal(t, want, doer.Req.Header.Get("Accept"))
+			})
+		}
+	}
+}

@@ -174,6 +174,13 @@ go test -tags integration -count=1 ./tests/integration/...
 docker compose -f tests/integration/docker-compose.yaml down -v
 ```
 
+`BenchmarkQueryData` runs the same backends with larger, prod-shaped results, with the Mimir protobuf flag off and on. Compare the flag with `benchstat`:
+
+```bash
+go test -tags integration -run '^$' -bench BenchmarkQueryData -benchmem -count=6 ./tests/integration/... > bench.txt
+benchstat -col /flag bench.txt
+```
+
 ---
 
 ## Data source configuration schema
