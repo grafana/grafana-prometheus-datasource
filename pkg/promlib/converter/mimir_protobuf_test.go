@@ -589,6 +589,28 @@ func randomHistogram(rnd *rand.Rand) *histogram.FloatHistogram {
 	return h
 }
 
+func TestEachBucketMatchesAllBucketIterator(t *testing.T) {
+	histograms := []*histogram.FloatHistogram{
+		exponentialHistogram(),
+		customBucketsHistogram(),
+		{Schema: 0, ZeroThreshold: 0.75, ZeroCount: 1, PositiveSpans: []histogram.Span{{Offset: -1, Length: 3}}, PositiveBuckets: []float64{1, 2, 3}, NegativeSpans: []histogram.Span{{Offset: -1, Length: 3}}, NegativeBuckets: []float64{4, 5, 6}},
+		{Schema: -4, PositiveSpans: []histogram.Span{{Offset: 60, Length: 6}}, PositiveBuckets: []float64{1, 2, 3, 4, 5, 6}},
+		{Schema: 8},
+	}
+	rnd := rand.New(rand.NewPCG(5, 6))
+	for range 500 {
+		histograms = append(histograms, randomHistogram(rnd))
+	}
+	for i, h := range histograms {
+		var want, got []histogram.Bucket[float64]
+		for it := h.AllBucketIterator(); it.Next(); {
+			want = append(want, it.At())
+		}
+		eachBucket(h, func(b histogram.Bucket[float64]) { got = append(got, b) })
+		require.Equal(t, want, got, "histogram %d: %v", i, h)
+	}
+}
+
 func TestReadMimirProtobufResultSeriesLimit(t *testing.T) {
 	series := []testSeries{
 		{labels: []string{"a", "1"}, samples: []testSample{{1, 1}}},
@@ -709,15 +731,27 @@ func withHistograms(r testResponse) testResponse {
 }
 
 func TestReadMimirProtobufResultAllocs(t *testing.T) {
-	r := promShapedResponse("matrix", 100, 60, 10)
-	pb := r.protobuf()
-	requireDecodersAgree(t, r, Options{})
-	allocs := testing.AllocsPerRun(20, func() {
-		_ = ReadMimirProtobufResult(bytes.NewReader(pb), Options{})
-	})
-	perSeries := allocs / 100
-	t.Logf("%.1f allocations per series", perSeries)
-	require.LessOrEqual(t, perSeries, 32.0, "the JSON decoder makes 65 allocations per series for this response")
+	tests := []struct {
+		name     string
+		response testResponse
+		max      float64
+		json     int
+	}{
+		{name: "floats", response: promShapedResponse("matrix", 100, 60, 10), max: 32, json: 65},
+		{name: "histograms", response: withHistograms(promShapedResponse("matrix", 100, 60, 10)), max: 48, json: 277},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pb := tt.response.protobuf()
+			requireDecodersAgree(t, tt.response, Options{})
+			allocs := testing.AllocsPerRun(20, func() {
+				_ = ReadMimirProtobufResult(bytes.NewReader(pb), Options{})
+			})
+			perSeries := allocs / 100
+			t.Logf("%.1f allocations per series", perSeries)
+			require.LessOrEqual(t, perSeries, tt.max, "the JSON decoder makes %d allocations per series for this response", tt.json)
+		})
+	}
 }
 
 // The testdata/mimir-protobuf fixtures are the same responses written by Mimir's jsonFormatter and ProtobufFormatter
