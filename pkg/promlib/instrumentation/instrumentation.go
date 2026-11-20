@@ -75,6 +75,9 @@ func getErrorSource(err error, resp *backend.QueryDataResponse) string {
 
 func getErrorSourceForResponse(res backend.DataResponse) string {
 	if res.Error != nil {
+		if backend.RequestStatusFromError(res.Error) == backend.RequestStatusCancelled {
+			return NoneSource
+		}
 		if res.ErrorSource != backend.ErrorSourceDownstream {
 			return PluginSource
 		}

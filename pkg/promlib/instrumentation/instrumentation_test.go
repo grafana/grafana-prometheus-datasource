@@ -138,6 +138,9 @@ func TestGetErrorSource(t *testing.T) {
 }
 
 func TestUpdateQueryDataMetricsStatus(t *testing.T) {
+	succeeded := backend.DataResponse{Status: backend.StatusOK}
+	failed := backend.DataResponse{Error: fmt.Errorf("bad_data"), ErrorSource: backend.ErrorSourceDownstream, Status: backend.StatusBadRequest}
+	cancelled := backend.DataResponse{Error: context.Canceled, ErrorSource: backend.ErrorSourceDownstream, Status: backend.StatusBadGateway}
 	tests := []struct {
 		name       string
 		err        error
@@ -147,21 +150,33 @@ func TestUpdateQueryDataMetricsStatus(t *testing.T) {
 	}{
 		{
 			name:       "a failed query",
-			resp:       &backend.QueryDataResponse{Responses: backend.Responses{"A": {Error: fmt.Errorf("bad_data"), ErrorSource: backend.ErrorSourceDownstream, Status: backend.StatusBadRequest}}},
+			resp:       &backend.QueryDataResponse{Responses: backend.Responses{"A": failed}},
 			wantStatus: "error",
 			wantSource: DatabaseSource,
 		},
 		{
 			name:       "a cancelled query",
-			resp:       &backend.QueryDataResponse{Responses: backend.Responses{"A": {Error: context.Canceled, ErrorSource: backend.ErrorSourceDownstream}}},
+			resp:       &backend.QueryDataResponse{Responses: backend.Responses{"A": cancelled}},
 			wantStatus: "cancelled",
-			wantSource: DatabaseSource,
+			wantSource: NoneSource,
 		},
 		{
 			name:       "a successful query",
-			resp:       &backend.QueryDataResponse{Responses: backend.Responses{"A": {Status: backend.StatusOK}}},
+			resp:       &backend.QueryDataResponse{Responses: backend.Responses{"A": succeeded}},
 			wantStatus: "ok",
 			wantSource: NoneSource,
+		},
+		{
+			name:       "a successful query and a failed query",
+			resp:       &backend.QueryDataResponse{Responses: backend.Responses{"A": succeeded, "B": failed}},
+			wantStatus: "error",
+			wantSource: DatabaseSource,
+		},
+		{
+			name:       "a cancelled query and a failed query",
+			resp:       &backend.QueryDataResponse{Responses: backend.Responses{"A": cancelled, "B": failed}},
+			wantStatus: "error",
+			wantSource: DatabaseSource,
 		},
 		{
 			name:       "a request error",
