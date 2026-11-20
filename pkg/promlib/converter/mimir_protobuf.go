@@ -425,19 +425,43 @@ func (d *seriesDecoder) appendBuckets(info *histogramInfo, ts int64, b []byte) e
 	}
 
 	t := time.UnixMilli(ts).UTC()
-	it := fh.AllBucketIterator()
-	for it.Next() {
-		bucket := it.At()
+	eachBucket(fh, func(bucket histogram.Bucket[float64]) {
 		if bucket.Count == 0 {
-			continue
+			return
 		}
 		info.times = append(info.times, t)
 		info.yLayouts = append(info.yLayouts, bucketBoundaries(bucket))
 		info.yMins = append(info.yMins, canonicalNaN(bucket.Lower))
 		info.yMaxes = append(info.yMaxes, canonicalNaN(bucket.Upper))
 		info.counts = append(info.counts, canonicalNaN(bucket.Count))
-	}
+	})
 	return nil
+}
+
+// eachBucket calls fn for each bucket that FloatHistogram.AllBucketIterator yields. That iterator escapes to the heap,
+// and the two iterators below inline and stay on the stack.
+func eachBucket(fh *histogram.FloatHistogram, fn func(histogram.Bucket[float64])) {
+	negative := fh.NegativeReverseBucketIterator()
+	for negative.Next() {
+		fn(trimToZeroBucket(negative.At(), fh.ZeroThreshold))
+	}
+	if fh.ZeroCount > 0 {
+		fn(fh.ZeroBucket())
+	}
+	positive := fh.PositiveBucketIterator()
+	for positive.Next() {
+		fn(trimToZeroBucket(positive.At(), fh.ZeroThreshold))
+	}
+}
+
+func trimToZeroBucket(b histogram.Bucket[float64], zeroThreshold float64) histogram.Bucket[float64] {
+	switch {
+	case b.Lower > 0 && b.Lower < zeroThreshold:
+		b.Lower = zeroThreshold
+	case b.Upper < 0 && b.Upper > -zeroThreshold:
+		b.Upper = -zeroThreshold
+	}
+	return b
 }
 
 // bucketBoundaries is the boundary rule that the JSON response gives each bucket.
