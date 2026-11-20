@@ -10,6 +10,7 @@ import { type GrafanaTheme2 } from '@grafana/data';
 import { selectors } from '@grafana/e2e-selectors';
 import { type Monaco, type monacoTypes, ReactMonacoEditor, useTheme2 } from '@grafana/ui';
 
+import { isQueryCoauthoringEditorHost } from '../../query_coauthoring/queryCoauthoringContracts';
 import { type Props } from './MonacoQueryFieldProps';
 import { getOverrideServices } from './getOverrideServices';
 import { DataProvider } from './monaco-completion-provider/data_provider';
@@ -109,6 +110,7 @@ const getStyles = (theme: GrafanaTheme2, placeholder: string) => {
         opacity: 0.6,
       },
     }),
+    coauthoringChange: css({ backgroundColor: theme.colors.action.selected }),
     coauthoringPortal: css({
       zIndex: theme.zIndex.portal,
     }),
@@ -131,10 +133,13 @@ const MonacoQueryField = (props: Props) => {
     datasource,
     timeRange,
     createQueryForCoauthoring,
+    queryCoauthoring,
     unstable_queryEditorCoauthoringV1,
     unstable_queryEditorInsertionV1,
   } = props;
 
+  const externalQueryRef = useLatest(initialValue);
+  const v2ActiveRef = useLatest(isQueryCoauthoringEditorHost(queryCoauthoring));
   const lpRef = useLatest(languageProvider);
   const historyRef = useLatest(history);
   const onRunQueryRef = useLatest(onRunQuery);
@@ -151,6 +156,8 @@ const MonacoQueryField = (props: Props) => {
     onManualQueryChange: onBlur,
     portalClassName: styles.coauthoringPortal,
     registrar: unstable_queryEditorCoauthoringV1,
+    host: queryCoauthoring,
+    changeClassName: styles.coauthoringChange,
     timeRange,
     widgetId: `prometheus-query-coauthoring-${id}`,
   });
@@ -184,6 +191,7 @@ const MonacoQueryField = (props: Props) => {
           ensurePromQL(monaco);
         }}
         onMount={(editor, monaco) => {
+          autocompleteDisposeFun.current?.();
           attachCoauthoring(editor, monaco);
           attachInsertion(editor);
 
@@ -191,7 +199,10 @@ const MonacoQueryField = (props: Props) => {
           // we setup on-blur
           editor.onDidBlurEditorWidget(() => {
             isEditorFocused.set(false);
-            onBlurRef.current(editor.getValue());
+            const value = editor.getValue();
+            if (!v2ActiveRef.current || value !== externalQueryRef.current) {
+              onBlurRef.current(value);
+            }
           });
           editor.onDidFocusEditorText(() => {
             isEditorFocused.set(true);
