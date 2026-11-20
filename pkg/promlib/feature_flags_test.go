@@ -69,7 +69,7 @@ func ofrepHost(t *testing.T, providerType string) (*fakeOFREP, context.Context) 
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)
 	ctx := withOpenFeatureConfig(context.Background(), providerType, server.URL, `{"slug":"mystack"}`)
-	return host, backend.WithPluginContext(ctx, backend.PluginContext{Namespace: "stacks-1"})
+	return host, backend.WithPluginContext(ctx, backend.PluginContext{PluginID: "prometheus", Namespace: "stacks-1"})
 }
 
 func expireAnswers(f *ofrepFlags) {
@@ -89,7 +89,15 @@ func TestMimirProtobufResponsesEnabled(t *testing.T) {
 		f := newOFREPFlags()
 		assert.True(t, f.mimirProtobufResponsesEnabled(ctx, logger))
 		assert.True(t, f.mimirProtobufResponsesEnabled(ctx, logger))
-		assert.Equal(t, []map[string]any{{"targetingKey": "grafana-prometheus-datasource"}}, host.requests(), "no stack attributes")
+		assert.Equal(t, []map[string]any{{"targetingKey": "prometheus"}}, host.requests(), "no stack attributes")
+	})
+
+	t.Run("each plugin that embeds promlib evaluates under its own plugin ID", func(t *testing.T) {
+		host, ctx := ofrepHost(t, "ofrep")
+		f := newOFREPFlags()
+		f.mimirProtobufResponsesEnabled(ctx, logger)
+		f.mimirProtobufResponsesEnabled(backend.WithPluginContext(ctx, backend.PluginContext{PluginID: "grafana-amazonprometheus-datasource", Namespace: "stacks-1"}), logger)
+		assert.Equal(t, []map[string]any{{"targetingKey": "prometheus"}, {"targetingKey": "grafana-amazonprometheus-datasource"}}, host.requests())
 	})
 
 	t.Run("off when the host serves false", func(t *testing.T) {
@@ -135,7 +143,7 @@ func TestMimirProtobufResponsesEnabled(t *testing.T) {
 		host, ctx := ofrepHost(t, "ofrep")
 		f := newOFREPFlags()
 		f.mimirProtobufResponsesEnabled(ctx, logger)
-		f.mimirProtobufResponsesEnabled(backend.WithPluginContext(ctx, backend.PluginContext{Namespace: "stacks-2"}), logger)
+		f.mimirProtobufResponsesEnabled(backend.WithPluginContext(ctx, backend.PluginContext{PluginID: "prometheus", Namespace: "stacks-2"}), logger)
 		assert.Len(t, host.requests(), 1)
 	})
 
