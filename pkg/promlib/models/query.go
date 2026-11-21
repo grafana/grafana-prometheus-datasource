@@ -175,6 +175,9 @@ type QueryModel struct {
 	Interval     string `json:"interval,omitempty"`
 	// Return an instant query result as one numeric-long frame (Time, label columns, Value) instead of one frame per series
 	LongVector bool `json:"longVector,omitempty"`
+	// Set by the Grafana alerting scheduler, never by the frontend: return an instant alert query as one numeric-long frame.
+	// Alert queries ignore longVector.
+	AlertingNumericLong bool `json:"alertingNumericLong,omitempty"`
 }
 
 type TimeRange struct {
@@ -196,6 +199,8 @@ type Query struct {
 	ExemplarQuery bool
 	UtcOffsetSec  int64
 	LongVector    bool
+	// PerSeriesIfHistogram keeps one frame per series for a LongVector result that holds a native histogram sample.
+	PerSeriesIfHistogram bool
 
 	Scopes []scope.ScopeSpec
 }
@@ -210,9 +215,10 @@ type internalQueryModel struct {
 
 	// The following properties may be part of the request payload, however they are not saved in panel JSON
 	// Timezone offset to align start & end time on backend
-	UtcOffsetSec int64  `json:"utcOffsetSec,omitempty"`
-	Interval     string `json:"interval,omitempty"`
-	LongVector   bool   `json:"longVector,omitempty"`
+	UtcOffsetSec        int64  `json:"utcOffsetSec,omitempty"`
+	Interval            string `json:"interval,omitempty"`
+	LongVector          bool   `json:"longVector,omitempty"`
+	AlertingNumericLong bool   `json:"alertingNumericLong,omitempty"`
 }
 
 func Parse(ctx context.Context, log glog.Logger, span trace.Span, query backend.DataQuery, dsScrapeInterval string, intervalCalculator intervalv2.Calculator, fromAlert bool) (*Query, error) {
@@ -280,8 +286,8 @@ func Parse(ctx context.Context, log glog.Logger, span trace.Span, query backend.
 	// We never want to run exemplar query for alerting
 	if fromAlert {
 		model.Exemplar = false
-		// Alert evaluation reads one frame per series.
-		model.LongVector = false
+		// Only the alerting scheduler sets alertingNumericLong, so a longVector copied into a rule keeps one frame per series.
+		model.LongVector = model.AlertingNumericLong
 	}
 
 	span.SetAttributes(
@@ -291,17 +297,18 @@ func Parse(ctx context.Context, log glog.Logger, span trace.Span, query backend.
 	)
 
 	return &Query{
-		Expr:          expr,
-		Step:          calculatedStep,
-		LegendFormat:  model.LegendFormat,
-		Start:         query.TimeRange.From,
-		End:           query.TimeRange.To,
-		RefId:         query.RefID,
-		InstantQuery:  model.Instant,
-		RangeQuery:    model.Range,
-		ExemplarQuery: model.Exemplar,
-		UtcOffsetSec:  model.UtcOffsetSec,
-		LongVector:    model.LongVector,
+		Expr:                 expr,
+		Step:                 calculatedStep,
+		LegendFormat:         model.LegendFormat,
+		Start:                query.TimeRange.From,
+		End:                  query.TimeRange.To,
+		RefId:                query.RefID,
+		InstantQuery:         model.Instant,
+		RangeQuery:           model.Range,
+		ExemplarQuery:        model.Exemplar,
+		UtcOffsetSec:         model.UtcOffsetSec,
+		LongVector:           model.LongVector,
+		PerSeriesIfHistogram: fromAlert,
 	}, nil
 }
 

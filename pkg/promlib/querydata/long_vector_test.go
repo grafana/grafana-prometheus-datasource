@@ -81,12 +81,54 @@ func TestLongVector(t *testing.T) {
 		require.Equal(t, data.FrameTypeTimeSeriesMulti, frames[0].Meta.Type)
 	})
 
-	t.Run("alerting request ignores the opt-in", func(t *testing.T) {
+	fromAlert := map[string]string{"FromAlert": "true"}
+	frameTypes := func(frames data.Frames) []data.FrameType {
+		types := make([]data.FrameType, 0, len(frames))
+		for _, f := range frames {
+			types = append(types, f.Meta.Type)
+		}
+		return types
+	}
+
+	t.Run("alerting request ignores a plain longVector", func(t *testing.T) {
 		tctx, err := setup()
 		require.NoError(t, err)
-		frames, err := executeWithHeaders(tctx, query(`{"refId":"A","expr":"up","instant":true,"range":false,"format":"table","longVector":true}`), nil, vector, nil, map[string]string{"FromAlert": "true"})
+		frames, err := executeWithHeaders(tctx, query(`{"refId":"A","expr":"up","instant":true,"range":false,"format":"table","longVector":true}`), nil, vector, nil, fromAlert)
 		require.NoError(t, err)
-		require.Len(t, frames, 2)
-		require.Equal(t, data.FrameTypeNumericMulti, frames[0].Meta.Type)
+		require.Equal(t, []data.FrameType{data.FrameTypeNumericMulti, data.FrameTypeNumericMulti}, frameTypes(frames))
+	})
+
+	t.Run("alerting request with alertingNumericLong returns one long frame", func(t *testing.T) {
+		tctx, err := setup()
+		require.NoError(t, err)
+		frames, err := executeWithHeaders(tctx, query(`{"refId":"A","expr":"up","instant":true,"range":false,"alertingNumericLong":true}`), nil, vector, nil, fromAlert)
+		require.NoError(t, err)
+		require.Equal(t, []data.FrameType{data.FrameTypeNumericLong}, frameTypes(frames))
+		require.Equal(t, []string{"Time", "__name__", "job", "instance", "Value"}, fieldNames(frames[0]))
+	})
+
+	t.Run("alertingNumericLong outside alerting keeps one frame per series", func(t *testing.T) {
+		tctx, err := setup()
+		require.NoError(t, err)
+		frames, err := execute(tctx, query(`{"refId":"A","expr":"up","instant":true,"range":false,"alertingNumericLong":true}`), nil, vector, nil)
+		require.NoError(t, err)
+		require.Equal(t, []data.FrameType{data.FrameTypeNumericMulti, data.FrameTypeNumericMulti}, frameTypes(frames))
+	})
+
+	t.Run("alerting request keeps one frame per series for a vector with a native histogram", func(t *testing.T) {
+		withHistogram := queryResult{
+			Type: p.ValVector,
+			Result: p.Vector{
+				&p.Sample{Metric: p.Metric{"job": "a"}, Value: 1, Timestamp: 1700000000000},
+				&p.Sample{Metric: p.Metric{"job": "h"}, Timestamp: 1700000000000, Histogram: &p.SampleHistogram{
+					Count: 3, Sum: 4.5, Buckets: p.HistogramBuckets{{Boundaries: 0, Lower: 1, Upper: 2, Count: 3}},
+				}},
+			},
+		}
+		tctx, err := setup()
+		require.NoError(t, err)
+		frames, err := executeWithHeaders(tctx, query(`{"refId":"A","expr":"up","instant":true,"range":false,"alertingNumericLong":true}`), nil, withHistogram, nil, fromAlert)
+		require.NoError(t, err)
+		require.Equal(t, []data.FrameType{data.FrameTypeNumericMulti, "heatmap-cells"}, frameTypes(frames))
 	})
 }
