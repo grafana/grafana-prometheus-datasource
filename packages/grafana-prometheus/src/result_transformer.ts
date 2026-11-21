@@ -291,9 +291,13 @@ export function transformDFToTable(dfs: DataFrame[]): DataFrame[] {
 
 function longFrameToTable(df: DataFrame, valueText: string): DataFrame {
   const valueIndex = df.fields.length - 1;
-  const fields = df.fields.map((field, i) =>
-    i === valueIndex ? { ...field, name: valueText, display: getDisplayProcessor() } : field
-  );
+  const fields = df.fields.map((field, i) => {
+    if (i === valueIndex) {
+      return { ...field, name: valueText, display: getDisplayProcessor() };
+    }
+    // The backend sends null for a label the series lacks, where the per-series table has ''.
+    return i === 0 ? field : { ...field, values: field.values.map((value) => value ?? '') };
+  });
   const times = df.fields[0]?.values ?? [];
   const needsSort = times.some((time, i) => i > 0 && time < times[i - 1]);
   const frame: DataFrame = {

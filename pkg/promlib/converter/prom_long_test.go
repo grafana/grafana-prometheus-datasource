@@ -63,7 +63,11 @@ func tableFromLongFrame(t *testing.T, f *data.Frame) table {
 		tbl.times = append(tbl.times, f.Fields[0].At(i).(time.Time))
 		tbl.values = append(tbl.values, f.Fields[last].At(i).(float64))
 		for j, field := range f.Fields[1:last] {
-			tbl.cols[tbl.keys[j]] = append(tbl.cols[tbl.keys[j]], field.At(i).(string))
+			var v string
+			if p := field.At(i).(*string); p != nil {
+				v = *p
+			}
+			tbl.cols[tbl.keys[j]] = append(tbl.cols[tbl.keys[j]], v)
 		}
 	}
 	return tbl
@@ -213,17 +217,20 @@ func TestReadVectorLong(t *testing.T) {
 	require.Equal(t, data.FieldTypeTime, frame.Fields[0].Type())
 	require.Equal(t, time.Unix(1700000001, 500000000).UTC(), frame.Fields[0].At(2))
 
-	column := func(idx int) []string {
-		out := make([]string, frame.Rows())
+	column := func(idx int) []any {
+		require.Equal(t, data.FieldTypeNullableString, frame.Fields[idx].Type(), frame.Fields[idx].Name)
+		out := make([]any, frame.Rows())
 		for i := range out {
-			out[i] = frame.Fields[idx].At(i).(string)
+			if v := frame.Fields[idx].At(i).(*string); v != nil {
+				out[i] = *v
+			}
 		}
 		return out
 	}
-	require.Equal(t, []string{"up", "up", "", ""}, column(1))
-	require.Equal(t, []string{"i1", "", "", "i3"}, column(2))
-	require.Equal(t, []string{"b", "a", "", "c"}, column(3))
-	require.Equal(t, []string{"", "z1", "", "z3"}, column(4))
+	require.Equal(t, []any{"up", "up", nil, nil}, column(1))
+	require.Equal(t, []any{"i1", nil, nil, "i3"}, column(2))
+	require.Equal(t, []any{"b", "a", nil, "c"}, column(3))
+	require.Equal(t, []any{nil, "z1", nil, "z3"}, column(4))
 
 	values := frame.Fields[5]
 	require.Equal(t, data.FieldTypeFloat64, values.Type())
