@@ -822,7 +822,7 @@ func readVectorLong(iter *sdkjsoniter.Iterator) backend.DataResponse {
 	fields := make([]*data.Field, 0, len(labelKeys)+2)
 	fields = append(fields, data.NewField(data.TimeSeriesTimeFieldName, nil, times))
 	for _, key := range labelKeys {
-		fields = append(fields, data.NewField(key, nil, labelCols[key]))
+		fields = append(fields, data.NewField(key, nil, nullableLabels(labelCols[key])))
 	}
 	fields = append(fields, data.NewField(data.TimeSeriesValueFieldName, nil, values))
 
@@ -834,6 +834,18 @@ func readVectorLong(iter *sdkjsoniter.Iterator) backend.DataResponse {
 	}
 	rsp.Frames = append(data.Frames{frame}, rsp.Frames...)
 	return rsp
+}
+
+// nullableLabels returns col with nil for each series that lacks the label, so a long reader does not
+// add the label with an empty value. Prometheus treats an empty label value as no label.
+func nullableLabels(col []string) []*string {
+	out := make([]*string, len(col))
+	for i := range col {
+		if col[i] != "" {
+			out[i] = &col[i]
+		}
+	}
+	return out
 }
 
 func readTimeValuePair(iter *sdkjsoniter.Iterator) (time.Time, float64, error) {

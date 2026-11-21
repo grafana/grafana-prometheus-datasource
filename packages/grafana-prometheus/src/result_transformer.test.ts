@@ -1525,7 +1525,8 @@ describe('Prometheus Result Transformer', () => {
           })
         );
 
-      // The backend orders label columns as transformDFToTable does: first seen, sorted within each series.
+      // The backend orders label columns as transformDFToTable does: first seen, sorted within each series,
+      // and sends null for a label the series lacks.
       const longFrame = (refId: string, samples: Sample[]) => {
         const keys = samples.reduce<string[]>(
           (acc, { labels }) => [
@@ -1544,7 +1545,7 @@ describe('Prometheus Result Transformer', () => {
             ...keys.map((key) => ({
               name: key,
               type: FieldType.string,
-              values: samples.map((s) => s.labels[key] ?? ''),
+              values: samples.map((s) => s.labels[key] ?? null),
               config: { filterable: true },
             })),
             { name: 'Value', type: FieldType.number, values: samples.map((s) => s.value) },
