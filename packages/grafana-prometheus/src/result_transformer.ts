@@ -207,15 +207,24 @@ export function transformDFToTable(dfs: DataFrame[]): DataFrame[] {
   const dataFramesByRefId = groupBy(dfs, 'refId');
   const refIds = Object.keys(dataFramesByRefId);
 
-  const frames = refIds.map((refId) => {
-    // Create timeField, valueField and labelFields
+  const frames = refIds.flatMap((refId) => {
     const valueText = getValueText(refIds.length, refId);
+    const [longFrames, seriesFrames] = partition(
+      dataFramesByRefId[refId],
+      (df) => df.meta?.type === DataFrameType.NumericLong
+    );
+    const longTables = longFrames.map((df) => longFrameToTable(df, valueText));
+    if (seriesFrames.length === 0) {
+      return longTables;
+    }
+
+    // Create timeField, valueField and labelFields
     const valueField = getValueField({ data: [], valueName: valueText });
     const timeField = getTimeField([]);
     const labelFields: Field[] = [];
 
     // Fill labelsFields with labels from dataFrames
-    dataFramesByRefId[refId].forEach((df) => {
+    seriesFrames.forEach((df) => {
       const frameValueField = df.fields[1];
       const promLabels = frameValueField?.labels ?? {};
 
@@ -238,7 +247,7 @@ export function transformDFToTable(dfs: DataFrame[]): DataFrame[] {
     let needsSort = false;
 
     // Fill valueField, timeField and labelFields with values
-    dataFramesByRefId[refId].forEach((df) => {
+    seriesFrames.forEach((df) => {
       timeField.config.interval ??= df.fields[0]?.config.interval;
 
       const timeFields = df.fields[0]?.values ?? [];
@@ -268,16 +277,36 @@ export function transformDFToTable(dfs: DataFrame[]): DataFrame[] {
       fields,
       // Prometheus specific UI for instant queries
       meta: {
-        ...dataFramesByRefId[refId][0].meta,
+        ...seriesFrames[0].meta,
         preferredVisualisationType: 'rawPrometheus' as const,
       },
       length: timeField.values.length,
     };
 
-    return needsSort ? sortDataFrame(frame, 0) : frame;
+    return [...longTables, needsSort ? sortDataFrame(frame, 0) : frame];
   });
 
   return frames;
+}
+
+function longFrameToTable(df: DataFrame, valueText: string): DataFrame {
+  const valueIndex = df.fields.length - 1;
+  const fields = df.fields.map((field, i) => {
+    if (i === valueIndex) {
+      return { ...field, name: valueText, display: getDisplayProcessor() };
+    }
+    // The backend sends null for a label the series lacks, where the per-series table has ''.
+    return i === 0 ? field : { ...field, values: field.values.map((value) => value ?? '') };
+  });
+  const times = df.fields[0]?.values ?? [];
+  const needsSort = times.some((time, i) => i > 0 && time < times[i - 1]);
+  const frame: DataFrame = {
+    ...df,
+    fields,
+    meta: { ...df.meta, preferredVisualisationType: 'rawPrometheus' as const },
+  };
+
+  return needsSort ? sortDataFrame(frame, 0) : frame;
 }
 
 function getValueText(responseLength: number, refId = '') {

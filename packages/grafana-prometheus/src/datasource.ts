@@ -447,6 +447,12 @@ export class PrometheusDatasource
       processedTarget.groupByKeys = request.groupByKeys;
     }
 
+    // Same rule as isTableResult in result_transformer.ts, which passes a long frame through.
+    const rendersAsTable = (refId: string) =>
+      request.app === CoreApp.Explore || request.targets.some((t) => t.refId === refId && t.format === 'table');
+    const withLongVector = (query: PromQuery): PromQuery =>
+      query.instant && rendersAsTable(query.refId) ? { ...query, longVector: true } : query;
+
     if (target.instant && target.range) {
       // We have query type "Both" selected
       // We should send separate queries with different refId
@@ -456,15 +462,15 @@ export class PrometheusDatasource
           refId: processedTarget.refId,
           instant: false,
         },
-        {
+        withLongVector({
           ...processedTarget,
           refId: processedTarget.refId + InstantQueryRefIdIndex,
           range: false,
           exemplar: false,
-        }
+        })
       );
     } else {
-      processedTargets.push(processedTarget);
+      processedTargets.push(withLongVector(processedTarget));
     }
 
     return processedTargets;

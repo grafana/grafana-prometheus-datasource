@@ -21,6 +21,11 @@ func logf(format string, a ...any) {
 }
 
 type Options struct {
+	// LongVector reads a vector result into one numeric-long frame instead of one numeric-multi frame per series.
+	LongVector bool
+	// PerSeriesIfHistogram makes LongVector read a vector that holds a native histogram sample into one frame per
+	// series, as without LongVector.
+	PerSeriesIfHistogram bool
 }
 
 func rspErr(e error) backend.DataResponse {
@@ -301,7 +306,11 @@ func totalQueryableSamples(stats any) (float64, bool) {
 func readResult(resultType string, rsp backend.DataResponse, iter *sdkjsoniter.Iterator, opt Options, encodingFlags []string) backend.DataResponse {
 	switch resultType {
 	case "matrix", "vector":
-		rsp = readMatrixOrVectorMulti(iter, resultType, opt)
+		if resultType == "vector" && opt.LongVector {
+			rsp = readVectorLong(iter, opt)
+		} else {
+			rsp = readMatrixOrVectorMulti(iter, resultType, opt)
+		}
 		if rsp.Error != nil {
 			return rsp
 		}
@@ -702,17 +711,7 @@ func readMatrixOrVectorMulti(iter *sdkjsoniter.Iterator, resultType string, opt 
 		}
 
 		if histogram != nil {
-			frame := data.NewFrame("",
-				data.NewField("xMax", labels, histogram.times),
-				data.NewField("yMin", labels, histogram.yMins),
-				data.NewField("yMax", labels, histogram.yMaxes),
-				data.NewField("count", labels, histogram.counts),
-				data.NewField("yLayout", labels, histogram.yLayouts),
-			)
-			frame.Meta = &data.FrameMeta{
-				Type: "heatmap-cells",
-			}
-			rsp.Frames = append(rsp.Frames, frame)
+			rsp.Frames = append(rsp.Frames, newHeatmapFrame(labels, histogram))
 			histogramSize := len(histogram.times)
 			// Require two equal series before preallocating so sharply ragged responses do not overallocate.
 			if histogramSize == previousHistogramSize {
@@ -737,6 +736,163 @@ func readMatrixOrVectorMulti(iter *sdkjsoniter.Iterator, resultType string, opt 
 	}
 
 	return rsp
+}
+
+// heatmapAt is a native histogram series and the number of float series that came before it.
+type heatmapAt struct {
+	row   int
+	frame *data.Frame
+}
+
+// readVectorLong reads a vector result into one numeric-long frame with the columns and rows that
+// transformDFToTable in @grafana/prometheus builds from one frame per series.
+func readVectorLong(iter *sdkjsoniter.Iterator, opt Options) backend.DataResponse {
+	rsp := backend.DataResponse{}
+	var times []time.Time
+	var values []float64
+	labelCols := map[string][]string{}
+	var labelKeys []string
+	var heatmaps []heatmapAt
+
+	for more, err := iter.ReadArray(); more; more, err = iter.ReadArray() {
+		if err != nil {
+			return rspErr(err)
+		}
+
+		var labels data.Labels
+		var histogram *histogramInfo
+		var t time.Time
+		var v float64
+		hasValue := false
+
+		for l1Field, err := iter.ReadObject(); l1Field != ""; l1Field, err = iter.ReadObject() {
+			if err != nil {
+				return rspErr(err)
+			}
+			switch l1Field {
+			case "metric":
+				if err = iter.ReadVal(&labels); err != nil {
+					return rspErr(err)
+				}
+
+			case "value":
+				if t, v, err = readTimeValuePair(iter); err != nil {
+					return rspErr(err)
+				}
+				hasValue = true
+
+			case "histogram":
+				histogram = newHistogramInfo(0)
+				if err = readHistogram(iter, histogram); err != nil {
+					return rspErr(err)
+				}
+
+			default:
+				if err = iter.Skip(); err != nil {
+					return rspErr(err)
+				}
+				logf("readVectorLong: %s\n", l1Field)
+			}
+		}
+
+		if histogram != nil {
+			heatmaps = append(heatmaps, heatmapAt{row: len(times), frame: newHeatmapFrame(labels, histogram)})
+			continue
+		}
+		if !hasValue {
+			continue
+		}
+
+		row := len(times)
+		times = append(times, t)
+		values = append(values, v)
+		var newKeys []string
+		for key, val := range labels {
+			col, ok := labelCols[key]
+			if !ok {
+				col = make([]string, row, row+1)
+				newKeys = append(newKeys, key)
+			}
+			labelCols[key] = append(col, val)
+		}
+		// Columns appear in first-seen order, and each series adds its new keys sorted.
+		slices.Sort(newKeys)
+		labelKeys = append(labelKeys, newKeys...)
+		for key, col := range labelCols {
+			if len(col) == row {
+				labelCols[key] = append(col, "")
+			}
+		}
+	}
+
+	if opt.PerSeriesIfHistogram && len(heatmaps) > 0 {
+		return perSeriesVector(times, values, labelKeys, labelCols, heatmaps)
+	}
+	for _, h := range heatmaps {
+		rsp.Frames = append(rsp.Frames, h.frame)
+	}
+	if len(times) == 0 {
+		return rsp
+	}
+
+	fields := make([]*data.Field, 0, len(labelKeys)+2)
+	fields = append(fields, data.NewField(data.TimeSeriesTimeFieldName, nil, times))
+	for _, key := range labelKeys {
+		fields = append(fields, data.NewField(key, nil, nullableLabels(labelCols[key])))
+	}
+	fields = append(fields, data.NewField(data.TimeSeriesValueFieldName, nil, values))
+
+	frame := data.NewFrame("", fields...)
+	frame.Meta = &data.FrameMeta{
+		Type:        data.FrameTypeNumericLong,
+		Custom:      resultTypeToCustomMeta("vector"),
+		TypeVersion: data.FrameTypeVersion{0, 1},
+	}
+	rsp.Frames = append(data.Frames{frame}, rsp.Frames...)
+	return rsp
+}
+
+// perSeriesVector returns the frames that readMatrixOrVectorMulti reads from the same vector, in series order.
+func perSeriesVector(times []time.Time, values []float64, labelKeys []string, labelCols map[string][]string, heatmaps []heatmapAt) backend.DataResponse {
+	rsp := backend.DataResponse{Frames: make(data.Frames, 0, len(times)+len(heatmaps))}
+	h := 0
+	for row := range times {
+		for ; h < len(heatmaps) && heatmaps[h].row == row; h++ {
+			rsp.Frames = append(rsp.Frames, heatmaps[h].frame)
+		}
+		labels := data.Labels{}
+		for _, key := range labelKeys {
+			if v := labelCols[key][row]; v != "" {
+				labels[key] = v
+			}
+		}
+		frame := data.NewFrame("",
+			data.NewField(data.TimeSeriesTimeFieldName, nil, []time.Time{times[row]}),
+			data.NewField(data.TimeSeriesValueFieldName, labels, []float64{values[row]}),
+		)
+		frame.Meta = &data.FrameMeta{
+			Type:        data.FrameTypeNumericMulti,
+			Custom:      resultTypeToCustomMeta("vector"),
+			TypeVersion: data.FrameTypeVersion{0, 1},
+		}
+		rsp.Frames = append(rsp.Frames, frame)
+	}
+	for _, hm := range heatmaps[h:] {
+		rsp.Frames = append(rsp.Frames, hm.frame)
+	}
+	return rsp
+}
+
+// nullableLabels returns col with nil for each series that lacks the label, so a long reader does not
+// add the label with an empty value. Prometheus treats an empty label value as no label.
+func nullableLabels(col []string) []*string {
+	out := make([]*string, len(col))
+	for i := range col {
+		if col[i] != "" {
+			out[i] = &col[i]
+		}
+	}
+	return out
 }
 
 func readTimeValuePair(iter *sdkjsoniter.Iterator) (time.Time, float64, error) {
@@ -782,6 +938,20 @@ func newHistogramInfo(size int) *histogramInfo {
 		counts:   make([]float64, 0, size),
 		yLayouts: make([]int8, 0, size),
 	}
+}
+
+func newHeatmapFrame(labels data.Labels, histogram *histogramInfo) *data.Frame {
+	frame := data.NewFrame("",
+		data.NewField("xMax", labels, histogram.times),
+		data.NewField("yMin", labels, histogram.yMins),
+		data.NewField("yMax", labels, histogram.yMaxes),
+		data.NewField("count", labels, histogram.counts),
+		data.NewField("yLayout", labels, histogram.yLayouts),
+	)
+	frame.Meta = &data.FrameMeta{
+		Type: "heatmap-cells",
+	}
+	return frame
 }
 
 // This will read a single sparse histogram

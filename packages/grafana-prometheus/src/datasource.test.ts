@@ -1327,6 +1327,43 @@ describe('PrometheusDatasource2', () => {
 
       expect(processed).not.toHaveProperty('groupByKeys');
     });
+
+    describe('longVector', () => {
+      const processFor = (query: PromQuery, app: CoreApp) =>
+        ds.processTargetV2(query, { ...request, targets: [query], app }).map((q) => [q.refId, q.longVector]);
+
+      it.each([
+        ['an instant table query', { instant: true, range: false, format: 'table' }, CoreApp.Dashboard, [['A', true]]],
+        ['an instant query in Explore', { instant: true, range: false }, CoreApp.Explore, [['A', true]]],
+        ['an instant time series query', { instant: true, range: false }, CoreApp.Dashboard, [['A', undefined]]],
+        [
+          'a range table query',
+          { instant: false, range: true, format: 'table' },
+          CoreApp.Dashboard,
+          [['A', undefined]],
+        ],
+        [
+          'a Both query in Explore',
+          { instant: true, range: true },
+          CoreApp.Explore,
+          [
+            ['A', undefined],
+            ['A-Instant', true],
+          ],
+        ],
+        [
+          'a Both table query in a dashboard',
+          { instant: true, range: true, format: 'table' },
+          CoreApp.Dashboard,
+          [
+            ['A', undefined],
+            ['A-Instant', undefined],
+          ],
+        ],
+      ])('sets the opt-in for %s only where the result renders as a table', (_, props, app, expected) => {
+        expect(processFor({ ...target, ...props } as PromQuery, app)).toEqual(expected);
+      });
+    });
   });
 });
 
