@@ -6,14 +6,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math"
 	"math/rand"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
 	p "github.com/prometheus/common/model"
 	"github.com/stretchr/testify/require"
 
@@ -29,18 +27,6 @@ func replyQuery(t *testing.T, refID string, props models.PrometheusQueryProperti
 	b, err := json.Marshal(models.QueryModel{PrometheusQueryProperties: props})
 	require.NoError(t, err)
 	return backend.DataQuery{RefID: refID, JSON: b, TimeRange: backend.TimeRange{From: time.Unix(0, 0), To: time.Unix(600, 0)}}
-}
-
-func replySizeRejections(t *testing.T) float64 {
-	t.Helper()
-	families, err := prometheus.DefaultGatherer.Gather()
-	require.NoError(t, err)
-	for _, f := range families {
-		if f.GetName() == "grafana_prometheus_plugin_backend_reply_size_guard_rejected_count" {
-			return f.GetMetric()[0].GetCounter().GetValue()
-		}
-	}
-	return 0
 }
 
 func randomVector(r *rand.Rand, series int) p.Vector {
@@ -67,16 +53,15 @@ func randomMatrix(r *rand.Rand, series int) p.Matrix {
 	return m
 }
 
-func executeReply(t *testing.T, guard bool, limit int64, rangeRes, instantRes any) *backend.QueryDataResponse {
-	t.Helper()
+func TestRejectOversizedReplyFailsEveryQueryOfAnExecuteReply(t *testing.T) {
+	r := rand.New(rand.NewSource(1))
 	tctx, err := setup()
 	require.NoError(t, err)
-	querydata.SetReplySizeGuard(tctx.queryData, guard, limit)
-	rr, err := toAPIResponse(rangeRes)
+	rangeRes, err := toAPIResponse(queryResult{Type: p.ValMatrix, Result: randomMatrix(r, 3)})
 	require.NoError(t, err)
-	ir, err := toAPIResponse(instantRes)
+	instantRes, err := toAPIResponse(queryResult{Type: p.ValVector, Result: randomVector(r, 3)})
 	require.NoError(t, err)
-	tctx.httpProvider.setResponse(rr, ir, nil)
+	tctx.httpProvider.setResponse(rangeRes, instantRes, nil)
 	req := &backend.QueryDataRequest{
 		Queries: []backend.DataQuery{
 			replyQuery(t, "range", models.PrometheusQueryProperties{Expr: "up", Range: true}),
@@ -86,41 +71,15 @@ func executeReply(t *testing.T, guard bool, limit int64, rangeRes, instantRes an
 	}
 	res, err := tctx.queryData.Execute(context.Background(), req)
 	require.NoError(t, err)
-	return res
-}
 
-func TestExecuteFailsEveryQueryOfAReplyOverTheSizeLimit(t *testing.T) {
-	r := rand.New(rand.NewSource(1))
-	rangeRes := queryResult{Type: p.ValMatrix, Result: randomMatrix(r, 3)}
-	instantRes := queryResult{Type: p.ValVector, Result: randomVector(r, 3)}
-
-	before := replySizeRejections(t)
-	res := executeReply(t, true, 64, rangeRes, instantRes)
+	size, rejected := querydata.RejectOversizedReply(res, 64)
+	require.True(t, rejected)
+	require.Greater(t, size, int64(64))
 	for _, refID := range []string{"range", "instant"} {
 		require.ErrorIs(t, res.Responses[refID].Error, querydata.ErrReplyTooLarge)
 		require.ErrorContains(t, res.Responses[refID].Error, "more than the 64-byte limit of a reply to Grafana")
 		require.Equal(t, backend.ErrorSourceDownstream, res.Responses[refID].ErrorSource)
 		require.Empty(t, res.Responses[refID].Frames)
-	}
-	require.Equal(t, before+1, replySizeRejections(t))
-
-	off := executeReply(t, false, 64, rangeRes, instantRes)
-	for _, refID := range []string{"range", "instant"} {
-		require.NoError(t, off.Responses[refID].Error)
-		require.NotEmpty(t, off.Responses[refID].Frames)
-	}
-}
-
-func TestExecuteRepliesUnderTheSizeLimitAreTheSameWithTheGuardOff(t *testing.T) {
-	r := rand.New(rand.NewSource(2))
-	for i := range 200 {
-		rangeRes := queryResult{Type: p.ValMatrix, Result: randomMatrix(r, r.Intn(60))}
-		instantRes := queryResult{Type: p.ValVector, Result: randomVector(r, r.Intn(60))}
-		on, err := json.Marshal(executeReply(t, true, math.MaxInt32, rangeRes, instantRes))
-		require.NoError(t, err)
-		off, err := json.Marshal(executeReply(t, false, math.MaxInt32, rangeRes, instantRes))
-		require.NoError(t, err)
-		require.JSONEq(t, string(off), string(on), "case %d", i)
 	}
 }
 
@@ -135,7 +94,6 @@ func BenchmarkExecuteReplySizeGuard(b *testing.B) {
 		b.Run(map[bool]string{true: "on", false: "off"}[guard], func(b *testing.B) {
 			tctx, err := setup()
 			require.NoError(b, err)
-			querydata.SetReplySizeGuard(tctx.queryData, guard, math.MaxInt32)
 			q, err := json.Marshal(models.QueryModel{PrometheusQueryProperties: models.PrometheusQueryProperties{Expr: "up", Instant: true}})
 			require.NoError(b, err)
 			req := &backend.QueryDataRequest{
@@ -145,8 +103,12 @@ func BenchmarkExecuteReplySizeGuard(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
 				tctx.httpProvider.setResponse(nil, &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader(raw))}, nil)
-				if _, err := tctx.queryData.Execute(context.Background(), req); err != nil {
+				res, err := tctx.queryData.Execute(context.Background(), req)
+				if err != nil {
 					b.Fatal(err)
+				}
+				if guard {
+					querydata.RejectOversizedReply(res, querydata.MaxReplySize)
 				}
 			}
 		})

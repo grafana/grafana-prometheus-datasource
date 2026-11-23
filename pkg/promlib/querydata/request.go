@@ -18,7 +18,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/client"
-	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/instrumentation"
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/intervalv2"
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/models"
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/querydata/exemplar"
@@ -46,8 +45,6 @@ type QueryData struct {
 	TimeInterval       string
 	exemplarSampler    func() exemplar.Sampler
 	featureToggles     backend.FeatureToggles
-	replySizeGuard     bool
-	replySizeLimit     int64
 }
 
 func New(
@@ -74,8 +71,6 @@ func New(
 		URL:                settings.URL,
 		exemplarSampler:    exemplarSampler,
 		featureToggles:     featureToggles,
-		replySizeGuard:     replySizeGuardEnabled(),
-		replySizeLimit:     replySizeLimit,
 	}, nil
 }
 
@@ -105,13 +100,6 @@ func (s *QueryData) Execute(ctx context.Context, req *backend.QueryDataRequest) 
 		}
 		return nil
 	})
-
-	if s.replySizeGuard {
-		if size, rejected := rejectOversizedReply(&result, s.replySizeLimit); rejected {
-			instrumentation.UpdateReplySizeGuardMetrics()
-			logger.Warn("Rejected a query reply over the message size limit", "bytesAtLeast", size, "limit", s.replySizeLimit, "queries", len(req.Queries))
-		}
-	}
 
 	return &result, nil
 }

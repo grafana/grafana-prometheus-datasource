@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"os"
 	"strconv"
 	"unicode/utf8"
 
@@ -13,11 +12,8 @@ import (
 	"github.com/grafana/grafana-plugin-sdk-go/data"
 )
 
-// replySizeLimit is the largest message grpc-go sends to Grafana by default.
-const replySizeLimit = math.MaxInt32
-
-// replySizeGuardEnv turns the guard off when set to false or 0. Grafana passes [plugin.<id>] reply_size_guard as this variable.
-const replySizeGuardEnv = "GF_PLUGIN_REPLY_SIZE_GUARD"
+// MaxReplySize is the largest message grpc-go sends from a plugin process to Grafana by default.
+const MaxReplySize = math.MaxInt32
 
 // replySizeMarginPerFrame covers the 8-byte padding of Arrow IPC messages, which differs between frames by up to 40 bytes.
 const replySizeMarginPerFrame = 48
@@ -25,14 +21,9 @@ const replySizeMarginPerFrame = 48
 // ErrReplyTooLarge is the error for a reply that is too large to send to Grafana. Its text is a stable token.
 var ErrReplyTooLarge = errors.New("err-prometheus-reply-too-large")
 
-func replySizeGuardEnabled() bool {
-	v := os.Getenv(replySizeGuardEnv)
-	return v != "false" && v != "0"
-}
-
-// rejectOversizedReply fails every query of result when a lower bound of its encoded size is over limit, and returns
-// that bound. Such a reply cannot reach Grafana, so this changes no reply that would arrive.
-func rejectOversizedReply(result *backend.QueryDataResponse, limit int64) (int64, bool) {
+// RejectOversizedReply fails every query of result when a lower bound of its encoded size is over limit, and returns
+// that bound. Call it only in a plugin process, where a reply over MaxReplySize cannot reach Grafana.
+func RejectOversizedReply(result *backend.QueryDataResponse, limit int64) (int64, bool) {
 	size := replySizeLowerBound(result.Responses, limit)
 	if size <= limit {
 		return size, false

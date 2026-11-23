@@ -10,6 +10,7 @@ require (
 	github.com/grafana/grafana-plugin-sdk-go v0.302.0
 	github.com/grafana/grafana-prometheus-datasource/pkg/promlib v0.0.22
 	github.com/magefile/mage v1.17.2
+	github.com/prometheus/client_golang v1.25.0
 	github.com/stretchr/testify v1.12.1
 	k8s.io/kube-openapi v0.0.0-20260929181212-2cfbdf149b9a
 )
@@ -79,7 +80,6 @@ require (
 	github.com/pandatix/go-abnf v0.5.5 // indirect
 	github.com/patrickmn/go-cache v2.1.0+incompatible // indirect
 	github.com/pierrec/lz4/v4 v4.1.33 // indirect
-	github.com/prometheus/client_golang v1.25.0 // indirect
 	github.com/prometheus/client_model v0.6.3 // indirect
 	github.com/prometheus/common v0.74.0 // indirect
 	github.com/prometheus/procfs v0.23.0 // indirect

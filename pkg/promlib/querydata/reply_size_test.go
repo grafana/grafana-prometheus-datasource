@@ -136,8 +136,8 @@ func TestReplySizeLowerBoundCatchesTheRuleShapeJustOverTheLimit(t *testing.T) {
 
 	bound, exact := replySizeLowerBound(responses, 0), encodedReplySize(t, responses)
 	require.GreaterOrEqual(t, float64(bound)/float64(exact), 0.985)
-	require.Greater(t, exact*prodSeries/sample, int64(replySizeLimit), "the reply at prod size fails to send today")
-	require.Greater(t, bound*prodSeries/sample, int64(replySizeLimit), "the bound at prod size catches it")
+	require.Greater(t, exact*prodSeries/sample, int64(MaxReplySize), "the reply at prod size fails to send today")
+	require.Greater(t, bound*prodSeries/sample, int64(MaxReplySize), "the bound at prod size catches it")
 }
 
 func plainFrames(n int) data.Frames {
