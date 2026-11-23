@@ -257,11 +257,13 @@ func addDataResponse(res *backend.DataResponse, dr *backend.DataResponse) {
 		if dr.Error == nil {
 			dr.Error = res.Error
 		} else {
-			dr.Error = fmt.Errorf("%v %w", dr.Error, res.Error)
+			dr.Error = fmt.Errorf("%w %w", dr.Error, res.Error)
 		}
-		dr.ErrorSource = status.SourceFromHTTPStatus(int(res.Status))
-		if backend.IsPluginError(res.Error) {
-			dr.ErrorSource = backend.ErrorSourcePlugin
+		if dr.ErrorSource != backend.ErrorSourcePlugin {
+			dr.ErrorSource = status.SourceFromHTTPStatus(int(res.Status))
+			if backend.IsPluginError(res.Error) {
+				dr.ErrorSource = backend.ErrorSourcePlugin
+			}
 		}
 		dr.Status = res.Status
 	}
