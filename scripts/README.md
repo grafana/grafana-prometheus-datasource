@@ -85,6 +85,14 @@ node scripts/sync-changelog.js                 # default: datasource → root
 node scripts/sync-changelog.js promlib         # promlib stub → pkg/promlib
 ```
 
+### `schema-copy-patterns.js`
+
+The `CopyWebpackPlugin` patterns that put the plugin schema files into
+`dist/schema/`. `webpack.config.ts` imports them. The pattern for
+`schema/v0alpha1.json`, the one file Grafana reads, also merges the query type
+schema into it. `__tests__/schema-copy-patterns.test.js` fails if that file
+loses the query types.
+
 ## Tests — `__tests__/`
 
 Jest tests run end-to-end against the real `@changesets/cli` binary, but
