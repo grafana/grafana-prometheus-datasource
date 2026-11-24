@@ -24,6 +24,18 @@ var (
 		Name:      "prometheus_plugin_backend_series_limit_exceeded_count",
 		Help:      "The total amount of query results that held more series than the series limit",
 	})
+
+	queryResponseFormatCounter = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "grafana",
+		Name:      "prometheus_plugin_backend_query_response_format_count",
+		Help:      "The total amount of query responses decoded, by response format",
+	}, []string{"format"})
+)
+
+// Query response formats for UpdateQueryResponseFormatMetrics.
+const (
+	FormatJSON          = "json"
+	FormatMimirProtobuf = "mimir_protobuf"
 )
 
 const (
@@ -59,6 +71,11 @@ func UpdateJsonDataLenientTypeMetrics(fromValueType, toValueType, outcome string
 // UpdateSeriesLimitExceededMetrics records a query result that held more series than the series limit.
 func UpdateSeriesLimitExceededMetrics() {
 	seriesLimitExceededCounter.Inc()
+}
+
+// UpdateQueryResponseFormatMetrics records the format of a query response that the plugin decodes.
+func UpdateQueryResponseFormatMetrics(format string) {
+	queryResponseFormatCounter.WithLabelValues(format).Inc()
 }
 
 func getErrorSource(err error, resp *backend.QueryDataResponse) string {

@@ -3,6 +3,7 @@ package promlib
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
@@ -51,6 +52,8 @@ func (s *Service) Dispose() {
 }
 
 func newInstanceSettings(httpClientProvider *sdkhttpclient.Provider, log log.Logger, extendOptions ExtendOptions) datasource.InstanceFactoryFunc {
+	// The SDK rebuilds an instance whenever its settings change, so the flag cache lives outside the instance.
+	flags := newOFREPFlags()
 	return func(ctx context.Context, settings backend.DataSourceInstanceSettings) (instancemgmt.Instance, error) {
 		// Parsed once and shared for consumers below.
 		jsonData, err := models.ParsePromOptions(settings)
@@ -96,6 +99,9 @@ func newInstanceSettings(httpClientProvider *sdkhttpclient.Provider, log log.Log
 			jsonData.TimeInterval,
 			log,
 			featureToggles,
+			queryClientOptions(jsonData, func(ctx context.Context) bool {
+				return flags.mimirProtobufResponsesEnabled(ctx, log)
+			})...,
 		)
 		if err != nil {
 			return nil, err
@@ -112,6 +118,18 @@ func newInstanceSettings(httpClientProvider *sdkhttpclient.Provider, log log.Log
 			resource:  r,
 		}, nil
 	}
+}
+
+// queryClientOptions keeps JSON responses for a datasource that requests query stats, because Mimir's protobuf
+// response has no stats.
+func queryClientOptions(jsonData *models.PromOptions, mimirProtobufEnabled func(context.Context) bool) []client.Option {
+	if bool(jsonData.QueryStatsEnabled) {
+		return nil
+	}
+	if params, err := url.ParseQuery(string(jsonData.CustomQueryParameters)); err == nil && params.Has("stats") {
+		return nil
+	}
+	return []client.Option{client.WithMimirProtobuf(mimirProtobufEnabled)}
 }
 
 func (s *Service) QueryData(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
