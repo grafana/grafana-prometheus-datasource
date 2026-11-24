@@ -12,15 +12,18 @@ import (
 	"time"
 
 	apiv1 "github.com/prometheus/client_golang/api/prometheus/v1"
+	"github.com/prometheus/client_golang/prometheus"
 	p "github.com/prometheus/common/model"
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/httpclient"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
+	"github.com/grafana/grafana-plugin-sdk-go/config"
 	"github.com/grafana/grafana-plugin-sdk-go/data"
 
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/client"
+	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/converter"
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/models"
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/querydata"
 )
@@ -342,6 +345,58 @@ func TestPrometheus_parseTimeSeriesResponse(t *testing.T) {
 		require.Equal(t, int64(123), testValue.(time.Time).UnixMilli())
 	})
 
+	t.Run("series limit from the Grafana config", func(t *testing.T) {
+		qr := queryResult{
+			Type: p.ValVector,
+			Result: p.Vector{
+				&p.Sample{Metric: p.Metric{"app": "a"}, Value: 1, Timestamp: 123},
+				&p.Sample{Metric: p.Metric{"app": "b"}, Value: 2, Timestamp: 123},
+				&p.Sample{Metric: p.Metric{"app": "c"}, Value: 3, Timestamp: 123},
+			},
+		}
+		b, err := json.Marshal(&models.QueryModel{
+			PrometheusQueryProperties: models.PrometheusQueryProperties{Instant: true},
+		})
+		require.NoError(t, err)
+		query := backend.DataQuery{RefID: "A", JSON: b}
+
+		for _, tc := range []struct {
+			name       string
+			limit      string
+			wantFrames int
+		}{
+			{name: "not set", limit: "", wantFrames: 3},
+			{name: "zero", limit: "0", wantFrames: 3},
+			{name: "at the series count", limit: "3", wantFrames: 3},
+			{name: "not a number", limit: "many", wantFrames: 3},
+			{name: "negative", limit: "-1", wantFrames: 3},
+		} {
+			t.Run(tc.name+" returns every series", func(t *testing.T) {
+				tctx, err := setup()
+				require.NoError(t, err)
+				before := seriesLimitExceededCount(t)
+				rsp := executeInstantWithConfig(t, tctx, query, qr, map[string]string{"GF_SERIES_LIMIT": tc.limit})
+				require.NoError(t, rsp.Error)
+				require.Len(t, rsp.Frames, tc.wantFrames)
+				require.Equal(t, before, seriesLimitExceededCount(t))
+			})
+		}
+
+		t.Run("below the series count fails the query", func(t *testing.T) {
+			tctx, err := setup()
+			require.NoError(t, err)
+			before := seriesLimitExceededCount(t)
+			rsp := executeInstantWithConfig(t, tctx, query, qr, map[string]string{"GF_SERIES_LIMIT": "2"})
+			require.Equal(t, before+1, seriesLimitExceededCount(t))
+			require.ErrorIs(t, rsp.Error, converter.ErrMaxSeriesExceeded)
+			require.ErrorContains(t, rsp.Error, "more than 2 series")
+			require.Equal(t, backend.ErrorSourceDownstream, rsp.ErrorSource)
+			require.Len(t, rsp.Frames, 1)
+			require.Empty(t, rsp.Frames[0].Fields)
+			require.NotEmpty(t, rsp.Frames[0].Meta.ExecutedQueryString)
+		})
+	})
+
 	t.Run("scalar response should be parsed normally", func(t *testing.T) {
 		qr := queryResult{
 			Type: p.ValScalar,
@@ -533,6 +588,35 @@ func executeWithHeaders(tctx *testContext, query backend.DataQuery, rqr, iqr, eq
 
 func execute(tctx *testContext, query backend.DataQuery, rqr, iqr, eqr any) (data.Frames, error) {
 	return executeWithHeaders(tctx, query, rqr, iqr, eqr, map[string]string{})
+}
+
+func executeInstantWithConfig(t *testing.T, tctx *testContext, query backend.DataQuery, iqr any, cfg map[string]string) backend.DataResponse {
+	t.Helper()
+	instantRes, err := toAPIResponse(iqr)
+	require.NoError(t, err)
+	tctx.httpProvider.setResponse(nil, instantRes, nil)
+
+	grafanaCfg := config.NewGrafanaCfg(cfg)
+	req := backend.QueryDataRequest{
+		Queries:       []backend.DataQuery{query},
+		PluginContext: backend.PluginContext{GrafanaConfig: grafanaCfg},
+	}
+	res, err := tctx.queryData.Execute(config.WithGrafanaConfig(context.Background(), grafanaCfg), &req)
+	require.NoError(t, err)
+	return res.Responses[query.RefID]
+}
+
+func seriesLimitExceededCount(t *testing.T) float64 {
+	t.Helper()
+	families, err := prometheus.DefaultGatherer.Gather()
+	require.NoError(t, err)
+	for _, mf := range families {
+		if mf.GetName() == "grafana_prometheus_plugin_backend_series_limit_exceeded_count" {
+			return mf.GetMetric()[0].GetCounter().GetValue()
+		}
+	}
+	t.Fatal("series limit counter is not registered")
+	return 0
 }
 
 type apiResponse struct {

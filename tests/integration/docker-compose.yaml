@@ -1,0 +1,58 @@
+name: prometheus-integration
+
+services:
+  prometheus:
+    image: prom/prometheus:v3.16.0@sha256:e04987641b57704f408e31f6373ba4138ecf27cb4a165d24aabb6c38fddd0f06
+    command:
+      [
+        --config.file=/etc/prometheus/prometheus.yml,
+        --storage.tsdb.path=/prometheus,
+        --web.enable-remote-write-receiver,
+      ]
+    ports: ['39090:9090']
+
+  # The oldest version that supports every feature in the data source documentation (native histograms since 2.40).
+  prometheus-2-40:
+    image: prom/prometheus:v2.40.7@sha256:dfc1143c7da386041ed84f8b13b335637dcc1d6e217512543ed248da66163690
+    command:
+      [
+        --config.file=/etc/prometheus/prometheus.yml,
+        --storage.tsdb.path=/prometheus,
+        --web.enable-remote-write-receiver,
+        --enable-feature=native-histograms,
+      ]
+    ports: ['39040:9090']
+
+  mimir:
+    image: grafana/mimir:3.2.6@sha256:32d79dc873a804d4dbf2724afcbb7b141553b5ed9118f9295972c4bb2982d6fd
+    command: [-config.file=/etc/mimir.yaml]
+    volumes: ['./config/mimir.yaml:/etc/mimir.yaml:ro']
+    ports: ['39009:9009']
+
+  cortex:
+    image: cortexproject/cortex:v1.21.1@sha256:8577eb292a011806a37ad2a6eb01584ff68563a4a428cb67a5b5d4febd1f5d8a
+    command:
+      [-config.file=/etc/cortex.yaml, '-target=distributor,ingester,querier,query-frontend,store-gateway,compactor']
+    volumes: ['./config/cortex.yaml:/etc/cortex.yaml:ro']
+    ports: ['39010:9009']
+
+  thanos-receive:
+    image: quay.io/thanos/thanos:v0.42.5@sha256:0a546b98a8dd47735456ab389983675ee363d68127e334937a9fceeea10da5e7
+    command:
+      [
+        receive,
+        --tsdb.path=/tmp/thanos-receive,
+        --remote-write.address=0.0.0.0:19291,
+        --grpc-address=0.0.0.0:10901,
+        --http-address=0.0.0.0:10902,
+        '--label=receive_replica="0"',
+        --tsdb.enable-native-histograms,
+      ]
+    ports: ['39291:19291']
+
+  thanos-query:
+    image: quay.io/thanos/thanos:v0.42.5@sha256:0a546b98a8dd47735456ab389983675ee363d68127e334937a9fceeea10da5e7
+    command:
+      [query, --http-address=0.0.0.0:10904, --endpoint=thanos-receive:10901, --query.replica-label=receive_replica]
+    ports: ['39904:10904']
+    depends_on: [thanos-receive]

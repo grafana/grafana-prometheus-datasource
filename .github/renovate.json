@@ -1,4 +1,13 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["github>grafana/grafana-renovate-config//presets/data-sources/base"]
+  "extends": ["github>grafana/grafana-renovate-config//presets/data-sources/base"],
+  "packageRules": [
+    {
+      "description": "Keep the oldest Prometheus in the integration tests on 2.40, the native histogram floor in the data source documentation",
+      "matchFileNames": ["tests/integration/docker-compose.yaml"],
+      "matchPackageNames": ["prom/prometheus"],
+      "matchCurrentVersion": "/^v2\\.40\\./",
+      "allowedVersions": "/^v2\\.40\\./"
+    }
+  ]
 }
