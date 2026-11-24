@@ -1,6 +1,8 @@
 # grafana-prometheus-datasource
 
-## 13.2.8
+## 13.3.0
+
+🚀 Ship the query type schema in the plugin package so that Grafana can serve it ([#442](https://github.com/grafana/grafana-prometheus-datasource/pull/442))
 
 🐛 Fix query editor crash on queries with Range and Instant both enabled outside Explore and the panel editor (e.g. Notebooks) ([#450](https://github.com/grafana/grafana-prometheus-datasource/pull/450))
 
