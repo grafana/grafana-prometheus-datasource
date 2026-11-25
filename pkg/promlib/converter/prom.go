@@ -23,9 +23,6 @@ func logf(format string, a ...any) {
 type Options struct {
 	// LongVector reads a vector result into one numeric-long frame instead of one numeric-multi frame per series.
 	LongVector bool
-	// PerSeriesIfHistogram makes LongVector read a vector that holds a native histogram sample into one frame per
-	// series, as without LongVector.
-	PerSeriesIfHistogram bool
 }
 
 func rspErr(e error) backend.DataResponse {
@@ -307,7 +304,7 @@ func readResult(resultType string, rsp backend.DataResponse, iter *sdkjsoniter.I
 	switch resultType {
 	case "matrix", "vector":
 		if resultType == "vector" && opt.LongVector {
-			rsp = readVectorLong(iter, opt)
+			rsp = readVectorLong(iter)
 		} else {
 			rsp = readMatrixOrVectorMulti(iter, resultType, opt)
 		}
@@ -738,21 +735,14 @@ func readMatrixOrVectorMulti(iter *sdkjsoniter.Iterator, resultType string, opt 
 	return rsp
 }
 
-// heatmapAt is a native histogram series and the number of float series that came before it.
-type heatmapAt struct {
-	row   int
-	frame *data.Frame
-}
-
 // readVectorLong reads a vector result into one numeric-long frame with the columns and rows that
 // transformDFToTable in @grafana/prometheus builds from one frame per series.
-func readVectorLong(iter *sdkjsoniter.Iterator, opt Options) backend.DataResponse {
+func readVectorLong(iter *sdkjsoniter.Iterator) backend.DataResponse {
 	rsp := backend.DataResponse{}
 	var times []time.Time
 	var values []float64
 	labelCols := map[string][]string{}
 	var labelKeys []string
-	var heatmaps []heatmapAt
 
 	for more, err := iter.ReadArray(); more; more, err = iter.ReadArray() {
 		if err != nil {
@@ -796,7 +786,7 @@ func readVectorLong(iter *sdkjsoniter.Iterator, opt Options) backend.DataRespons
 		}
 
 		if histogram != nil {
-			heatmaps = append(heatmaps, heatmapAt{row: len(times), frame: newHeatmapFrame(labels, histogram)})
+			rsp.Frames = append(rsp.Frames, newHeatmapFrame(labels, histogram))
 			continue
 		}
 		if !hasValue {
@@ -825,12 +815,6 @@ func readVectorLong(iter *sdkjsoniter.Iterator, opt Options) backend.DataRespons
 		}
 	}
 
-	if opt.PerSeriesIfHistogram && len(heatmaps) > 0 {
-		return perSeriesVector(times, values, labelKeys, labelCols, heatmaps)
-	}
-	for _, h := range heatmaps {
-		rsp.Frames = append(rsp.Frames, h.frame)
-	}
 	if len(times) == 0 {
 		return rsp
 	}
@@ -849,37 +833,6 @@ func readVectorLong(iter *sdkjsoniter.Iterator, opt Options) backend.DataRespons
 		TypeVersion: data.FrameTypeVersion{0, 1},
 	}
 	rsp.Frames = append(data.Frames{frame}, rsp.Frames...)
-	return rsp
-}
-
-// perSeriesVector returns the frames that readMatrixOrVectorMulti reads from the same vector, in series order.
-func perSeriesVector(times []time.Time, values []float64, labelKeys []string, labelCols map[string][]string, heatmaps []heatmapAt) backend.DataResponse {
-	rsp := backend.DataResponse{Frames: make(data.Frames, 0, len(times)+len(heatmaps))}
-	h := 0
-	for row := range times {
-		for ; h < len(heatmaps) && heatmaps[h].row == row; h++ {
-			rsp.Frames = append(rsp.Frames, heatmaps[h].frame)
-		}
-		labels := data.Labels{}
-		for _, key := range labelKeys {
-			if v := labelCols[key][row]; v != "" {
-				labels[key] = v
-			}
-		}
-		frame := data.NewFrame("",
-			data.NewField(data.TimeSeriesTimeFieldName, nil, []time.Time{times[row]}),
-			data.NewField(data.TimeSeriesValueFieldName, labels, []float64{values[row]}),
-		)
-		frame.Meta = &data.FrameMeta{
-			Type:        data.FrameTypeNumericMulti,
-			Custom:      resultTypeToCustomMeta("vector"),
-			TypeVersion: data.FrameTypeVersion{0, 1},
-		}
-		rsp.Frames = append(rsp.Frames, frame)
-	}
-	for _, hm := range heatmaps[h:] {
-		rsp.Frames = append(rsp.Frames, hm.frame)
-	}
 	return rsp
 }
 

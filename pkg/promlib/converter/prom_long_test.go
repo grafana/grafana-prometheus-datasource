@@ -137,101 +137,33 @@ func TestReadVectorLongMatchesSeriesFrames(t *testing.T) {
 	}
 }
 
-// randomVector returns a vector response of up to 40 series with ragged label sets, special values and,
-// for about one series in ten, a native histogram sample.
-func randomVector(rng *rand.Rand) string {
-	keys := []string{"__name__", "az", "id", "instance", "job", "le", "zone"}
-	values := []string{"0", "1", "-2.5", "1e300", "NaN", "+Inf", "-Inf"}
-	var sb strings.Builder
-	sb.WriteString(`{"status":"success","data":{"resultType":"vector","result":[`)
-	for i := range rng.IntN(40) {
-		if i > 0 {
-			sb.WriteByte(',')
-		}
-		var labels []string
-		for _, key := range keys {
-			if rng.IntN(3) > 0 {
-				labels = append(labels, fmt.Sprintf(`"%s":"v%d"`, key, rng.IntN(4)))
-			}
-		}
-		ts := fmt.Sprintf("%d.%03d", 1700000000+rng.IntN(3), rng.IntN(1000))
-		if rng.IntN(10) == 0 {
-			fmt.Fprintf(&sb, `{"metric":{%s},"histogram":[%s,{"count":"3","sum":"4.5","buckets":[[0,"1","2","3"]]}]}`, strings.Join(labels, ","), ts)
-			continue
-		}
-		fmt.Fprintf(&sb, `{"metric":{%s},"value":[%s,"%s"]}`, strings.Join(labels, ","), ts, values[rng.IntN(len(values))])
-	}
-	sb.WriteString(`]}}`)
-	return sb.String()
-}
-
 func TestReadVectorLongMatchesSeriesFramesRandom(t *testing.T) {
 	rng := rand.New(rand.NewPCG(1, 2))
+	keys := []string{"__name__", "az", "id", "instance", "job", "le", "zone"}
+	values := []string{"0", "1", "-2.5", "1e300", "NaN", "+Inf", "-Inf"}
 	for n := range 500 {
-		input := randomVector(rng)
-		t.Run(fmt.Sprint(n), func(t *testing.T) {
-			requireLongMatchesSeriesFrames(t, input)
-		})
-	}
-}
-
-// requireSameFrames asserts that the two readings of input give the same frames, in the same order.
-func requireSameFrames(t *testing.T, input string, want, got Options) {
-	t.Helper()
-	read := func(opt Options) data.Frames {
-		rsp := ReadPrometheusStyleResult(jsoniter.ParseBytes(sdkjsoniter.ConfigDefault, []byte(input)), opt)
-		require.NoError(t, rsp.Error)
-		return rsp.Frames
-	}
-	wantFrames, gotFrames := read(want), read(got)
-	require.Equal(t, len(wantFrames), len(gotFrames), "frames")
-	for i := range wantFrames {
-		w, err := data.FrameToJSON(wantFrames[i], data.IncludeAll)
-		require.NoError(t, err)
-		g, err := data.FrameToJSON(gotFrames[i], data.IncludeAll)
-		require.NoError(t, err)
-		require.JSONEq(t, string(w), string(g), "frame %d", i)
-	}
-}
-
-// A vector with a native histogram sample reads into the frames of readMatrixOrVectorMulti, and a vector
-// without one into the long frame.
-func TestReadVectorLongPerSeriesIfHistogram(t *testing.T) {
-	histogram := func(job string) string {
-		return `{"metric":{"job":"` + job + `"},"histogram":[1700000000,{"count":"3","sum":"4.5","buckets":[[0,"1","2","3"]]}]}`
-	}
-	float := `{"metric":{"job":"a","instance":"i"},"value":[1700000000,"1"]}`
-	ragged := `{"metric":{"zone":"z"},"value":[1700000001,"NaN"]}`
-	tests := []struct {
-		name   string
-		result string
-	}{
-		{"histogram between float series", float + "," + histogram("h") + "," + ragged},
-		{"histogram first", histogram("h") + "," + float + "," + ragged},
-		{"histogram last", float + "," + ragged + "," + histogram("h")},
-		{"two histograms together", float + "," + histogram("h1") + "," + histogram("h2") + "," + ragged},
-		{"histograms only", histogram("h1") + "," + histogram("h2")},
-		{"series without labels", `{"metric":{},"value":[1700000000,"2"]},` + histogram("h")},
-	}
-	perSeries := Options{LongVector: true, PerSeriesIfHistogram: true}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			requireSameFrames(t, `{"status":"success","data":{"resultType":"vector","result":[`+tc.result+`]}}`, Options{}, perSeries)
-		})
-	}
-	t.Run("no histogram", func(t *testing.T) {
-		requireSameFrames(t, `{"status":"success","data":{"resultType":"vector","result":[`+float+","+ragged+`]}}`, Options{LongVector: true}, perSeries)
-	})
-
-	rng := rand.New(rand.NewPCG(3, 4))
-	for n := range 500 {
-		input := randomVector(rng)
-		want := Options{LongVector: true}
-		if strings.Contains(input, `"histogram"`) {
-			want = Options{}
+		var sb strings.Builder
+		sb.WriteString(`{"status":"success","data":{"resultType":"vector","result":[`)
+		for i := range rng.IntN(40) {
+			if i > 0 {
+				sb.WriteByte(',')
+			}
+			var labels []string
+			for _, key := range keys {
+				if rng.IntN(3) > 0 {
+					labels = append(labels, fmt.Sprintf(`"%s":"v%d"`, key, rng.IntN(4)))
+				}
+			}
+			ts := fmt.Sprintf("%d.%03d", 1700000000+rng.IntN(3), rng.IntN(1000))
+			if rng.IntN(10) == 0 {
+				fmt.Fprintf(&sb, `{"metric":{%s},"histogram":[%s,{"count":"3","sum":"4.5","buckets":[[0,"1","2","3"]]}]}`, strings.Join(labels, ","), ts)
+				continue
+			}
+			fmt.Fprintf(&sb, `{"metric":{%s},"value":[%s,"%s"]}`, strings.Join(labels, ","), ts, values[rng.IntN(len(values))])
 		}
-		t.Run(fmt.Sprint("random ", n), func(t *testing.T) {
-			requireSameFrames(t, input, want, perSeries)
+		sb.WriteString(`]}}`)
+		t.Run(fmt.Sprint(n), func(t *testing.T) {
+			requireLongMatchesSeriesFrames(t, sb.String())
 		})
 	}
 }

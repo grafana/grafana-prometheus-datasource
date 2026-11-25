@@ -53,8 +53,7 @@ func (s *QueryData) parseResponse(ctx context.Context, q *models.Query, res *htt
 		// with no external Accept-Encoding, so Go's transparent decompression applies.
 		iter := jsoniter.Parse(jsoniter.ConfigDefault, res.Body, 1024)
 		r := converter.ReadPrometheusStyleResult(iter, converter.Options{
-			LongVector:           q.LongVector && queryType == models.InstantQueryType,
-			PerSeriesIfHistogram: q.PerSeriesIfHistogram,
+			LongVector: q.LongVector && queryType == models.InstantQueryType,
 		})
 		r.Status = backend.Status(res.StatusCode)
 
