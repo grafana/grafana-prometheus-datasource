@@ -7,11 +7,13 @@ import (
 	"math/rand/v2"
 	"os"
 	"path"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/data"
 	sdkjsoniter "github.com/grafana/grafana-plugin-sdk-go/data/utils/jsoniter"
 	jsoniter "github.com/json-iterator/go"
@@ -117,54 +119,134 @@ func requireLongMatchesSeriesFrames(t *testing.T, input string) {
 	}
 }
 
+var vectorEdgeCases = []struct {
+	name   string
+	result string
+}{
+	{"empty", ``},
+	{"one series without labels", `{"metric":{},"value":[1700000000,"1"]}`},
+	{"new keys keep first-seen order", `{"metric":{"job":"a"},"value":[1700000000,"1"]},{"metric":{"instance":"i","job":"b"},"value":[1700000000,"2"]},{"metric":{"az":"z"},"value":[1700000000,"3"]}`},
+	{"special values", `{"metric":{"v":"nan"},"value":[1700000000,"NaN"]},{"metric":{"v":"inf"},"value":[1700000000,"+Inf"]},{"metric":{"v":"-inf"},"value":[1700000000,"-Inf"]}`},
+	{"times out of order", `{"metric":{"a":"1"},"value":[1700000005.25,"1"]},{"metric":{"a":"2"},"value":[1700000000,"2"]}`},
+	{"duplicate label sets", `{"metric":{"a":"1"},"value":[1700000000,"1"]},{"metric":{"a":"1"},"value":[1700000000,"2"]}`},
+	{"float and native histogram series", `{"metric":{"job":"a"},"value":[1700000000,"1"]},{"metric":{"job":"h"},"histogram":[1700000000,{"count":"3","sum":"4.5","buckets":[[0,"1","2","3"]]}]},{"metric":{"zone":"z"},"value":[1700000000,"2"]}`},
+}
+
+func vectorResponse(result string) string {
+	return `{"status":"success","data":{"resultType":"vector","result":[` + result + `]}}`
+}
+
 func TestReadVectorLongMatchesSeriesFrames(t *testing.T) {
-	tests := []struct {
-		name   string
-		result string
-	}{
-		{"empty", ``},
-		{"one series without labels", `{"metric":{},"value":[1700000000,"1"]}`},
-		{"new keys keep first-seen order", `{"metric":{"job":"a"},"value":[1700000000,"1"]},{"metric":{"instance":"i","job":"b"},"value":[1700000000,"2"]},{"metric":{"az":"z"},"value":[1700000000,"3"]}`},
-		{"special values", `{"metric":{"v":"nan"},"value":[1700000000,"NaN"]},{"metric":{"v":"inf"},"value":[1700000000,"+Inf"]},{"metric":{"v":"-inf"},"value":[1700000000,"-Inf"]}`},
-		{"times out of order", `{"metric":{"a":"1"},"value":[1700000005.25,"1"]},{"metric":{"a":"2"},"value":[1700000000,"2"]}`},
-		{"duplicate label sets", `{"metric":{"a":"1"},"value":[1700000000,"1"]},{"metric":{"a":"1"},"value":[1700000000,"2"]}`},
-		{"float and native histogram series", `{"metric":{"job":"a"},"value":[1700000000,"1"]},{"metric":{"job":"h"},"histogram":[1700000000,{"count":"3","sum":"4.5","buckets":[[0,"1","2","3"]]}]},{"metric":{"zone":"z"},"value":[1700000000,"2"]}`},
-	}
-	for _, tc := range tests {
+	for _, tc := range vectorEdgeCases {
 		t.Run(tc.name, func(t *testing.T) {
-			requireLongMatchesSeriesFrames(t, `{"status":"success","data":{"resultType":"vector","result":[`+tc.result+`]}}`)
+			requireLongMatchesSeriesFrames(t, vectorResponse(tc.result))
 		})
 	}
 }
 
-func TestReadVectorLongMatchesSeriesFramesRandom(t *testing.T) {
-	rng := rand.New(rand.NewPCG(1, 2))
+// randomVector returns a vector response of up to 40 series with ragged label sets, special values and,
+// for about one series in ten, a native histogram sample.
+func randomVector(rng *rand.Rand) string {
 	keys := []string{"__name__", "az", "id", "instance", "job", "le", "zone"}
 	values := []string{"0", "1", "-2.5", "1e300", "NaN", "+Inf", "-Inf"}
-	for n := range 500 {
-		var sb strings.Builder
-		sb.WriteString(`{"status":"success","data":{"resultType":"vector","result":[`)
-		for i := range rng.IntN(40) {
-			if i > 0 {
-				sb.WriteByte(',')
-			}
-			var labels []string
-			for _, key := range keys {
-				if rng.IntN(3) > 0 {
-					labels = append(labels, fmt.Sprintf(`"%s":"v%d"`, key, rng.IntN(4)))
-				}
-			}
-			ts := fmt.Sprintf("%d.%03d", 1700000000+rng.IntN(3), rng.IntN(1000))
-			if rng.IntN(10) == 0 {
-				fmt.Fprintf(&sb, `{"metric":{%s},"histogram":[%s,{"count":"3","sum":"4.5","buckets":[[0,"1","2","3"]]}]}`, strings.Join(labels, ","), ts)
-				continue
-			}
-			fmt.Fprintf(&sb, `{"metric":{%s},"value":[%s,"%s"]}`, strings.Join(labels, ","), ts, values[rng.IntN(len(values))])
+	var sb strings.Builder
+	sb.WriteString(`{"status":"success","data":{"resultType":"vector","result":[`)
+	for i := range rng.IntN(40) {
+		if i > 0 {
+			sb.WriteByte(',')
 		}
-		sb.WriteString(`]}}`)
+		var labels []string
+		for _, key := range keys {
+			if rng.IntN(3) > 0 {
+				labels = append(labels, fmt.Sprintf(`"%s":"v%d"`, key, rng.IntN(4)))
+			}
+		}
+		ts := fmt.Sprintf("%d.%03d", 1700000000+rng.IntN(3), rng.IntN(1000))
+		if rng.IntN(10) == 0 {
+			fmt.Fprintf(&sb, `{"metric":{%s},"histogram":[%s,{"count":"3","sum":"4.5","buckets":[[0,"1","2","3"]]}]}`, strings.Join(labels, ","), ts)
+			continue
+		}
+		fmt.Fprintf(&sb, `{"metric":{%s},"value":[%s,"%s"]}`, strings.Join(labels, ","), ts, values[rng.IntN(len(values))])
+	}
+	sb.WriteString(`]}}`)
+	return sb.String()
+}
+
+func TestReadVectorLongMatchesSeriesFramesRandom(t *testing.T) {
+	rng := rand.New(rand.NewPCG(1, 2))
+	for n := range 500 {
+		input := randomVector(rng)
 		t.Run(fmt.Sprint(n), func(t *testing.T) {
-			requireLongMatchesSeriesFrames(t, sb.String())
+			requireLongMatchesSeriesFrames(t, input)
 		})
+	}
+}
+
+// vectorResult returns an iterator at the result array of a vector response.
+func vectorResult(t *testing.T, input string) *sdkjsoniter.Iterator {
+	t.Helper()
+	iter := sdkjsoniter.NewIterator(jsoniter.ParseString(sdkjsoniter.ConfigDefault, input))
+	for l1, err := iter.ReadObject(); l1 != ""; l1, err = iter.ReadObject() {
+		require.NoError(t, err)
+		if l1 != "data" {
+			require.NoError(t, iter.Skip())
+			continue
+		}
+		for l2, err := iter.ReadObject(); l2 != ""; l2, err = iter.ReadObject() {
+			require.NoError(t, err)
+			if l2 == "result" {
+				return iter
+			}
+			require.NoError(t, iter.Skip())
+		}
+	}
+	t.Fatal("response has no result array")
+	return nil
+}
+
+func requireSameAsReference(t *testing.T, input string) {
+	t.Helper()
+	want := readVectorLongReference(vectorResult(t, input))
+	got := readVectorLong(vectorResult(t, input))
+	require.Equal(t, want.Error, got.Error)
+	require.Len(t, got.Frames, len(want.Frames))
+	for i := range want.Frames {
+		w, err := want.Frames[i].MarshalArrow()
+		require.NoError(t, err)
+		g, err := got.Frames[i].MarshalArrow()
+		require.NoError(t, err)
+		require.Equal(t, w, g, "frame %d", i)
+	}
+}
+
+func TestReadVectorLongMatchesReference(t *testing.T) {
+	for _, tc := range vectorEdgeCases {
+		t.Run(tc.name, func(t *testing.T) {
+			requireSameAsReference(t, vectorResponse(tc.result))
+		})
+	}
+	t.Run("ragged label sets", func(t *testing.T) {
+		requireSameAsReference(t, string(makeRaggedVectorWorkload(300, 50)))
+	})
+	rng := rand.New(rand.NewPCG(3, 4))
+	for n := range 500 {
+		input := randomVector(rng)
+		t.Run(fmt.Sprint(n), func(t *testing.T) {
+			requireSameAsReference(t, input)
+		})
+	}
+}
+
+func TestReadVectorLongRaggedLabelsBytes(t *testing.T) {
+	const ceiling = 16 << 20
+	input := makeRaggedVectorWorkload(2500, 200)
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	rsp := ReadPrometheusStyleResult(jsoniter.ParseBytes(sdkjsoniter.ConfigDefault, input), Options{LongVector: true})
+	runtime.ReadMemStats(&after)
+	require.NoError(t, rsp.Error)
+	if got := after.TotalAlloc - before.TotalAlloc; got > ceiling {
+		t.Errorf("reading 2,500 series with 210 label keys as a long frame allocated %d bytes, want at most %d", got, ceiling)
 	}
 }
 
@@ -285,4 +367,112 @@ func TestLongVectorLeavesOtherResultTypesUnchanged(t *testing.T) {
 			}
 		})
 	}
+}
+
+// readVectorLongReference grows every label column by one row per series. TestReadVectorLongMatchesReference
+// checks that readVectorLong returns the same frames.
+func readVectorLongReference(iter *sdkjsoniter.Iterator) backend.DataResponse {
+	rsp := backend.DataResponse{}
+	var times []time.Time
+	var values []float64
+	labelCols := map[string][]string{}
+	var labelKeys []string
+
+	for more, err := iter.ReadArray(); more; more, err = iter.ReadArray() {
+		if err != nil {
+			return rspErr(err)
+		}
+
+		var labels data.Labels
+		var histogram *histogramInfo
+		var t time.Time
+		var v float64
+		hasValue := false
+
+		for l1Field, err := iter.ReadObject(); l1Field != ""; l1Field, err = iter.ReadObject() {
+			if err != nil {
+				return rspErr(err)
+			}
+			switch l1Field {
+			case "metric":
+				if err = iter.ReadVal(&labels); err != nil {
+					return rspErr(err)
+				}
+
+			case "value":
+				if t, v, err = readTimeValuePair(iter); err != nil {
+					return rspErr(err)
+				}
+				hasValue = true
+
+			case "histogram":
+				histogram = newHistogramInfo(0)
+				if err = readHistogram(iter, histogram); err != nil {
+					return rspErr(err)
+				}
+
+			default:
+				if err = iter.Skip(); err != nil {
+					return rspErr(err)
+				}
+				logf("readVectorLongReference: %s\n", l1Field)
+			}
+		}
+
+		if histogram != nil {
+			rsp.Frames = append(rsp.Frames, newHeatmapFrame(labels, histogram))
+			continue
+		}
+		if !hasValue {
+			continue
+		}
+
+		row := len(times)
+		times = append(times, t)
+		values = append(values, v)
+		var newKeys []string
+		for key, val := range labels {
+			col, ok := labelCols[key]
+			if !ok {
+				col = make([]string, row, row+1)
+				newKeys = append(newKeys, key)
+			}
+			labelCols[key] = append(col, val)
+		}
+		// Columns appear in first-seen order, and each series adds its new keys sorted.
+		slices.Sort(newKeys)
+		labelKeys = append(labelKeys, newKeys...)
+		for key, col := range labelCols {
+			if len(col) == row {
+				labelCols[key] = append(col, "")
+			}
+		}
+	}
+
+	if len(times) == 0 {
+		return rsp
+	}
+
+	fields := make([]*data.Field, 0, len(labelKeys)+2)
+	fields = append(fields, data.NewField(data.TimeSeriesTimeFieldName, nil, times))
+	for _, key := range labelKeys {
+		col := labelCols[key]
+		nullable := make([]*string, len(col))
+		for i := range col {
+			if col[i] != "" {
+				nullable[i] = &col[i]
+			}
+		}
+		fields = append(fields, data.NewField(key, nil, nullable))
+	}
+	fields = append(fields, data.NewField(data.TimeSeriesValueFieldName, nil, values))
+
+	frame := data.NewFrame("", fields...)
+	frame.Meta = &data.FrameMeta{
+		Type:        data.FrameTypeNumericLong,
+		Custom:      resultTypeToCustomMeta("vector"),
+		TypeVersion: data.FrameTypeVersion{0, 1},
+	}
+	rsp.Frames = append(data.Frames{frame}, rsp.Frames...)
+	return rsp
 }

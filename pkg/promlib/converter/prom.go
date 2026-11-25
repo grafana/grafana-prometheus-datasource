@@ -741,7 +741,8 @@ func readVectorLong(iter *sdkjsoniter.Iterator) backend.DataResponse {
 	rsp := backend.DataResponse{}
 	var times []time.Time
 	var values []float64
-	labelCols := map[string][]string{}
+	var rows []data.Labels
+	keyCounts := map[string]int{}
 	var labelKeys []string
 
 	for more, err := iter.ReadArray(); more; more, err = iter.ReadArray() {
@@ -793,26 +794,19 @@ func readVectorLong(iter *sdkjsoniter.Iterator) backend.DataResponse {
 			continue
 		}
 
-		row := len(times)
 		times = append(times, t)
 		values = append(values, v)
+		rows = append(rows, labels)
 		var newKeys []string
-		for key, val := range labels {
-			col, ok := labelCols[key]
-			if !ok {
-				col = make([]string, row, row+1)
+		for key := range labels {
+			if keyCounts[key] == 0 {
 				newKeys = append(newKeys, key)
 			}
-			labelCols[key] = append(col, val)
+			keyCounts[key]++
 		}
 		// Columns appear in first-seen order, and each series adds its new keys sorted.
 		slices.Sort(newKeys)
 		labelKeys = append(labelKeys, newKeys...)
-		for key, col := range labelCols {
-			if len(col) == row {
-				labelCols[key] = append(col, "")
-			}
-		}
 	}
 
 	if len(times) == 0 {
@@ -821,9 +815,7 @@ func readVectorLong(iter *sdkjsoniter.Iterator) backend.DataResponse {
 
 	fields := make([]*data.Field, 0, len(labelKeys)+2)
 	fields = append(fields, data.NewField(data.TimeSeriesTimeFieldName, nil, times))
-	for _, key := range labelKeys {
-		fields = append(fields, data.NewField(key, nil, nullableLabels(labelCols[key])))
-	}
+	fields = append(fields, labelFields(labelKeys, keyCounts, rows)...)
 	fields = append(fields, data.NewField(data.TimeSeriesValueFieldName, nil, values))
 
 	frame := data.NewFrame("", fields...)
@@ -836,16 +828,23 @@ func readVectorLong(iter *sdkjsoniter.Iterator) backend.DataResponse {
 	return rsp
 }
 
-// nullableLabels returns col with nil for each series that lacks the label, so a long reader does not
-// add the label with an empty value. Prometheus treats an empty label value as no label.
-func nullableLabels(col []string) []*string {
-	out := make([]*string, len(col))
-	for i := range col {
-		if col[i] != "" {
-			out[i] = &col[i]
+// labelFields returns one nullable string field per key, with nil for each series that lacks the label, so a
+// long reader does not add the label with an empty value. Prometheus treats an empty label value as no label.
+func labelFields(keys []string, keyCounts map[string]int, rows []data.Labels) []*data.Field {
+	fields := make([]*data.Field, len(keys))
+	for k, key := range keys {
+		cells := make([]string, 0, keyCounts[key])
+		field := data.NewFieldFromFieldType(data.FieldTypeNullableString, len(rows))
+		field.Name = key
+		for r, labels := range rows {
+			if v := labels[key]; v != "" {
+				cells = append(cells, v)
+				field.Set(r, &cells[len(cells)-1])
+			}
 		}
+		fields[k] = field
 	}
-	return out
+	return fields
 }
 
 func readTimeValuePair(iter *sdkjsoniter.Iterator) (time.Time, float64, error) {
