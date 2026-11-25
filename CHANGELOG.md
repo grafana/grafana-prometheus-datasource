@@ -1,5 +1,23 @@
 # grafana-prometheus-datasource
 
+## 13.3.0
+
+🚀 Ship the query type schema in the plugin package so that Grafana can serve it ([#442](https://github.com/grafana/grafana-prometheus-datasource/pull/442))
+
+🐛 Fix query editor crash on queries with Range and Instant both enabled outside Explore and the panel editor (e.g. Notebooks) ([#450](https://github.com/grafana/grafana-prometheus-datasource/pull/450))
+
+⚙️ Update grafana-plugin-sdk-go to v0.302.0, which lowers the memory that encoding large query responses holds. Remove `ValidateAdmission`, `MutateAdmission` and `ConvertObjects` from `Service`, because the SDK no longer has the experimental admission and conversion hooks. ([#449](https://github.com/grafana/grafana-prometheus-datasource/pull/449))
+
+🐛 Build the Search API resource URL with `buildResourcesDatasourceUrl` so it follows Grafana's datasource API routing, falling back to the legacy URL on older Grafana runtimes. Also send the datasource request headers (`X-Plugin-Id`, `X-Datasource-Uid`) with these requests. ([#454](https://github.com/grafana/grafana-prometheus-datasource/pull/454))
+
+## 13.2.7
+
+🐛 Fix security vulnerability (CVE-2026-78661)
+
+🐛 Fix browser freeze when a query with the Auto legend returns many series ([#395](https://github.com/grafana/grafana-prometheus-datasource/pull/395))
+
+🐛 Select the exact match on Enter in the query builder metric, label name and label value fields, instead of the first option in sorted order. ([#430](https://github.com/grafana/grafana-prometheus-datasource/pull/430))
+
 ## 13.2.6
 
 🐛 Enable publish-and-deployed ([#426](https://github.com/grafana/grafana-prometheus-datasource/pull/426))

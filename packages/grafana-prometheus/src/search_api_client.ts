@@ -300,9 +300,8 @@ export class SearchApiClient extends BaseResourceClient implements ResourceApiCl
       }
     }
 
-    const uid = encodeURIComponent(this.datasource.uid);
-    const url = `api/datasources/uid/${uid}/resources/api/v1/search/${endpoint}`;
-    const headers: Record<string, string> = {};
+    const url = this.buildSearchUrl(endpoint);
+    const headers: Record<string, string> = { ...this.getDatasourceRequestHeaders() };
     const orgId = config.bootData?.user?.orgId;
     if (orgId) {
       headers['X-Grafana-Org-Id'] = String(orgId);
@@ -322,6 +321,27 @@ export class SearchApiClient extends BaseResourceClient implements ResourceApiCl
       options.onTransportStats?.({ ...stats });
       cancel();
     }
+  }
+
+  // Resource URLs go through DataSourceWithBackend so they follow Grafana's datasource API routing
+  // (the /apis/... path when the feature flag is on). Older @grafana/runtime versions do not have
+  // buildResourcesDatasourceUrl, in which case the legacy URL is used.
+  private buildSearchUrl(endpoint: SearchEndpoint): string {
+    const path = `api/v1/search/${endpoint}`;
+    if (typeof this.datasource.buildResourcesDatasourceUrl === 'function') {
+      // buildResourcesDatasourceUrl returns a root-relative path. chunked() needs a URL without the
+      // leading slash so it resolves against <base href> and keeps working on subpath installs.
+      return this.datasource.buildResourcesDatasourceUrl(path).replace(/^\/+/, '');
+    }
+    return `api/datasources/uid/${encodeURIComponent(this.datasource.uid)}/resources/${path}`;
+  }
+
+  // Same headers getResource/postResource add (X-Plugin-Id, X-Datasource-Uid). The method is
+  // protected in DataSourceWithBackend and absent in older runtimes.
+  private getDatasourceRequestHeaders(): Record<string, string> {
+    const getHeaders = (this.datasource as unknown as { getRequestHeaders?: () => Record<string, string> })
+      .getRequestHeaders;
+    return typeof getHeaders === 'function' ? getHeaders.call(this.datasource) : {};
   }
 
   private async pingLoginToRefreshSession(): Promise<void> {

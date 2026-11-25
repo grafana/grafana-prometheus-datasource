@@ -86,9 +86,15 @@ export const PromQueryBuilderOptions = React.memo<PromQueryBuilderOptionsProps>(
       onRunQuery();
     };
 
+    const queryTypeValue = getQueryTypeValue(query);
+
+    // A query that is already "Both" (e.g. added from Explore) must keep its option in every app.
     const queryTypeOptions = getQueryTypeOptions(
       !uiOptions?.disableTypeBoth &&
-        (app === CoreApp.Explore || app === CoreApp.Correlations || app === CoreApp.PanelEditor)
+        (app === CoreApp.Explore ||
+          app === CoreApp.Correlations ||
+          app === CoreApp.PanelEditor ||
+          queryTypeValue === 'both')
     );
 
     const onQueryTypeChange = getQueryTypeChangeHandler(query, onChange);
@@ -105,15 +111,17 @@ export const PromQueryBuilderOptions = React.memo<PromQueryBuilderOptionsProps>(
     };
 
     const formatOption = FORMAT_OPTIONS.find((option) => option.value === query.format) || FORMAT_OPTIONS[0];
-    const queryTypeValue = getQueryTypeValue(query);
-    const queryTypeLabel = queryTypeOptions.find((x) => x.value === queryTypeValue)!.label;
+    const queryTypeLabel = (
+      queryTypeOptions.find((x) => x.value === queryTypeValue) ??
+      getQueryTypeOptions(true).find((x) => x.value === queryTypeValue)
+    )?.label;
 
     return (
       <Box backgroundColor={'secondary'} borderRadius="default">
         <div data-testid={selectors.components.DataSource.Prometheus.queryEditor.options}>
           <QueryOptionGroup
             title={t('grafana-prometheus.querybuilder.prom-query-builder-options.title-options', 'Options')}
-            collapsedInfo={getCollapsedInfo(query, formatOption.label!, queryTypeLabel, app, {
+            collapsedInfo={getCollapsedInfo(query, formatOption.label!, queryTypeLabel ?? queryTypeValue, app, {
               legend: showLegend,
               minStep: showMinStep,
               format: showFormat,

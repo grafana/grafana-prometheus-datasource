@@ -1,5 +1,17 @@
 # Changelog
 
+## 13.2.5
+
+🐛 Fix query editor crash on queries with Range and Instant both enabled outside Explore and the panel editor (e.g. Notebooks) ([#450](https://github.com/grafana/grafana-prometheus-datasource/pull/450))
+
+🐛 Build the Search API resource URL with `buildResourcesDatasourceUrl` so it follows Grafana's datasource API routing, falling back to the legacy URL on older Grafana runtimes. Also send the datasource request headers (`X-Plugin-Id`, `X-Datasource-Uid`) with these requests. ([#454](https://github.com/grafana/grafana-prometheus-datasource/pull/454))
+
+## 13.2.4
+
+🐛 Fix browser freeze when a query with the Auto legend returns many series ([#395](https://github.com/grafana/grafana-prometheus-datasource/pull/395))
+
+🐛 Select the exact match on Enter in the query builder metric, label name and label value fields, instead of the first option in sorted order. ([#430](https://github.com/grafana/grafana-prometheus-datasource/pull/430))
+
 ## 13.2.3
 
 🐛 Fix config editor crash when exemplarTraceIdDestinations is provisioned as a non-array value. The value is now ignored, matching the backend, and a warning is shown. ([#418](https://github.com/grafana/grafana-prometheus-datasource/pull/418))

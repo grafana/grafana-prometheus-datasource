@@ -870,7 +870,7 @@
       ]
     },
     {
-      "msg": "Minimal Basic-auth payload: {\"url\":\"http://localhost:9090\",\"basicAuth\":true,\"basicAuthUser\":\"<user>\",\"jsonData\":{},\"secureJsonData\":{\"basicAuthPassword\":\"<password>\"}}. Minimal No-auth payload: {\"url\":\"http://localhost:9090\",\"jsonData\":{}}. Minimal OAuth-forward payload: {\"url\":\"http://localhost:9090\",\"jsonData\":{\"oauthPassThru\":true}}. root_url is required — the backend admission handler (pkg/promlib/admission_handler.go:51) rejects a missing URL. Trailing slashes are safe: the client uses path.Join to build /api/v1/... under the base URL.",
+      "msg": "Minimal Basic-auth payload: {\"url\":\"http://localhost:9090\",\"basicAuth\":true,\"basicAuthUser\":\"<user>\",\"jsonData\":{},\"secureJsonData\":{\"basicAuthPassword\":\"<password>\"}}. Minimal No-auth payload: {\"url\":\"http://localhost:9090\",\"jsonData\":{}}. Minimal OAuth-forward payload: {\"url\":\"http://localhost:9090\",\"jsonData\":{\"oauthPassThru\":true}}. root_url is required, because a query without a URL fails. Trailing slashes are safe: the client uses path.Join to build /api/v1/... under the base URL.",
       "tags": [
         "llm",
         "auth"
