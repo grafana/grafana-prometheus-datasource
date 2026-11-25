@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/client"
+	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/instrumentation"
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/intervalv2"
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/models"
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib/querydata/exemplar"
@@ -92,33 +94,44 @@ func (s *QueryData) Execute(ctx context.Context, req *backend.QueryDataRequest) 
 
 	_ = concurrency.ForEachJob(ctx, len(req.Queries), concurrentQueryCount, func(ctx context.Context, idx int) error {
 		query := req.Queries[idx]
-		r := s.handleQuery(ctx, query, fromAlert)
-		if r != nil {
-			m.Lock()
-			result.Responses[query.RefID] = *r
-			m.Unlock()
-		}
+		r := s.recoverPanic(ctx, func() backend.DataResponse { return s.handleQuery(ctx, query, fromAlert) })
+		m.Lock()
+		result.Responses[query.RefID] = r
+		m.Unlock()
 		return nil
 	})
 
 	return &result, nil
 }
 
-func (s *QueryData) handleQuery(ctx context.Context, bq backend.DataQuery, fromAlert bool) *backend.DataResponse {
+// recoverPanic runs query and turns a panic into an error response. The SDK recovers panics only on the request
+// goroutine, and each query and each of its requests run on goroutines of their own.
+func (s *QueryData) recoverPanic(ctx context.Context, query func() backend.DataResponse) (rsp backend.DataResponse) {
+	defer func() {
+		if p := recover(); p != nil {
+			s.log.FromContext(ctx).Error("panic triggered", "error", p, "stack", string(debug.Stack()))
+			instrumentation.UpdateQueryPanicMetrics()
+			rsp = backend.DataResponse{
+				Error:       backend.PluginErrorf("panic triggered: %v", p),
+				Status:      backend.StatusInternal,
+				ErrorSource: backend.ErrorSourcePlugin,
+			}
+		}
+	}()
+	return query()
+}
+
+func (s *QueryData) handleQuery(ctx context.Context, bq backend.DataQuery, fromAlert bool) backend.DataResponse {
 	traceCtx, span := s.tracer.Start(ctx, "datasource.prometheus")
 	defer span.End()
 	query, err := models.Parse(ctx, s.log, span, bq, s.TimeInterval, s.intervalCalculator, fromAlert)
 	if err != nil {
-		return &backend.DataResponse{
+		return backend.DataResponse{
 			Error: err,
 		}
 	}
 
-	r := s.fetch(traceCtx, s.client, query)
-	if r == nil {
-		s.log.FromContext(ctx).Debug("Received nil response from runQuery", "query", query.Expr)
-	}
-	return r
+	return *s.fetch(traceCtx, s.client, query)
 }
 
 func (s *QueryData) fetch(traceCtx context.Context, client *client.Client, q *models.Query) *backend.DataResponse {
@@ -139,7 +152,7 @@ func (s *QueryData) fetch(traceCtx context.Context, client *client.Client, q *mo
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			res := s.instantQuery(traceCtx, client, q)
+			res := s.recoverPanic(traceCtx, func() backend.DataResponse { return s.instantQuery(traceCtx, client, q) })
 			m.Lock()
 			addDataResponse(&res, dr)
 			m.Unlock()
@@ -150,7 +163,7 @@ func (s *QueryData) fetch(traceCtx context.Context, client *client.Client, q *mo
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			res := s.rangeQuery(traceCtx, client, q)
+			res := s.recoverPanic(traceCtx, func() backend.DataResponse { return s.rangeQuery(traceCtx, client, q) })
 			m.Lock()
 			addDataResponse(&res, dr)
 			m.Unlock()
@@ -161,7 +174,7 @@ func (s *QueryData) fetch(traceCtx context.Context, client *client.Client, q *mo
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			res := s.exemplarQuery(traceCtx, client, q)
+			res := s.recoverPanic(traceCtx, func() backend.DataResponse { return s.exemplarQuery(traceCtx, client, q) })
 			m.Lock()
 			if res.Error != nil {
 				// If exemplar query returns error, we want to only log it and
@@ -244,9 +257,14 @@ func addDataResponse(res *backend.DataResponse, dr *backend.DataResponse) {
 		if dr.Error == nil {
 			dr.Error = res.Error
 		} else {
-			dr.Error = fmt.Errorf("%v %w", dr.Error, res.Error)
+			dr.Error = fmt.Errorf("%w %w", dr.Error, res.Error)
 		}
-		dr.ErrorSource = status.SourceFromHTTPStatus(int(res.Status))
+		if dr.ErrorSource != backend.ErrorSourcePlugin {
+			dr.ErrorSource = status.SourceFromHTTPStatus(int(res.Status))
+			if backend.IsPluginError(res.Error) {
+				dr.ErrorSource = backend.ErrorSourcePlugin
+			}
+		}
 		dr.Status = res.Status
 	}
 	dr.Frames = append(dr.Frames, res.Frames...)
