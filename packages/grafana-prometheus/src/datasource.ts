@@ -431,6 +431,8 @@ export class PrometheusDatasource
     const processedTargets: PromQuery[] = [];
     const processedTarget = {
       ...target,
+      // Only withLongVector sets the opt-in, so a saved longVector does not change other panels.
+      longVector: undefined,
       exemplar: this.shouldRunExemplarQuery(target, request),
       requestId: request.panelId + target.refId,
       utcOffsetSec: utcOffset * 60,
@@ -637,6 +639,8 @@ export class PrometheusDatasource
 
         const expandedQuery = {
           ...query,
+          // Expressions do not read numeric-long frames.
+          longVector: undefined,
           ...(query.scopes && query.scopes.length > 0 ? { adhocFilters: this.generateScopeFilters(filters) } : {}),
           datasource: this.getRef(),
           expr: replacedInterpolatedQuery,

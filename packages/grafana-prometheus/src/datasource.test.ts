@@ -794,6 +794,15 @@ describe('PrometheusDatasource', () => {
       expect(queries[0].interval).toBe(interval);
     });
 
+    it('should drop a saved longVector', () => {
+      const queries = ds.interpolateVariablesInQueries(
+        [{ refId: 'A', expr: 'up', instant: true, longVector: true }],
+        {}
+      );
+
+      expect(queries[0].longVector).toBeUndefined();
+    });
+
     it('should call enhanceExprWithAdHocFilters', () => {
       ds.enhanceExprWithAdHocFilters = jest.fn();
       const queries = [
@@ -1354,6 +1363,21 @@ describe('PrometheusDatasource2', () => {
         [
           'a Both table query in a dashboard',
           { instant: true, range: true, format: 'table' },
+          CoreApp.Dashboard,
+          [
+            ['A', undefined],
+            ['A-Instant', undefined],
+          ],
+        ],
+        [
+          'an instant time series query with a saved opt-in',
+          { instant: true, range: false, longVector: true },
+          CoreApp.Dashboard,
+          [['A', undefined]],
+        ],
+        [
+          'a Both table query in a dashboard with a saved opt-in',
+          { instant: true, range: true, format: 'table', longVector: true },
           CoreApp.Dashboard,
           [
             ['A', undefined],
