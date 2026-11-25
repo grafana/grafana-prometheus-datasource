@@ -18,6 +18,12 @@ var (
 		Name:      "prometheus_plugin_backend_jsondata_lenient_type_count",
 		Help:      "The total amount of datasource jsonData values that did not match their declared type",
 	}, []string{"from", "to", "outcome"})
+
+	queryPanicCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: "grafana",
+		Name:      "prometheus_plugin_backend_query_panic_count",
+		Help:      "The total amount of query panics that the plugin recovered from and returned as query errors",
+	})
 )
 
 const (
@@ -48,6 +54,11 @@ func UpdateQueryDataMetrics(err error, resp *backend.QueryDataResponse) {
 // type. outcome is "coerced" when the value could still be read, "dropped" when it could not.
 func UpdateJsonDataLenientTypeMetrics(fromValueType, toValueType, outcome string) {
 	jsonDataLenientTypeCounter.WithLabelValues(fromValueType, toValueType, outcome).Inc()
+}
+
+// UpdateQueryPanicMetrics records a query panic that the plugin recovered from.
+func UpdateQueryPanicMetrics() {
+	queryPanicCounter.Inc()
 }
 
 func getErrorSource(err error, resp *backend.QueryDataResponse) string {
