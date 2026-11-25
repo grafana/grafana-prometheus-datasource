@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -111,9 +112,7 @@ func TestService(t *testing.T) {
 			return NewService(p, logger, mockExtendTransportOptions)
 		})
 		got := send(t, func(p *sdkhttpclient.Provider) *Service {
-			service, err := NewServiceFactory(p, logger, mockExtendTransportOptions)(context.Background(), *mockRequest().PluginContext.DataSourceInstanceSettings)
-			require.NoError(t, err)
-			return service
+			return NewServiceFactory(p, logger, mockExtendTransportOptions)(context.Background(), *mockRequest().PluginContext.DataSourceInstanceSettings)
 		})
 
 		require.Equal(t, want.Method, got.Method)
@@ -124,6 +123,45 @@ func TestService(t *testing.T) {
 		gotBody, err := io.ReadAll(got.Body)
 		require.NoError(t, err)
 		require.Equal(t, wantBody, gotBody)
+	})
+
+	t.Run("both constructors apply the transport and middlewares of extendOptions", func(t *testing.T) {
+		var header string
+		srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+			header = r.Header.Get("X-Extended")
+		}))
+		t.Cleanup(srv.Close)
+		req := mockRequest()
+		req.PluginContext.DataSourceInstanceSettings.URL = srv.URL
+		settings := *req.PluginContext.DataSourceInstanceSettings
+		logger := backend.NewLoggerWith("logger", "test")
+
+		for name, newService := range map[string]func(ExtendOptions) *Service{
+			"NewService": func(extend ExtendOptions) *Service { return NewService(nil, logger, extend) },
+			"NewServiceFactory": func(extend ExtendOptions) *Service {
+				return NewServiceFactory(nil, logger, extend)(context.Background(), settings)
+			},
+		} {
+			t.Run(name, func(t *testing.T) {
+				header = ""
+				configured := false
+				extend := func(_ context.Context, _ backend.DataSourceInstanceSettings, opts *sdkhttpclient.Options, _ log.Logger) error {
+					opts.ConfigureTransport = func(sdkhttpclient.Options, *http.Transport) { configured = true }
+					opts.Middlewares = append(opts.Middlewares, sdkhttpclient.NamedMiddlewareFunc("extended",
+						func(_ sdkhttpclient.Options, next http.RoundTripper) http.RoundTripper {
+							return sdkhttpclient.RoundTripperFunc(func(r *http.Request) (*http.Response, error) {
+								r.Header.Set("X-Extended", "yes")
+								return next.RoundTrip(r)
+							})
+						}))
+					return nil
+				}
+
+				require.NoError(t, newService(extend).CallResource(context.Background(), req, &fakeSender{}))
+				require.True(t, configured)
+				require.Equal(t, "yes", header)
+			})
+		}
 	})
 
 	t.Run("no extendOptions function provided", func(t *testing.T) {

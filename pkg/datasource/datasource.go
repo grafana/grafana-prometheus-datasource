@@ -16,11 +16,7 @@ import (
 func NewInstanceFactory() sdkdatasource.InstanceFactoryFunc {
 	newService := promlib.NewServiceFactory(sdkhttpclient.NewProvider(), backend.NewLoggerWith("logger", "tsdb.prometheus"), nil)
 	return func(ctx context.Context, settings backend.DataSourceInstanceSettings) (instancemgmt.Instance, error) {
-		s, err := newService(ctx, settings)
-		if err != nil {
-			return nil, err
-		}
-		return &Datasource{Service: s}, nil
+		return &Datasource{Service: newService(ctx, settings)}, nil
 	}
 }
 

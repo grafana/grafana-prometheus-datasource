@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -120,4 +121,48 @@ func TestDatasourceDisposeClosesIdleConnections(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("the idle upstream connection is still open after Dispose")
 	}
+}
+
+func brokenSettings(pCtx backend.PluginContext) backend.PluginContext {
+	settings := *pCtx.DataSourceInstanceSettings
+	settings.Updated = settings.Updated.Add(time.Minute)
+	settings.JSONData = []byte(`{`)
+	pCtx.DataSourceInstanceSettings = &settings
+	return pCtx
+}
+
+func TestBrokenSettingsKeepActiveInstancesCount(t *testing.T) {
+	pCtx := pluginContext(1, "http://localhost:9090")
+	pCtx.GrafanaConfig = config.NewGrafanaCfg(nil)
+	ctx := config.WithGrafanaConfig(context.Background(), pCtx.GrafanaConfig)
+	im := sdkdatasource.NewInstanceManager(NewInstanceFactory())
+	before := activeInstances(t)
+
+	_, err := im.Get(ctx, pCtx)
+	require.NoError(t, err)
+	broken := brokenSettings(pCtx)
+	for range 3 {
+		_, _ = im.Get(ctx, broken)
+	}
+
+	// The SDK disposes a replaced instance, and decrements the gauge, 5 s after the replacement.
+	time.Sleep(6 * time.Second)
+	require.Equal(t, before+1, activeInstances(t))
+}
+
+func TestInstanceFactoryReturnsBuildErrorFromHandlers(t *testing.T) {
+	pCtx := brokenSettings(pluginContext(1, "http://localhost:9090"))
+	ctx := config.WithGrafanaConfig(context.Background(), ttlConfig)
+	inst, err := NewInstanceFactory()(ctx, *pCtx.DataSourceInstanceSettings)
+	require.NoError(t, err)
+	ds := inst.(*Datasource)
+
+	_, err = ds.QueryData(ctx, &backend.QueryDataRequest{PluginContext: pCtx, Queries: []backend.DataQuery{{RefID: "A"}}})
+	require.ErrorContains(t, err, "error reading settings")
+
+	health, err := ds.CheckHealth(ctx, &backend.CheckHealthRequest{PluginContext: pCtx})
+	require.NoError(t, err)
+	require.Equal(t, backend.HealthStatusError, health.Status)
+	require.Contains(t, health.Message, "error reading settings")
+	require.True(t, strings.HasSuffix(health.Message, " - error getting datasource info"), health.Message)
 }

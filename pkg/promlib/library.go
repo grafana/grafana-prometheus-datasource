@@ -40,10 +40,11 @@ func (i instance) Dispose() {
 
 type singleInstance struct {
 	instance instancemgmt.Instance
+	err      error
 }
 
 func (s singleInstance) Get(context.Context, backend.PluginContext) (instancemgmt.Instance, error) {
-	return s.instance, nil
+	return s.instance, s.err
 }
 
 type ExtendOptions func(ctx context.Context, settings backend.DataSourceInstanceSettings, clientOpts *sdkhttpclient.Options, log log.Logger) error
@@ -61,18 +62,15 @@ func NewService(httpClientProvider *sdkhttpclient.Provider, plog log.Logger, ext
 }
 
 // NewServiceFactory returns a constructor for a Service that serves one data source, for a caller that keeps one
-// instance per data source itself, such as datasource.Manage.
-func NewServiceFactory(httpClientProvider *sdkhttpclient.Provider, plog log.Logger, extendOptions ExtendOptions) func(context.Context, backend.DataSourceInstanceSettings) (*Service, error) {
+// instance per data source, such as datasource.Manage. If the settings do not build, the Service returns the error.
+func NewServiceFactory(httpClientProvider *sdkhttpclient.Provider, plog log.Logger, extendOptions ExtendOptions) func(context.Context, backend.DataSourceInstanceSettings) *Service {
 	if httpClientProvider == nil {
 		httpClientProvider = sdkhttpclient.NewProvider()
 	}
 	newInstance := newInstanceSettings(httpClientProvider, plog, extendOptions)
-	return func(ctx context.Context, settings backend.DataSourceInstanceSettings) (*Service, error) {
+	return func(ctx context.Context, settings backend.DataSourceInstanceSettings) *Service {
 		i, err := newInstance(ctx, settings)
-		if err != nil {
-			return nil, err
-		}
-		return &Service{im: singleInstance{instance: i}, logger: plog}, nil
+		return &Service{im: singleInstance{instance: i, err: err}, logger: plog}
 	}
 }
 
