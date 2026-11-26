@@ -4,13 +4,13 @@ go 1.27.3
 
 require (
 	github.com/andybalholm/brotli v1.2.8
-	github.com/grafana/dskit v0.0.0-20260928073014-b6a53f6bee29
+	github.com/grafana/dskit v0.0.0-20261104230502-5490ebb9aba4
 	github.com/grafana/grafana-plugin-sdk-go v0.302.0
-	github.com/grafana/grafana/apps/scope v0.0.0-20260930131613-fc95ee9133b2
+	github.com/grafana/grafana/apps/scope v0.0.0-20261106150213-2ec4c98d1619
 	github.com/json-iterator/go v1.1.12
 	github.com/prometheus/client_golang v1.25.0
 	github.com/prometheus/common v0.74.0
-	github.com/prometheus/prometheus v0.315.0
+	github.com/prometheus/prometheus v0.315.1
 	github.com/stretchr/testify v1.12.1
 	go.opentelemetry.io/otel v1.47.0
 	go.opentelemetry.io/otel/trace v1.47.0
@@ -84,7 +84,7 @@ require (
 	github.com/pierrec/lz4/v4 v4.1.33 // indirect
 	github.com/prometheus/client_model v0.6.3 // indirect
 	github.com/prometheus/procfs v0.23.0 // indirect
-	github.com/stretchr/objx v0.7.0 // indirect
+	github.com/stretchr/objx v0.8.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/zeebo/xxh3 v1.1.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
@@ -111,10 +111,10 @@ require (
 	google.golang.org/grpc v1.85.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
-	k8s.io/apimachinery v0.37.1 // indirect
+	k8s.io/apimachinery v0.37.2 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20260929181212-2cfbdf149b9a // indirect
-	k8s.io/utils v0.0.0-20260707023825-cf1189d6abe3 // indirect
+	k8s.io/utils v0.0.0-20261023123148-ca04ba58ecab // indirect
 	sigs.k8s.io/json v0.0.0-20260909141634-11ed52e25bc5 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v6 v6.4.2 // indirect
