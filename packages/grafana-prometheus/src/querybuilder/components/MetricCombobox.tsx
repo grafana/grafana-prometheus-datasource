@@ -42,7 +42,7 @@ export function MetricCombobox({
   const [metricsModalOpen, setMetricsModalOpen] = useState(false);
   const [options, setOptions] = useState<Array<SelectableValue<string>>>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const searchAbortControllerRef = useRef<AbortController>();
+  const searchAbortControllerRef = useRef<AbortController | undefined>(undefined);
   const requestIdRef = useRef(0);
   const typedInputRef = useRef('');
   const styles = getStyles(useTheme2());

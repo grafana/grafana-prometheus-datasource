@@ -77,7 +77,7 @@ export const MetricsModalContextProvider: FC<PropsWithChildren<MetricsModalConte
   const [searchedText, setSearchedTextState] = useState('');
   const [resultsIncomplete, setResultsIncomplete] = useState(false);
   const latestSearchIdRef = useRef<number>(0);
-  const searchAbortControllerRef = useRef<AbortController>();
+  const searchAbortControllerRef = useRef<AbortController | undefined>(undefined);
   const setSearchedText = useCallback((value: string) => {
     latestSearchIdRef.current++;
     searchAbortControllerRef.current?.abort();
