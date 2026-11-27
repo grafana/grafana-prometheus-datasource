@@ -21,7 +21,7 @@ func TestPlugin(t *testing.T) {
 		ID:                "prometheus",
 		ConfigSchemaJSON:  configSchemaJSON,
 		SettingsJSONModel: models.PromOptions{},
-		SecureKeys:        []string{"basicAuthPassword", "tlsCACert", "tlsClientCert", "tlsClientKey"},
+		SecureKeys:        []string{"basicAuthPassword", "tlsCACert", "tlsClientCert", "tlsClientKey", "oauth2ClientSecret"},
 		SettingsExamples: &pluginschema.SettingsExamples{
 			Examples: map[string]*spec3.Example{
 				"": {
