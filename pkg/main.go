@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	if err := datasource.Manage("prometheus", promds.NewDatasource, datasource.ManageOpts{}); err != nil {
+	if err := datasource.Manage("prometheus", promds.NewInstanceFactory(), datasource.ManageOpts{}); err != nil {
 		log.DefaultLogger.Error(err.Error())
 		os.Exit(1)
 	}

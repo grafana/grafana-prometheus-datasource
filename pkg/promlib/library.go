@@ -3,6 +3,7 @@ package promlib
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
@@ -19,13 +20,31 @@ import (
 )
 
 type Service struct {
-	im     instancemgmt.InstanceManager
+	im     instanceGetter
 	logger log.Logger
+}
+
+type instanceGetter interface {
+	Get(ctx context.Context, pluginContext backend.PluginContext) (instancemgmt.Instance, error)
 }
 
 type instance struct {
 	queryData *querydata.QueryData
 	resource  *resource.Resource
+	transport *http.Transport
+}
+
+func (i instance) Dispose() {
+	i.transport.CloseIdleConnections()
+}
+
+type singleInstance struct {
+	instance instancemgmt.Instance
+	err      error
+}
+
+func (s singleInstance) Get(context.Context, backend.PluginContext) (instancemgmt.Instance, error) {
+	return s.instance, s.err
 }
 
 type ExtendOptions func(ctx context.Context, settings backend.DataSourceInstanceSettings, clientOpts *sdkhttpclient.Options, log log.Logger) error
@@ -42,12 +61,26 @@ func NewService(httpClientProvider *sdkhttpclient.Provider, plog log.Logger, ext
 	}
 }
 
-// Dispose here tells plugin SDK that plugin wants to clean up resources when a new instance
-// created. As soon as datasource settings change detected by SDK old datasource instance will
-// be disposed and a new one will be created using NewSampleDatasource factory function.
+// NewServiceFactory returns a constructor for a Service that serves one data source, for a caller that keeps one
+// instance per data source, such as datasource.Manage. If the settings do not build, the Service returns the error.
+func NewServiceFactory(httpClientProvider *sdkhttpclient.Provider, plog log.Logger, extendOptions ExtendOptions) func(context.Context, backend.DataSourceInstanceSettings) *Service {
+	if httpClientProvider == nil {
+		httpClientProvider = sdkhttpclient.NewProvider()
+	}
+	newInstance := newInstanceSettings(httpClientProvider, plog, extendOptions)
+	return func(ctx context.Context, settings backend.DataSourceInstanceSettings) *Service {
+		i, err := newInstance(ctx, settings)
+		return &Service{im: singleInstance{instance: i, err: err}, logger: plog}
+	}
+}
+
+// Dispose closes the idle connections of a Service that NewServiceFactory built.
 func (s *Service) Dispose() {
-	// Clean up datasource instance resources.
-	s.logger.Debug("Disposing the instance...")
+	if si, ok := s.im.(singleInstance); ok {
+		if d, ok := si.instance.(instancemgmt.InstanceDisposer); ok {
+			d.Dispose()
+		}
+	}
 }
 
 func newInstanceSettings(httpClientProvider *sdkhttpclient.Provider, log log.Logger, extendOptions ExtendOptions) datasource.InstanceFactoryFunc {
@@ -77,6 +110,17 @@ func newInstanceSettings(httpClientProvider *sdkhttpclient.Provider, log log.Log
 			err = extendOptions(ctx, settings, opts, log)
 			if err != nil {
 				return nil, fmt.Errorf("error extending transport options: %v", err)
+			}
+		}
+
+		// http.Client.CloseIdleConnections cannot reach the transport through the SDK's middleware chain until
+		// https://github.com/grafana/grafana-plugin-sdk-go/pull/1853 ships.
+		var transport *http.Transport
+		configureTransport := opts.ConfigureTransport
+		opts.ConfigureTransport = func(o sdkhttpclient.Options, t *http.Transport) {
+			transport = t
+			if configureTransport != nil {
+				configureTransport(o, t)
 			}
 		}
 
@@ -110,6 +154,7 @@ func newInstanceSettings(httpClientProvider *sdkhttpclient.Provider, log log.Log
 		return instance{
 			queryData: qd,
 			resource:  r,
+			transport: transport,
 		}, nil
 	}
 }
