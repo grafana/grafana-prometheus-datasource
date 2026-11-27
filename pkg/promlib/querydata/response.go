@@ -64,16 +64,7 @@ func (s *QueryData) parseResponse(ctx context.Context, q *models.Query, res *htt
 		for i, frame := range r.Frames {
 			addMetadataToMultiFrame(q, frame)
 			if i == 0 {
-				frame.Meta.ExecutedQueryString = executedQueryString(q)
-				if frame.Meta.Custom == nil {
-					frame.Meta.Custom = make(map[string]any)
-				}
-				if custom, ok := frame.Meta.Custom.(map[string]any); ok {
-					// This is required for incremental querying feature
-					// Knowing the calculated minStep is required for merging and caching the frames on frontend side
-					custom["calculatedMinStep"] = q.Step.Milliseconds()
-				}
-				frame.Meta.Stats = append(frame.Meta.Stats, parseQueryStats(res.Header, queryType)...)
+				addFirstFrameMetadata(q, frame, res.Header, queryType)
 			}
 		}
 
@@ -102,6 +93,21 @@ func (s *QueryData) parseResponse(ctx context.Context, q *models.Query, res *htt
 
 		return errResp
 	}
+}
+
+// addFirstFrameMetadata adds the metadata that only the first frame of a response gets. The frame must already
+// have its meta, from addMetadataToMultiFrame.
+func addFirstFrameMetadata(q *models.Query, frame *data.Frame, header http.Header, queryType models.TimeSeriesQueryType) {
+	frame.Meta.ExecutedQueryString = executedQueryString(q)
+	if frame.Meta.Custom == nil {
+		frame.Meta.Custom = make(map[string]any)
+	}
+	if custom, ok := frame.Meta.Custom.(map[string]any); ok {
+		// This is required for incremental querying feature
+		// Knowing the calculated minStep is required for merging and caching the frames on frontend side
+		custom["calculatedMinStep"] = q.Step.Milliseconds()
+	}
+	frame.Meta.Stats = append(frame.Meta.Stats, parseQueryStats(header, queryType)...)
 }
 
 // knownQueryStats maps Mimir's Server-Timing metric names to the display
