@@ -261,16 +261,18 @@ describe('PrometheusDatasource', () => {
       });
 
       it('should not modify expression with no filters', async () => {
-        ds.query({
-          interval: '15s',
-          range: getMockTimeRange(),
-          targets: [target],
-        } as DataQueryRequest<PromQuery>);
+        await lastValueFrom(
+          ds.query({
+            interval: '15s',
+            range: getMockTimeRange(),
+            targets: [target],
+          } as DataQueryRequest<PromQuery>)
+        );
         const [result] = fetchMockCalledWith(fetchMock);
         expect(result).toMatchObject({ expr: DEFAULT_QUERY_EXPRESSION });
       });
 
-      it('should add filters to expression', () => {
+      it('should add filters to expression', async () => {
         const filters = [
           {
             key: 'k1',
@@ -283,17 +285,19 @@ describe('PrometheusDatasource', () => {
             value: 'v2',
           },
         ];
-        ds.query({
-          interval: '15s',
-          range: getMockTimeRange(),
-          filters,
-          targets: [target],
-        } as DataQueryRequest<PromQuery>);
+        await lastValueFrom(
+          ds.query({
+            interval: '15s',
+            range: getMockTimeRange(),
+            filters,
+            targets: [target],
+          } as DataQueryRequest<PromQuery>)
+        );
         const [result] = fetchMockCalledWith(fetchMock);
         expect(result).toMatchObject({ expr: 'metric{job="foo", k1="v1", k2!="v2"} - metric{k1="v1", k2!="v2"}' });
       });
 
-      it('should add escaping if needed to regex filter expressions', () => {
+      it('should add escaping if needed to regex filter expressions', async () => {
         const filters = [
           {
             key: 'k1',
@@ -306,12 +310,14 @@ describe('PrometheusDatasource', () => {
             value: `v'.*`,
           },
         ];
-        ds.query({
-          interval: '15s',
-          range: getMockTimeRange(),
-          filters,
-          targets: [target],
-        } as DataQueryRequest<PromQuery>);
+        await lastValueFrom(
+          ds.query({
+            interval: '15s',
+            range: getMockTimeRange(),
+            filters,
+            targets: [target],
+          } as DataQueryRequest<PromQuery>)
+        );
         const [result] = fetchMockCalledWith(fetchMock);
         expect(result).toMatchObject({
           expr: `metric{job="foo", k1=~"v.*", k2=~"v\\\\'.*"} - metric{k1=~"v.*", k2=~"v\\\\'.*"}`,
@@ -325,16 +331,18 @@ describe('PrometheusDatasource', () => {
       });
 
       it('should not modify expression with no filters', async () => {
-        ds.query({
-          interval: '15s',
-          range: getMockTimeRange(),
-          targets: [target],
-        } as DataQueryRequest<PromQuery>);
+        await lastValueFrom(
+          ds.query({
+            interval: '15s',
+            range: getMockTimeRange(),
+            targets: [target],
+          } as DataQueryRequest<PromQuery>)
+        );
         const [result] = fetchMockCalledWith(fetchMock);
         expect(result).toMatchObject({ expr: DEFAULT_QUERY_EXPRESSION });
       });
 
-      it('should add escaping if needed to regex filter expressions', () => {
+      it('should add escaping if needed to regex filter expressions', async () => {
         const filters = [
           {
             key: 'k1',
@@ -357,12 +365,14 @@ describe('PrometheusDatasource', () => {
             value: `\\v.*`,
           },
         ];
-        ds.query({
-          interval: '15s',
-          range: getMockTimeRange(),
-          filters,
-          targets: [target],
-        } as DataQueryRequest<PromQuery>);
+        await lastValueFrom(
+          ds.query({
+            interval: '15s',
+            range: getMockTimeRange(),
+            filters,
+            targets: [target],
+          } as DataQueryRequest<PromQuery>)
+        );
         const [result] = fetchMockCalledWith(fetchMock);
         expect(result).toMatchObject({
           expr: `metric{job="foo", k1=~"v.*", k2=~"v'.*", k3=~"v\\".*", k4=~"\\\\v.*"} - metric{k1=~"v.*", k2=~"v'.*", k3=~"v\\".*", k4=~"\\\\v.*"}`,
@@ -371,7 +381,7 @@ describe('PrometheusDatasource', () => {
     });
 
     describe('with multi-value operators', () => {
-      it('should remap =| to =~ and apply filter to expression', () => {
+      it('should remap =| to =~ and apply filter to expression', async () => {
         const filters = [
           {
             key: 'cluster',
@@ -380,19 +390,21 @@ describe('PrometheusDatasource', () => {
             values: ['prod-us-east-1', 'staging-eu-west-1', 'dev-eu-west-2'],
           },
         ];
-        ds.query({
-          interval: '15s',
-          range: getMockTimeRange(),
-          filters,
-          targets: [target],
-        } as DataQueryRequest<PromQuery>);
+        await lastValueFrom(
+          ds.query({
+            interval: '15s',
+            range: getMockTimeRange(),
+            filters,
+            targets: [target],
+          } as DataQueryRequest<PromQuery>)
+        );
         const [result] = fetchMockCalledWith(fetchMock);
         expect(result).toMatchObject({
           expr: `metric{job="foo", cluster=~"prod-us-east-1|staging-eu-west-1|dev-eu-west-2"} - metric{cluster=~"prod-us-east-1|staging-eu-west-1|dev-eu-west-2"}`,
         });
       });
 
-      it('should remap !=| to !~ and apply filter to expression', () => {
+      it('should remap !=| to !~ and apply filter to expression', async () => {
         const filters = [
           {
             key: 'namespace',
@@ -401,19 +413,21 @@ describe('PrometheusDatasource', () => {
             values: ['kube-system', 'kube-public'],
           },
         ];
-        ds.query({
-          interval: '15s',
-          range: getMockTimeRange(),
-          filters,
-          targets: [target],
-        } as DataQueryRequest<PromQuery>);
+        await lastValueFrom(
+          ds.query({
+            interval: '15s',
+            range: getMockTimeRange(),
+            filters,
+            targets: [target],
+          } as DataQueryRequest<PromQuery>)
+        );
         const [result] = fetchMockCalledWith(fetchMock);
         expect(result).toMatchObject({
           expr: `metric{job="foo", namespace!~"kube-system|kube-public"} - metric{namespace!~"kube-system|kube-public"}`,
         });
       });
 
-      it('should handle =| with a single value', () => {
+      it('should handle =| with a single value', async () => {
         const filters = [
           {
             key: 'cluster',
@@ -422,12 +436,14 @@ describe('PrometheusDatasource', () => {
             values: ['prod'],
           },
         ];
-        ds.query({
-          interval: '15s',
-          range: getMockTimeRange(),
-          filters,
-          targets: [target],
-        } as DataQueryRequest<PromQuery>);
+        await lastValueFrom(
+          ds.query({
+            interval: '15s',
+            range: getMockTimeRange(),
+            filters,
+            targets: [target],
+          } as DataQueryRequest<PromQuery>)
+        );
         const [result] = fetchMockCalledWith(fetchMock);
         expect(result).toMatchObject({
           expr: `metric{job="foo", cluster=~"prod"} - metric{cluster=~"prod"}`,

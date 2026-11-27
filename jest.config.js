@@ -47,8 +47,17 @@ const pluginProject = {
     '^react/jsx-dev-runtime$': '<rootDir>/node_modules/react/jsx-dev-runtime',
   },
   transform: { '^.+\\.(t|j)sx?$': swcTransform },
-  // monaco-promql ships ESM only; add it to the transform allowlist
-  transformIgnorePatterns: [nodeModulesToTransform([...grafanaESModules, 'monaco-promql', '@marcbachmann/cel-js'])],
+  // monaco-promql, @react-hookz/web and @ver0/deep-equal (used by @grafana/data) ship ESM only;
+  // add them to the transform allowlist
+  transformIgnorePatterns: [
+    nodeModulesToTransform([
+      ...grafanaESModules,
+      'monaco-promql',
+      '@marcbachmann/cel-js',
+      '@react-hookz/web',
+      '@ver0/deep-equal',
+    ]),
+  ],
 };
 
 // Project 2: the @grafana/prometheus library source under packages/grafana-prometheus.

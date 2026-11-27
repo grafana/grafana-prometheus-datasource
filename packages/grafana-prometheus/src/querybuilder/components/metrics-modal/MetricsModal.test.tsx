@@ -310,7 +310,8 @@ describe('MetricsModal', () => {
       expect(screen.getByText('metric_0')).toBeInTheDocument();
     });
 
-    const nextPageButton = screen.getByRole('button', { name: '2' });
+    // totalPageNum is derived in an effect after the metrics load, so wait for the page button to appear
+    const nextPageButton = await screen.findByRole('button', { name: '2' });
     await userEvent.click(nextPageButton);
 
     expect(reportInteraction).toHaveBeenCalledWith('grafana_prometheus_metrics_explorer_page_changed', {
