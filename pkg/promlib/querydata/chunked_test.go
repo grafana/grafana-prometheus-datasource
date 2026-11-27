@@ -139,7 +139,7 @@ func sameResponse(body string) fixtures {
 	}
 }
 
-func promQuery(t *testing.T, refID string, props models.PrometheusQueryProperties) backend.DataQuery {
+func promQuery(t testing.TB, refID string, props models.PrometheusQueryProperties) backend.DataQuery {
 	t.Helper()
 	b, err := json.Marshal(models.QueryModel{PrometheusQueryProperties: props})
 	require.NoError(t, err)
