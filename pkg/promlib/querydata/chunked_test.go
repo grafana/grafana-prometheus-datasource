@@ -195,6 +195,11 @@ func TestExecuteChunkedMatchesExecute(t *testing.T) {
 	converterFixture := func(name string) fixtures {
 		return sameResponse(readFixture(t, converterData+name+".json"))
 	}
+	// A classic histogram is one series per bucket, with the bucket bound in the le label.
+	classicHistogram := `{"status":"success","data":{"resultType":"matrix","result":[` +
+		`{"metric":{"__name__":"http_request_duration_seconds_bucket","le":"0.1"},"values":[[1641889530,"1"],[1641889545,"2"]]},` +
+		`{"metric":{"__name__":"http_request_duration_seconds_bucket","le":"1"},"values":[[1641889530,"3"],[1641889545,"5"]]},` +
+		`{"metric":{"__name__":"http_request_duration_seconds_bucket","le":"+Inf"},"values":[[1641889530,"4"],[1641889545,"7"]]}]}}`
 
 	cases := []struct {
 		name    string
@@ -223,6 +228,15 @@ func TestExecuteChunkedMatchesExecute(t *testing.T) {
 		{"legend auto", converterFixture("prom-matrix"), []backend.DataQuery{rangeQuery("A", "__auto")}},
 		{"legend template", converterFixture("prom-matrix"), []backend.DataQuery{rangeQuery("A", "{{job}} {{instance}}")}},
 		{"two refIDs", converterFixture("prom-matrix"), []backend.DataQuery{rangeQuery("A", ""), rangeQuery("B", "{{job}}")}},
+		{"native histogram range", converterFixture("prom-matrix-histogram-no-labels"), []backend.DataQuery{rangeQuery("A", "")}},
+		{"native histogram range, partitioned", converterFixture("prom-matrix-histogram-partitioned"), []backend.DataQuery{rangeQuery("A", "")}},
+		{"native histogram instant", converterFixture("prom-vector-histogram-no-labels"), []backend.DataQuery{instantQuery}},
+		{"classic histogram", sameResponse(classicHistogram), []backend.DataQuery{rangeQuery("A", "{{le}}")}},
+		{
+			"classic histogram as heatmap",
+			sameResponse(classicHistogram),
+			[]backend.DataQuery{promQuery(t, "A", models.PrometheusQueryProperties{Expr: "up", Range: true, Format: models.PromQueryFormatHeatmap, LegendFormat: "{{le}}"})},
+		},
 	}
 
 	for _, cf := range chunkFormats {
