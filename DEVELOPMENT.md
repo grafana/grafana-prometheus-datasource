@@ -45,6 +45,7 @@ the provisioned `prometheus-direct` and `prometheus-gzip` datasource UIDs:
 | `npm run server:utf8`             | UTF-8 metric and label names, including `a.utf8.metric 🤘`            |
 | `npm run server:search-api`       | Prometheus 3.13.3 with the experimental Search API enabled            |
 | `npm run server:full`             | All generators, node exporter, fake-data-gen, rules, and Alertmanager |
+| `npm run server:chunked`          | Grafana OSS nightly with chunked query streaming enabled              |
 
 The scripts are shorthand for layering one override onto the base file. The base
 `docker-compose.yaml` stays at the repo root; every scenario overlay lives in
@@ -68,6 +69,39 @@ the default datasource with `enableSearchApi` enabled. Use
 against the experimental metric and label search endpoints. See the
 [Search API lifecycle](./docs/prometheus-search-api-lifecycle.md) for runtime
 requirements and fallback behavior.
+
+### Chunked queries
+
+The chunked environment runs `grafana/grafana:nightly` with the
+`datasource.useNewCRUDAPIs` and `datasources.chunkedQueryStreaming` feature
+toggles. Dashboards and Explore still use `QueryData`. Only the datasource API
+calls `QueryChunkedData`, when a query asks for `text/jsonl`:
+
+```bash
+curl -s -X POST 'http://localhost:3000/apis/prometheus.datasource.grafana.app/v0alpha1/namespaces/default/datasources/prometheus-direct/query' \
+  -H 'accept: text/jsonl' -H 'content-type: application/json' \
+  -d '{"from":"now-1h","to":"now","queries":[{"refId":"A","expr":"up","range":true,"intervalMs":15000,"maxDataPoints":1000}]}'
+```
+
+Each line is one chunk. Leave out the `accept` header to get the same query as
+a single `QueryData` response.
+
+If the plugin does not implement `QueryChunkedData`, Grafana falls back to
+`QueryData` and numbers the frames `"0"`, `"1"`, and so on. The plugin log
+shows `endpoint=queryChunkedData` with `code = Unimplemented` on the first
+request. Grafana remembers that fallback until the plugin process restarts, so
+restart the Grafana container after rebuilding the backend:
+
+```bash
+docker restart grafana-prometheus-datasource
+```
+
+For many series, add the high-cardinality overlay and query
+`fakedata_highcard_http_requests_total`:
+
+```bash
+docker compose -f docker-compose.yaml -f devenv/compose/docker-compose.high-cardinality.yaml -f devenv/compose/docker-compose.chunked.yaml up --build
+```
 
 Stop the active environment before selecting another one:
 
