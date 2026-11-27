@@ -7,11 +7,14 @@ import { type Monaco, type MonacoEditor } from '@grafana/ui';
 import { type PrometheusDatasource } from '../../datasource';
 import { type PrometheusLanguageProviderInterface } from '../../language_provider';
 import { type QueryEditorCoauthoringRegistrationV1 } from '../../query_coauthoring/internalCoauthoringContract';
+import { isQueryCoauthoringEditorHost } from '../../query_coauthoring/queryCoauthoringContracts';
 import { type PromQuery } from '../../types';
 import {
   registerPrometheusQueryCoauthoring,
   type QueryCoauthoringRegistration,
 } from './PrometheusQueryCoauthoringAdapter';
+
+import { registerCoauthoringEditor } from './registerCoauthoringEditor';
 
 interface UsePrometheusQueryCoauthoringOptions {
   createQuery?: (value: string) => PromQuery;
@@ -20,6 +23,8 @@ interface UsePrometheusQueryCoauthoringOptions {
   languageProvider: PrometheusLanguageProviderInterface;
   onManualQueryChange(value: string): void;
   portalClassName: string;
+  host?: unknown;
+  changeClassName?: string;
   registrar?: QueryEditorCoauthoringRegistrationV1<PromQuery>;
   timeRange: TimeRange;
   widgetId: string;
@@ -38,6 +43,8 @@ export function usePrometheusQueryCoauthoring({
   onManualQueryChange,
   portalClassName,
   registrar,
+  host,
+  changeClassName,
   timeRange,
   widgetId,
 }: UsePrometheusQueryCoauthoringOptions) {
@@ -52,7 +59,22 @@ export function usePrometheusQueryCoauthoring({
   const timeRangeRef = useLatest(timeRange);
   const [mount, setMount] = useState<MonacoMount>();
   const [registration, setRegistration] = useState<QueryCoauthoringRegistration<PromQuery>>();
-  const available = Boolean(typeof registrar?.register === 'function' && createQuery);
+  const v2Host = isQueryCoauthoringEditorHost(host) ? host : undefined;
+  const available = !v2Host && Boolean(typeof registrar?.register === 'function' && createQuery);
+
+  useEffect(() => {
+    if (!mount || !v2Host) {
+      return;
+    }
+    return registerCoauthoringEditor({
+      ...mount,
+      host: v2Host,
+      changeClassName,
+      getExternalQuery: () => externalQueryRef.current,
+      onManualQueryChange: (value) => onManualQueryChangeRef.current(value),
+      widgetId,
+    });
+  }, [mount, v2Host, changeClassName, externalQueryRef, onManualQueryChangeRef, widgetId]);
 
   useEffect(() => {
     const createQueryAtRegistration = createQueryRef.current;

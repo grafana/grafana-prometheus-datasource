@@ -1,5 +1,27 @@
 # Prometheus query coauthoring
 
+This folder supports the inline v1 flow and Query Coauthoring v2 in the floating Assistant.
+Both share PromQL metadata, validation and diffing code.
+
+## Coauthoring v2
+
+`PrometheusDatasource.queryCoauthoring()` provides PromQL context and prepares typed query changes without
+requiring a mounted editor. Code Mode accepts an optional `queryCoauthoring` host to report selections,
+forward shortcuts and display the line marks Core requests. Core owns the session and panel previews;
+the floating Assistant owns chat. Proposed text arrives through normal query props, while typing reports a manual edit.
+
+The language stays at version 1 and exposes optional synchronous, nonmutating `getQuerySupport(query)`.
+PromQL returns `{ editable: true }`, including for drafts whose text still needs validation by `prepare`.
+New Core treats an absent hook as unknown, `false` as read-only, and throwing or malformed results as
+operational support failures. Descriptions remain usable independently of editability.
+
+A supported v2 host takes precedence over the v1 adapter. Without it, the v1 path remains available.
+Inheriting plugins receive v2 through the shared datasource and editor modules, without plugin-ID checks.
+The [private contract copy](queryCoauthoringContracts.ts) records its Core source and removal criteria;
+v2 intentionally keeps these copies private rather than applying the v1 promotion rule below.
+
+## Inline v1 (compatibility path)
+
 Query coauthoring lets someone who already has a working PromQL query describe a change in words instead of
 editing it by hand. They highlight part or all of the query, invoke coauthoring from the selection toolbar or
 with `Cmd/Ctrl + .`, describe the change, preview the proposal against the panel, then accept or dismiss it.
@@ -8,7 +30,7 @@ The feature is a paired experiment: Grafana's PanelEditNext query row owns the u
 datasource owns only the Monaco- and PromQL-specific parts. It is gated in Core behind the
 `queryeditor.coauthoringUi` feature toggle, and there is intentionally no row-level whole-query action.
 
-## Boundary
+### Boundary
 
 This is a private bilateral PanelEditNext + Prometheus seam. Prometheus implements the row-scoped
 `QueryEditorCoauthoringAdapterV1` supplied through the optional private query-editor prop
@@ -26,7 +48,7 @@ The datasource does not render coauthoring UI, mutate the editor for proposals, 
 or make the editor read-only. Core displays a proposal by passing the proposed `PromQuery` through the normal
 query props, which is why a proposal appears in Monaco without this package touching the model.
 
-## How data flows
+### How data flows
 
 ```mermaid
 sequenceDiagram
@@ -68,7 +90,7 @@ The context handed to Core (and from there to the Assistant) is deliberately sma
 normalized focus ranges, a PromQL language descriptor with prompt guidance, and advisory metric metadata. It
 carries no datasource identity, credentials, or panel data — Core supplies whatever else the Assistant needs.
 
-### Context budgets
+#### Context budgets
 
 `intelligence.ts` bounds enrichment so one invocation cannot fan out into an expensive burst of requests:
 
@@ -80,7 +102,7 @@ Metadata and labels are optional in the contract. They can be absent because of 
 failed, or because Prometheus genuinely has no value. Enrichment failures are swallowed on purpose: the rest of
 the context must still load.
 
-## Modules
+### Modules
 
 - `usePrometheusQueryCoauthoring.ts` contains the experiment's React lifecycle: Monaco attachment,
   current-value refs, adapter creation and disposal, Core registration, and style updates.
@@ -98,7 +120,7 @@ the context must still load.
 The first three live under [`../components/monaco-query-field`](../components/monaco-query-field/README.md)
 because they depend on Monaco; the rest are Monaco-free and live here.
 
-## Lifecycle invariants
+### Lifecycle invariants
 
 - Invocation captures `editor.getValue()` synchronously, including unblurred edits.
 - Context loading may be asynchronous, but a dismissed or replaced invocation cannot become current again.
@@ -108,7 +130,7 @@ because they depend on Monaco; the rest are Monaco-free and live here.
 - Proposal preparation is pure with respect to Monaco. Stale, invalid, and unchanged proposals are rejected
   without editor mutation.
 
-## Compatibility
+### Compatibility
 
 The optional registration can be ignored safely: editors without it retain normal editing behavior. Core injects
 it only for the `prometheus` plugin type; Amazon Managed Service for Prometheus remains outside this experiment
@@ -117,5 +139,5 @@ omits it and older Prometheus ignores it, so mixed versions fall back to the ord
 
 This paired architecture does not use an exposed component or `plugin.json` extension registration.
 
-**Second datasource rule:** a second datasource must not copy this seam. It requires a reviewed, generalized
+**v1 promotion rule:** a second datasource must not copy this v1 seam. It requires a reviewed, generalized
 contract promoted to `@grafana/data` — as does turning this experiment into a supported plugin extension point.
