@@ -18,6 +18,11 @@ import (
 // a response do not all stay in memory. The queries run one after another, and for each query the range request
 // runs before the instant request. A query error goes to the writer as Execute returns it. A failed write ends the
 // request with that error.
+//
+// Prometheus sends the warnings, infos and stats after the result, and only the first chunk of a frame carries its
+// metadata. So the converter holds back the last series, and these go on it, where Execute puts the notices on
+// every frame and the stats on the first one. Grafana shows the notices of all frames without duplicates, so users
+// see the same notices. The exemplar request is read whole, as in Execute, and its frames come last.
 func (s *QueryData) ExecuteChunked(ctx context.Context, req *backend.QueryChunkedDataRequest, w backend.ChunkedDataWriter) error {
 	fromAlert := req.Headers["FromAlert"] == "true"
 	for _, q := range req.Queries {
@@ -63,6 +68,20 @@ func (s *QueryData) handleQueryChunked(ctx context.Context, bq backend.DataQuery
 		if res.Error != nil {
 			addDataResponse(&res, &dr)
 			if err := writeError(ctx, w, q.RefId, dr); err != nil {
+				return err
+			}
+		}
+	}
+
+	if q.ExemplarQuery {
+		// The sampler needs all exemplars, so the exemplar request is read whole, as in Execute.
+		res := s.recoverPanic(traceCtx, func() backend.DataResponse { return s.exemplarQuery(traceCtx, s.client, q) })
+		if res.Error != nil {
+			// As in fetch, a failed exemplar request is only logged.
+			s.log.FromContext(traceCtx).Error("Exemplar query failed", "query", q.Expr, "err", res.Error)
+		}
+		for i, frame := range res.Frames {
+			if err := w.WriteFrame(ctx, q.RefId, fmt.Sprintf("%s/%d", models.ExemplarQueryType, i), frame); err != nil {
 				return err
 			}
 		}
@@ -134,7 +153,7 @@ func (s *QueryData) parseResponseChunked(ctx context.Context, q *models.Query, r
 	}
 
 	// Add frame to attach metadata
-	if len(r.Frames) == 0 && written == 0 {
+	if len(r.Frames) == 0 && written == 0 && !q.ExemplarQuery {
 		r.Frames = append(r.Frames, data.NewFrame(""))
 	}
 	for _, frame := range r.Frames {

@@ -215,6 +215,11 @@ func TestExecuteChunkedMatchesExecute(t *testing.T) {
 		{"empty matrix", sameResponse(`{"status":"success","data":{"resultType":"matrix","result":[]}}`), []backend.DataQuery{rangeQuery("A", "")}},
 		{"empty vector with warnings", converterFixture("prom-warnings-no-data"), []backend.DataQuery{instantQuery}},
 		{"empty vector with infos", converterFixture("prom-infos-no-data"), []backend.DataQuery{instantQuery}},
+		{
+			"one series with notices",
+			sameResponse(`{"status":"success","data":{"resultType":"vector","result":[{"metric":{"__name__":"up"},"value":[1641889530,"1"]}]},"warnings":["w"],"infos":["i"]}`),
+			[]backend.DataQuery{instantQuery},
+		},
 		{"legend auto", converterFixture("prom-matrix"), []backend.DataQuery{rangeQuery("A", "__auto")}},
 		{"legend template", converterFixture("prom-matrix"), []backend.DataQuery{rangeQuery("A", "{{job}} {{instance}}")}},
 		{"two refIDs", converterFixture("prom-matrix"), []backend.DataQuery{rangeQuery("A", ""), rangeQuery("B", "{{job}}")}},
@@ -419,4 +424,85 @@ func TestExecuteChunkedStopsWhenTheContextIsCancelled(t *testing.T) {
 	require.ErrorIs(t, err, context.Canceled)
 	require.Empty(t, w.chunks)
 	require.Zero(t, requests)
+}
+
+// exemplarsLast puts the exemplar frame after the other frames. Execute runs the exemplar request at the same time
+// as the range request, so its frame can come first.
+func exemplarsLast(frames data.Frames) data.Frames {
+	var others, exemplars data.Frames
+	for _, f := range frames {
+		if f.Name == "exemplar" {
+			exemplars = append(exemplars, f)
+		} else {
+			others = append(others, f)
+		}
+	}
+	return append(others, exemplars...)
+}
+
+func TestExecuteChunkedExemplars(t *testing.T) {
+	exemplars := readFixture(t, "../testdata/exemplar.result.json")
+	matrix := readFixture(t, "../converter/testdata/prom-matrix.json")
+	rangeAndExemplar := promQuery(t, "A", models.PrometheusQueryProperties{Expr: "up", Range: true, Exemplar: true})
+
+	cases := []struct {
+		name    string
+		fx      fixtures
+		queries []backend.DataQuery
+	}{
+		// models.Parse turns on the range request when neither range nor instant is set.
+		{"exemplar query", fixtures{"/api/v1/query_range": {body: matrix}, "/api/v1/query_exemplars": {body: exemplars}}, []backend.DataQuery{storedQuery(t, "exemplar")}},
+		{"range and exemplar query", fixtures{"/api/v1/query_range": {body: matrix}, "/api/v1/query_exemplars": {body: exemplars}}, []backend.DataQuery{rangeAndExemplar}},
+		{"failed exemplar request", fixtures{"/api/v1/query_range": {body: matrix}}, []backend.DataQuery{rangeAndExemplar}},
+	}
+
+	for _, cf := range chunkFormats {
+		for _, tc := range cases {
+			t.Run(cf.name+"/"+tc.name, func(t *testing.T) {
+				unary, w, err := runBothQueries(t, tc.fx, tc.queries, cf.format)
+				require.NoError(t, err)
+				expected := unary.Responses["A"]
+				actual := w.accumulate(t)["A"]
+				require.NoError(t, expected.Error)
+				require.NoError(t, actual.Error)
+				requireSameFrames(t, asReceived(t, cf.format, "A", exemplarsLast(expected.Frames)), actual.Frames)
+				require.Len(t, w.frameIDs("A"), len(actual.Frames), "one chunk per frame")
+			})
+		}
+	}
+}
+
+// TestExecuteChunkedPutsTheNoticesOnTheLastSeries covers the warnings and infos. They come after the result in the
+// Prometheus response, so ExecuteChunked puts them on the last series, and Execute puts them on every series.
+// Grafana shows the notices of all frames without duplicates, so users see the same notices.
+func TestExecuteChunkedPutsTheNoticesOnTheLastSeries(t *testing.T) {
+	query := []backend.DataQuery{promQuery(t, "A", models.PrometheusQueryProperties{Expr: "up", Instant: true})}
+	for _, cf := range chunkFormats {
+		for _, name := range []string{"prom-warnings", "prom-infos"} {
+			t.Run(cf.name+"/"+name, func(t *testing.T) {
+				fx := sameResponse(readFixture(t, "../converter/testdata/"+name+".json"))
+				unary, w, err := runBothQueries(t, fx, query, cf.format)
+				require.NoError(t, err)
+				expected := asReceived(t, cf.format, "A", unary.Responses["A"].Frames)
+				actual := w.accumulate(t)["A"].Frames
+				require.Len(t, actual, len(expected))
+				require.Greater(t, len(actual), 1)
+
+				notices := expected[0].Meta.Notices
+				require.NotEmpty(t, notices)
+				for i := range actual {
+					require.Equal(t, notices, expected[i].Meta.Notices)
+					if i == len(actual)-1 {
+						require.Equal(t, notices, actual[i].Meta.Notices)
+					} else {
+						require.Empty(t, actual[i].Meta.Notices)
+					}
+					// The rest of the metadata is the same.
+					expected[i].Meta.Notices = nil
+					actual[i].Meta.Notices = nil
+				}
+				requireSameFrames(t, expected, actual)
+			})
+		}
+	}
 }
