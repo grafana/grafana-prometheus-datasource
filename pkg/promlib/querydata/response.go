@@ -30,17 +30,8 @@ func (s *QueryData) parseResponse(ctx context.Context, q *models.Query, res *htt
 	ctx, endSpan := utils.StartTrace(ctx, s.tracer, "datasource.prometheus.parseResponse")
 	defer endSpan()
 
-	statusCode := res.StatusCode
-
 	switch {
-	// Status codes that Prometheus might return
-	// so we want to parse the response
-	// https://prometheus.io/docs/prometheus/latest/querying/api/#format-overview
-	case statusCode >= http.StatusOK && statusCode < http.StatusMultipleChoices,
-		statusCode == http.StatusBadRequest,
-		statusCode == http.StatusUnprocessableEntity,
-		statusCode == http.StatusServiceUnavailable:
-
+	case isPrometheusResponse(res.StatusCode):
 		// res.Body is read directly without calling utils.Decode because Go's
 		// http.Transport transparently decompresses gzip responses when it
 		// adds Accept-Encoding: gzip itself. At that point Content-Encoding is
@@ -74,25 +65,38 @@ func (s *QueryData) parseResponse(ctx context.Context, q *models.Query, res *htt
 
 		return r
 	default:
-		// Unknown status code. We don't want to parse the response.
-		const maxBodySize = 1024
-		lr := io.LimitReader(res.Body, maxBodySize)
-		tb, _ := io.ReadAll(lr)
-
-		s.log.FromContext(ctx).Error("Unexpected response received", "status", statusCode, "body", tb)
-
-		errResp := backend.DataResponse{
-			Error:       fmt.Errorf("unexpected response with status code %d: %s", statusCode, tb),
-			ErrorSource: backend.ErrorSourceFromHTTPStatus(statusCode),
-		}
-
-		f := data.NewFrame("")
-		addMetadataToMultiFrame(q, f)
-		f.Meta.ExecutedQueryString = executedQueryString(q)
-		errResp.Frames = append(errResp.Frames, f)
-
-		return errResp
+		return s.unexpectedResponse(ctx, q, res)
 	}
+}
+
+// isPrometheusResponse reports whether Prometheus might return the status code, so that the body has its JSON
+// format: https://prometheus.io/docs/prometheus/latest/querying/api/#format-overview
+func isPrometheusResponse(statusCode int) bool {
+	return statusCode >= http.StatusOK && statusCode < http.StatusMultipleChoices ||
+		statusCode == http.StatusBadRequest ||
+		statusCode == http.StatusUnprocessableEntity ||
+		statusCode == http.StatusServiceUnavailable
+}
+
+// unexpectedResponse is the error response for a status code that Prometheus does not return. The body is not parsed.
+func (s *QueryData) unexpectedResponse(ctx context.Context, q *models.Query, res *http.Response) backend.DataResponse {
+	const maxBodySize = 1024
+	lr := io.LimitReader(res.Body, maxBodySize)
+	tb, _ := io.ReadAll(lr)
+
+	s.log.FromContext(ctx).Error("Unexpected response received", "status", res.StatusCode, "body", tb)
+
+	errResp := backend.DataResponse{
+		Error:       fmt.Errorf("unexpected response with status code %d: %s", res.StatusCode, tb),
+		ErrorSource: backend.ErrorSourceFromHTTPStatus(res.StatusCode),
+	}
+
+	f := data.NewFrame("")
+	addMetadataToMultiFrame(q, f)
+	f.Meta.ExecutedQueryString = executedQueryString(q)
+	errResp.Frames = append(errResp.Frames, f)
+
+	return errResp
 }
 
 // addFirstFrameMetadata adds the metadata that only the first frame of a response gets. The frame must already

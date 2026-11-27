@@ -3,6 +3,7 @@ package querydata_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -99,6 +101,7 @@ type fixture struct {
 	status int
 	body   string
 	header http.Header
+	panics bool // the body panics on read
 }
 
 func (f fixture) response() *http.Response {
@@ -106,11 +109,15 @@ func (f fixture) response() *http.Response {
 	if status == 0 {
 		status = http.StatusOK
 	}
+	var body io.ReadCloser = io.NopCloser(bytes.NewReader([]byte(f.body)))
+	if f.panics {
+		body = panickingBody{}
+	}
 	return &http.Response{
 		StatusCode: status,
 		Status:     http.StatusText(status),
 		Header:     f.header,
-		Body:       io.NopCloser(bytes.NewReader([]byte(f.body))),
+		Body:       body,
 	}
 }
 
@@ -239,4 +246,177 @@ func TestExecuteChunkedMatchesExecute(t *testing.T) {
 			})
 		}
 	}
+}
+
+// requireSameError makes sure that the receiver gets the error of Execute, with its status and error source. The
+// receiver reads an error without a status as 500.
+func requireSameError(t *testing.T, expected, actual backend.DataResponse) {
+	t.Helper()
+	require.Error(t, expected.Error)
+	require.Error(t, actual.Error)
+	require.Equal(t, expected.Error.Error(), actual.Error.Error())
+	status := expected.Status
+	if status == 0 {
+		status = backend.StatusInternal
+	}
+	require.Equal(t, status, actual.Status)
+	// The SDK error source middleware gives a QueryData error without a source the downstream source when the error
+	// is a downstream error. The writer takes the source from the error too.
+	source := expected.ErrorSource
+	if source == "" && backend.IsDownstreamError(expected.Error) {
+		source = backend.ErrorSourceDownstream
+	}
+	require.Equal(t, source, actual.ErrorSource)
+}
+
+// TestExecuteChunkedErrorsMatchExecute makes sure that a receiver gets the same error and frames as Execute returns.
+func TestExecuteChunkedErrorsMatchExecute(t *testing.T) {
+	matrix := readFixture(t, "../converter/testdata/prom-matrix.json")
+	promError := readFixture(t, "../converter/testdata/prom-error.json")
+	rangeQuery := promQuery(t, "A", models.PrometheusQueryProperties{Expr: "up", Range: true})
+	statusError := func(status int) fixtures {
+		return fixtures{"/api/v1/query_range": {status: status, body: promError}}
+	}
+
+	cases := []struct {
+		name    string
+		fx      fixtures
+		queries []backend.DataQuery
+	}{
+		{"query model does not parse", sameResponse(matrix), []backend.DataQuery{{RefID: "A", JSON: []byte(`{`)}}},
+		{"HTTP request fails", fixtures{}, []backend.DataQuery{rangeQuery}},
+		{"Prometheus error with 400", statusError(http.StatusBadRequest), []backend.DataQuery{rangeQuery}},
+		{"Prometheus error with 422", statusError(http.StatusUnprocessableEntity), []backend.DataQuery{rangeQuery}},
+		{"Prometheus error with 503", statusError(http.StatusServiceUnavailable), []backend.DataQuery{rangeQuery}},
+		{"unknown status code", fixtures{"/api/v1/query_range": {status: http.StatusInternalServerError, body: "<html>oops</html>"}}, []backend.DataQuery{rangeQuery}},
+		{
+			"range fails, instant works",
+			fixtures{"/api/v1/query": {body: readFixture(t, "../converter/testdata/prom-vector.json")}},
+			[]backend.DataQuery{promQuery(t, "A", models.PrometheusQueryProperties{Expr: "up", Range: true, Instant: true})},
+		},
+		{
+			"a panic fails only its query",
+			fixtures{"/api/v1/query_range": {panics: true}, "/api/v1/query": {body: readFixture(t, "../converter/testdata/prom-vector.json")}},
+			[]backend.DataQuery{rangeQuery, promQuery(t, "B", models.PrometheusQueryProperties{Expr: "up", Instant: true})},
+		},
+	}
+
+	for _, cf := range chunkFormats {
+		for _, tc := range cases {
+			t.Run(cf.name+"/"+tc.name, func(t *testing.T) {
+				unary, w, err := runBothQueries(t, tc.fx, tc.queries, cf.format)
+				require.NoError(t, err)
+				chunked := w.accumulate(t)
+
+				for _, q := range tc.queries {
+					expected := unary.Responses[q.RefID]
+					actual := chunked[q.RefID]
+					if expected.Error == nil {
+						require.NoError(t, actual.Error)
+					} else {
+						requireSameError(t, expected, actual)
+					}
+					requireSameFrames(t, asReceived(t, cf.format, q.RefID, expected.Frames), actual.Frames)
+				}
+			})
+		}
+	}
+}
+
+// TestExecuteChunkedJoinsTheRangeAndInstantErrors covers a query whose two requests fail. Execute runs them at the
+// same time, so the order of the errors and the status change from run to run. ExecuteChunked runs the range
+// request first, so the instant request gives the status.
+func TestExecuteChunkedJoinsTheRangeAndInstantErrors(t *testing.T) {
+	fx := fixtures{"/api/v1/query_range": {status: http.StatusBadRequest, body: readFixture(t, "../converter/testdata/prom-error.json")}}
+	query := []backend.DataQuery{promQuery(t, "A", models.PrometheusQueryProperties{Expr: "up", Range: true, Instant: true})}
+	rangeErr := `bad_data: invalid parameter "start": cannot parse "" to a valid timestamp`
+	instantErr := `Post "http://localhost:9090/api/v1/query": no fixture for /api/v1/query`
+
+	for _, cf := range chunkFormats {
+		t.Run(cf.name, func(t *testing.T) {
+			unary, w, err := runBothQueries(t, fx, query, cf.format)
+			require.NoError(t, err)
+			expected := unary.Responses["A"]
+			actual := w.accumulate(t)["A"]
+
+			require.Contains(t, []string{rangeErr + " " + instantErr, instantErr + " " + rangeErr}, expected.Error.Error())
+			require.EqualError(t, actual.Error, rangeErr+" "+instantErr)
+			require.Equal(t, backend.StatusBadGateway, actual.Status)
+			require.Equal(t, backend.ErrorSourceDownstream, actual.ErrorSource)
+			requireSameFrames(t, asReceived(t, cf.format, "A", expected.Frames), actual.Frames)
+		})
+	}
+}
+
+// TestExecuteChunkedKeepsTheSeriesBeforeAParseError covers a body that ends in the third series. Execute drops the
+// two series that it read. The series that ExecuteChunked wrote stay, and the error is the same.
+func TestExecuteChunkedKeepsTheSeriesBeforeAParseError(t *testing.T) {
+	body := readFixture(t, "../converter/testdata/prom-query-range-big.json")
+	third := 0
+	for range 3 {
+		third += strings.Index(body[third:], `"metric"`) + 1
+	}
+	truncated := sameResponse(body[:third+100])
+	query := []backend.DataQuery{promQuery(t, "A", models.PrometheusQueryProperties{Expr: "up", Range: true})}
+
+	for _, cf := range chunkFormats {
+		t.Run(cf.name, func(t *testing.T) {
+			full, _, err := runBothQueries(t, sameResponse(body), query, cf.format)
+			require.NoError(t, err)
+			unary, w, err := runBothQueries(t, truncated, query, cf.format)
+			require.NoError(t, err)
+			actual := w.accumulate(t)["A"]
+
+			requireSameError(t, unary.Responses["A"], actual)
+			requireSameFrames(t, asReceived(t, cf.format, "A", full.Responses["A"].Frames[:2]), actual.Frames)
+		})
+	}
+}
+
+// TestExecuteChunkedReturnsTheFirstWriteError makes sure that a failed write ends the request. The writer gets no
+// more chunks, the method returns the write error, and the second query does not run.
+func TestExecuteChunkedReturnsTheFirstWriteError(t *testing.T) {
+	tctx, err := setup()
+	require.NoError(t, err)
+	requests := 0
+	tctx.httpProvider.roundTrip = func(*http.Request) (*http.Response, error) {
+		requests++
+		return fixture{body: readFixture(t, "../converter/testdata/prom-query-range-big.json")}.response(), nil
+	}
+	queries := []backend.DataQuery{
+		promQuery(t, "A", models.PrometheusQueryProperties{Expr: "up", Range: true}),
+		promQuery(t, "B", models.PrometheusQueryProperties{Expr: "up", Range: true}),
+	}
+
+	sendErr := errors.New("send failed")
+	writes := 0
+	w := backend.NewChunkedDataWriter(backend.DataFrameFormat_JSON, func(*pluginv2.QueryChunkedDataResponse) error {
+		writes++
+		return sendErr
+	})
+
+	err = tctx.queryData.ExecuteChunked(context.Background(), &backend.QueryChunkedDataRequest{Queries: queries}, w)
+	require.ErrorIs(t, err, sendErr)
+	require.Equal(t, 1, writes, "no write after the failed write")
+	require.Equal(t, 1, requests, "the second query does not run")
+}
+
+func TestExecuteChunkedStopsWhenTheContextIsCancelled(t *testing.T) {
+	tctx, err := setup()
+	require.NoError(t, err)
+	requests := 0
+	tctx.httpProvider.roundTrip = func(*http.Request) (*http.Response, error) {
+		requests++
+		return fixture{body: readFixture(t, "../converter/testdata/prom-matrix.json")}.response(), nil
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	w := newRecordingChunkedWriter(backend.DataFrameFormat_JSON)
+	err = tctx.queryData.ExecuteChunked(ctx, &backend.QueryChunkedDataRequest{
+		Queries: []backend.DataQuery{promQuery(t, "A", models.PrometheusQueryProperties{Expr: "up", Range: true})},
+	}, w)
+	require.ErrorIs(t, err, context.Canceled)
+	require.Empty(t, w.chunks)
+	require.Zero(t, requests)
 }
