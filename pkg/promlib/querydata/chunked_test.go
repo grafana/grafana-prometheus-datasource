@@ -3,8 +3,8 @@ package querydata_test
 import (
 	"bytes"
 	"context"
-	"errors"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
