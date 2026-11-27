@@ -1,6 +1,8 @@
 package converter
 
 import (
+	"encoding/json"
+	"errors"
 	"math"
 	"os"
 	"path"
@@ -142,6 +144,71 @@ func TestReadPrometheusQueryStats(t *testing.T) {
 		rsp := read(t, `{"status":"success","data":{"resultType":"vector","result":`+instantResult+`}}`)
 		require.Empty(t, rsp.Frames[0].Meta.Stats)
 		require.Equal(t, map[string]any{"resultType": "vector"}, rsp.Frames[0].Meta.Custom)
+	})
+}
+
+func readFile(t *testing.T, name string, opt Options) backend.DataResponse {
+	t.Helper()
+	// nolint:gosec
+	b, err := os.ReadFile(path.Join("testdata", name+".json"))
+	require.NoError(t, err)
+	return ReadPrometheusStyleResult(jsoniter.ParseBytes(sdkjsoniter.ConfigDefault, b), opt)
+}
+
+// TestReadPrometheusStyleResultOnFrame makes sure that OnFrame gets each series but the last, in the order that
+// ReadPrometheusStyleResult returns them, and that the result keeps only the last series.
+func TestReadPrometheusStyleResultOnFrame(t *testing.T) {
+	for _, name := range []string{"prom-matrix", "prom-query-range-big", "prom-vector", "prom-matrix-histogram-partitioned", "prom-matrix-with-nans"} {
+		t.Run(name, func(t *testing.T) {
+			expected := readFile(t, name, Options{})
+			require.NoError(t, expected.Error)
+
+			var written data.Frames
+			rsp := readFile(t, name, Options{OnFrame: func(f *data.Frame) error {
+				written = append(written, f)
+				return nil
+			}})
+			require.NoError(t, rsp.Error)
+			require.Len(t, rsp.Frames, 1)
+			require.Len(t, written, len(expected.Frames)-1)
+			// The JSON treats NaN and Inf values as equal.
+			e, err := json.Marshal(expected.Frames)
+			require.NoError(t, err)
+			a, err := json.Marshal(append(written, rsp.Frames...))
+			require.NoError(t, err)
+			require.Equal(t, string(e), string(a))
+		})
+	}
+
+	t.Run("notices go on the last series", func(t *testing.T) {
+		for _, name := range []string{"prom-warnings", "prom-infos"} {
+			expected := readFile(t, name, Options{})
+			require.NoError(t, expected.Error)
+
+			var written data.Frames
+			rsp := readFile(t, name, Options{OnFrame: func(f *data.Frame) error {
+				written = append(written, f)
+				return nil
+			}})
+			require.NoError(t, rsp.Error)
+			require.NotEmpty(t, written)
+			for _, f := range written {
+				require.Empty(t, f.Meta.Notices)
+			}
+			require.Len(t, rsp.Frames, 1)
+			require.Equal(t, expected.Frames[0].Meta.Notices, rsp.Frames[0].Meta.Notices)
+		}
+	})
+
+	t.Run("an OnFrame error stops the read", func(t *testing.T) {
+		writeErr := errors.New("write failed")
+		calls := 0
+		rsp := readFile(t, "prom-query-range-big", Options{OnFrame: func(*data.Frame) error {
+			calls++
+			return writeErr
+		}})
+		require.ErrorIs(t, rsp.Error, writeErr)
+		require.Equal(t, 1, calls)
 	})
 }
 
