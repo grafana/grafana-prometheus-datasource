@@ -10,6 +10,10 @@ export interface PromQuery extends GenPromQuery, DataQuery {
    * Timezone offset to align start & end time on backend
    */
   utcOffsetSec?: number;
+  /**
+   * Return an instant vector as one numeric-long frame instead of one frame per series
+   */
+  longVector?: boolean;
   valueWithRefId?: boolean;
   showingGraph?: boolean;
   showingTable?: boolean;

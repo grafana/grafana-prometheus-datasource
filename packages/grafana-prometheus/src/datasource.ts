@@ -431,6 +431,8 @@ export class PrometheusDatasource
     const processedTargets: PromQuery[] = [];
     const processedTarget = {
       ...target,
+      // Only withLongVector sets the opt-in, so a saved longVector does not change other panels.
+      longVector: undefined,
       exemplar: this.shouldRunExemplarQuery(target, request),
       requestId: request.panelId + target.refId,
       utcOffsetSec: utcOffset * 60,
@@ -447,6 +449,12 @@ export class PrometheusDatasource
       processedTarget.groupByKeys = request.groupByKeys;
     }
 
+    // Same rule as isTableResult in result_transformer.ts, which passes a long frame through.
+    const rendersAsTable = (refId: string) =>
+      request.app === CoreApp.Explore || request.targets.some((t) => t.refId === refId && t.format === 'table');
+    const withLongVector = (query: PromQuery): PromQuery =>
+      query.instant && rendersAsTable(query.refId) ? { ...query, longVector: true } : query;
+
     if (target.instant && target.range) {
       // We have query type "Both" selected
       // We should send separate queries with different refId
@@ -456,15 +464,15 @@ export class PrometheusDatasource
           refId: processedTarget.refId,
           instant: false,
         },
-        {
+        withLongVector({
           ...processedTarget,
           refId: processedTarget.refId + InstantQueryRefIdIndex,
           range: false,
           exemplar: false,
-        }
+        })
       );
     } else {
-      processedTargets.push(processedTarget);
+      processedTargets.push(withLongVector(processedTarget));
     }
 
     return processedTargets;
@@ -631,6 +639,8 @@ export class PrometheusDatasource
 
         const expandedQuery = {
           ...query,
+          // Expressions do not read numeric-long frames.
+          longVector: undefined,
           ...(query.scopes && query.scopes.length > 0 ? { adhocFilters: this.generateScopeFilters(filters) } : {}),
           datasource: this.getRef(),
           expr: replacedInterpolatedQuery,

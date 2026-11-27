@@ -794,6 +794,15 @@ describe('PrometheusDatasource', () => {
       expect(queries[0].interval).toBe(interval);
     });
 
+    it('should drop a saved longVector', () => {
+      const queries = ds.interpolateVariablesInQueries(
+        [{ refId: 'A', expr: 'up', instant: true, longVector: true }],
+        {}
+      );
+
+      expect(queries[0].longVector).toBeUndefined();
+    });
+
     it('should call enhanceExprWithAdHocFilters', () => {
       ds.enhanceExprWithAdHocFilters = jest.fn();
       const queries = [
@@ -1326,6 +1335,58 @@ describe('PrometheusDatasource2', () => {
       const [processed] = ds.processTargetV2(target, request);
 
       expect(processed).not.toHaveProperty('groupByKeys');
+    });
+
+    describe('longVector', () => {
+      const processFor = (query: PromQuery, app: CoreApp) =>
+        ds.processTargetV2(query, { ...request, targets: [query], app }).map((q) => [q.refId, q.longVector]);
+
+      it.each([
+        ['an instant table query', { instant: true, range: false, format: 'table' }, CoreApp.Dashboard, [['A', true]]],
+        ['an instant query in Explore', { instant: true, range: false }, CoreApp.Explore, [['A', true]]],
+        ['an instant time series query', { instant: true, range: false }, CoreApp.Dashboard, [['A', undefined]]],
+        [
+          'a range table query',
+          { instant: false, range: true, format: 'table' },
+          CoreApp.Dashboard,
+          [['A', undefined]],
+        ],
+        [
+          'a Both query in Explore',
+          { instant: true, range: true },
+          CoreApp.Explore,
+          [
+            ['A', undefined],
+            ['A-Instant', true],
+          ],
+        ],
+        [
+          'a Both table query in a dashboard',
+          { instant: true, range: true, format: 'table' },
+          CoreApp.Dashboard,
+          [
+            ['A', undefined],
+            ['A-Instant', undefined],
+          ],
+        ],
+        [
+          'an instant time series query with a saved opt-in',
+          { instant: true, range: false, longVector: true },
+          CoreApp.Dashboard,
+          [['A', undefined]],
+        ],
+        [
+          'a Both table query in a dashboard with a saved opt-in',
+          { instant: true, range: true, format: 'table', longVector: true },
+          CoreApp.Dashboard,
+          [
+            ['A', undefined],
+            ['A-Instant', undefined],
+          ],
+        ],
+      ])('sets the opt-in for %s only where the result renders as a table', (_, props, app, expected) => {
+        expect(processFor({ ...target, ...props } as PromQuery, app)).toEqual(expected);
+      });
     });
   });
 });
