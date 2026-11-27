@@ -11,6 +11,7 @@ import (
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	sdkhttpclient "github.com/grafana/grafana-plugin-sdk-go/backend/httpclient"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
+	"github.com/grafana/grafana-plugin-sdk-go/genproto/pluginv2"
 	"github.com/stretchr/testify/require"
 )
 
@@ -222,4 +223,43 @@ func mockSuggestResource() *backend.CallResourceRequest {
 				"limit": 10
 			}`),
 	}
+}
+
+func TestServiceQueryChunkedData(t *testing.T) {
+	logger := backend.NewLoggerWith("logger", "test")
+	recordChunks := func(chunks *[]*pluginv2.QueryChunkedDataResponse) backend.ChunkedDataWriter {
+		return backend.NewChunkedDataWriter(backend.DataFrameFormat_JSON, func(c *pluginv2.QueryChunkedDataResponse) error {
+			*chunks = append(*chunks, c)
+			return nil
+		})
+	}
+
+	t.Run("no queries gives the error of QueryData", func(t *testing.T) {
+		service := NewService(getMockPromTestSDKProvider(&fakeHTTPClientProvider{}), logger, nil)
+		_, queryDataErr := service.QueryData(context.Background(), &backend.QueryDataRequest{})
+		require.Error(t, queryDataErr)
+
+		var chunks []*pluginv2.QueryChunkedDataResponse
+		err := service.QueryChunkedData(context.Background(), &backend.QueryChunkedDataRequest{}, recordChunks(&chunks))
+		require.EqualError(t, err, queryDataErr.Error())
+		require.Empty(t, chunks)
+	})
+
+	t.Run("a query reaches the instance", func(t *testing.T) {
+		f := &fakeHTTPClientProvider{}
+		service := NewService(getMockPromTestSDKProvider(f), logger, nil)
+		req := &backend.QueryChunkedDataRequest{
+			PluginContext: mockRequest().PluginContext,
+			Queries: []backend.DataQuery{{
+				RefID:     "A",
+				JSON:      []byte(`{"expr":"up","range":true}`),
+				TimeRange: backend.TimeRange{From: time.Unix(0, 0), To: time.Unix(60, 0)},
+			}},
+		}
+
+		var chunks []*pluginv2.QueryChunkedDataResponse
+		require.NoError(t, service.QueryChunkedData(context.Background(), req, recordChunks(&chunks)))
+		require.Equal(t, "/api/v1/query_range", f.Roundtripper.Req.URL.Path)
+		require.NotEmpty(t, chunks)
+	})
 }

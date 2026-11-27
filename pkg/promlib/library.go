@@ -133,6 +133,20 @@ func (s *Service) QueryData(ctx context.Context, req *backend.QueryDataRequest) 
 	return qd, err
 }
 
+// QueryChunkedData runs the queries as QueryData does, and writes each series as its own chunk.
+func (s *Service) QueryChunkedData(ctx context.Context, req *backend.QueryChunkedDataRequest, w backend.ChunkedDataWriter) error {
+	if len(req.Queries) == 0 {
+		return fmt.Errorf("query contains no queries")
+	}
+
+	i, err := s.getInstance(ctx, req.PluginContext)
+	if err != nil {
+		return err
+	}
+
+	return i.queryData.ExecuteChunked(ctx, req, w)
+}
+
 func (s *Service) CallResource(ctx context.Context, req *backend.CallResourceRequest, sender backend.CallResourceResponseSender) error {
 	i, err := s.getInstance(ctx, req.PluginContext)
 	if err != nil {
