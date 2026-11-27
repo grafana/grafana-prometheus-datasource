@@ -24,6 +24,12 @@ var (
 		Name:      "prometheus_plugin_backend_reply_size_guard_rejected_count",
 		Help:      "The total amount of query replies failed because they were too large to send to Grafana",
 	})
+
+	queryPanicCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: "grafana",
+		Name:      "prometheus_plugin_backend_query_panic_count",
+		Help:      "The total amount of query panics that the plugin recovered from and returned as query errors",
+	})
 )
 
 const (
@@ -59,6 +65,11 @@ func UpdateJsonDataLenientTypeMetrics(fromValueType, toValueType, outcome string
 // UpdateReplySizeGuardMetrics records a query reply failed because it was too large to send to Grafana.
 func UpdateReplySizeGuardMetrics() {
 	replySizeGuardCounter.Inc()
+}
+
+// UpdateQueryPanicMetrics records a query panic that the plugin recovered from.
+func UpdateQueryPanicMetrics() {
+	queryPanicCounter.Inc()
 }
 
 func getErrorSource(err error, resp *backend.QueryDataResponse) string {
