@@ -19,6 +19,12 @@ var (
 		Help:      "The total amount of datasource jsonData values that did not match their declared type",
 	}, []string{"from", "to", "outcome"})
 
+	replySizeGuardCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: "grafana",
+		Name:      "prometheus_plugin_backend_reply_size_guard_rejected_count",
+		Help:      "The total amount of query replies failed because they were too large to send to Grafana",
+	})
+
 	queryPanicCounter = promauto.NewCounter(prometheus.CounterOpts{
 		Namespace: "grafana",
 		Name:      "prometheus_plugin_backend_query_panic_count",
@@ -54,6 +60,11 @@ func UpdateQueryDataMetrics(err error, resp *backend.QueryDataResponse) {
 // type. outcome is "coerced" when the value could still be read, "dropped" when it could not.
 func UpdateJsonDataLenientTypeMetrics(fromValueType, toValueType, outcome string) {
 	jsonDataLenientTypeCounter.WithLabelValues(fromValueType, toValueType, outcome).Inc()
+}
+
+// UpdateReplySizeGuardMetrics records a query reply failed because it was too large to send to Grafana.
+func UpdateReplySizeGuardMetrics() {
+	replySizeGuardCounter.Inc()
 }
 
 // UpdateQueryPanicMetrics records a query panic that the plugin recovered from.
