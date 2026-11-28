@@ -16,13 +16,13 @@ import (
 
 // ExecuteChunked runs the queries as Execute does, and writes each series as its own chunk, so that the series of
 // a response do not all stay in memory. The queries run one after another, and for each query the range request
-// runs before the instant request. A query error goes to the writer as Execute returns it. A failed write ends the
-// request with that error.
+// runs before the instant request, with the exemplar request at the same time. A query error goes to the writer
+// as Execute returns it. A failed write ends the request with that error.
 //
 // Prometheus sends the warnings, infos and stats after the result, and only the first chunk of a frame carries its
 // metadata. So the converter holds back the last series, and these go on it, where Execute puts the notices on
 // every frame and the stats on the first one. Grafana shows the notices of all frames without duplicates, so users
-// see the same notices. The exemplar request is read whole, as in Execute, and its frames come last.
+// see the same notices. The exemplar response is read whole, as in Execute, and its frames come last.
 func (s *QueryData) ExecuteChunked(ctx context.Context, req *backend.QueryChunkedDataRequest, w backend.ChunkedDataWriter) error {
 	fromAlert := req.Headers["FromAlert"] == "true"
 	for _, q := range req.Queries {
@@ -43,6 +43,18 @@ func (s *QueryData) handleQueryChunked(ctx context.Context, bq backend.DataQuery
 	q, err := models.Parse(ctx, s.log, span, bq, s.TimeInterval, s.intervalCalculator, fromAlert)
 	if err != nil {
 		return writeError(ctx, w, bq.RefID, backend.DataResponse{Error: err})
+	}
+
+	// The exemplar request runs at the same time as the range and instant requests, as in fetch. The sampler
+	// needs all exemplars, so the response is read whole, and its frames are written last.
+	var exemplars chan backend.DataResponse
+	if q.ExemplarQuery {
+		exemplarCtx, cancel := context.WithCancel(traceCtx)
+		defer cancel() // stops the request if a write fails first
+		exemplars = make(chan backend.DataResponse, 1)
+		go func() {
+			exemplars <- s.recoverPanic(exemplarCtx, func() backend.DataResponse { return s.exemplarQuery(exemplarCtx, s.client, q) })
+		}()
 	}
 
 	// dr joins the errors of the requests as fetch does. The receiver keeps the last error that it gets, so each
@@ -73,9 +85,8 @@ func (s *QueryData) handleQueryChunked(ctx context.Context, bq backend.DataQuery
 		}
 	}
 
-	if q.ExemplarQuery {
-		// The sampler needs all exemplars, so the exemplar request is read whole, as in Execute.
-		res := s.recoverPanic(traceCtx, func() backend.DataResponse { return s.exemplarQuery(traceCtx, s.client, q) })
+	if exemplars != nil {
+		res := <-exemplars
 		if res.Error != nil {
 			// As in fetch, a failed exemplar request is only logged.
 			s.log.FromContext(traceCtx).Error("Exemplar query failed", "query", q.Expr, "err", res.Error)

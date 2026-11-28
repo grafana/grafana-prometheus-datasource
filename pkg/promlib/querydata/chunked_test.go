@@ -472,6 +472,42 @@ func TestExecuteChunkedExemplars(t *testing.T) {
 	}
 }
 
+// TestExecuteChunkedSendsTheExemplarRequestWithTheOthers makes sure that the exemplar request runs at the same time
+// as the range request, as in Execute. The range request gets its answer only after the exemplar request started.
+func TestExecuteChunkedSendsTheExemplarRequestWithTheOthers(t *testing.T) {
+	matrix := readFixture(t, "../converter/testdata/prom-matrix.json")
+	exemplars := readFixture(t, "../testdata/exemplar.result.json")
+	exemplarStarted := make(chan struct{})
+
+	tctx, err := setup()
+	require.NoError(t, err)
+	tctx.httpProvider.roundTrip = func(req *http.Request) (*http.Response, error) {
+		switch req.URL.Path {
+		case "/api/v1/query_exemplars":
+			close(exemplarStarted)
+			return fixture{body: exemplars}.response(), nil
+		case "/api/v1/query_range":
+			select {
+			case <-exemplarStarted:
+				return fixture{body: matrix}.response(), nil
+			case <-time.After(5 * time.Second):
+				return nil, errors.New("the exemplar request did not start")
+			}
+		}
+		return nil, fmt.Errorf("no fixture for %s", req.URL.Path)
+	}
+
+	query := promQuery(t, "A", models.PrometheusQueryProperties{Expr: "up", Range: true, Exemplar: true})
+	pluginCtx := backend.PluginContext{GrafanaConfig: config.NewGrafanaCfg(map[string]string{"concurrent_query_count": "10"})}
+	w := newRecordingChunkedWriter(backend.DataFrameFormat_JSON)
+	req := &backend.QueryChunkedDataRequest{Queries: []backend.DataQuery{query}, PluginContext: pluginCtx, Format: backend.DataFrameFormat_JSON}
+	require.NoError(t, tctx.queryData.ExecuteChunked(context.Background(), req, w))
+
+	require.NoError(t, w.accumulate(t)["A"].Error)
+	ids := w.frameIDs("A")
+	require.Equal(t, "exemplar/0", ids[len(ids)-1], "the exemplar frame comes last")
+}
+
 // TestExecuteChunkedPutsTheNoticesOnTheLastSeries covers the warnings and infos. They come after the result in the
 // Prometheus response, so ExecuteChunked puts them on the last series, and Execute puts them on every series.
 // Grafana shows the notices of all frames without duplicates, so users see the same notices.
