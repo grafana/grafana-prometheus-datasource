@@ -636,6 +636,8 @@ type fakeHttpClientProvider struct {
 	rangeRes    *http.Response
 	instantRes  *http.Response
 	exemplarRes *http.Response
+	// roundTrip, when set, answers every request in place of the responses above.
+	roundTrip func(*http.Request) (*http.Response, error)
 }
 
 func (p *fakeHttpClientProvider) New(opts ...httpclient.Options) (*http.Client, error) {
@@ -660,6 +662,9 @@ func (p *fakeHttpClientProvider) setResponse(rangeRes, instantRes, exemplarRes *
 }
 
 func (p *fakeHttpClientProvider) RoundTrip(req *http.Request) (*http.Response, error) {
+	if p.roundTrip != nil {
+		return p.roundTrip(req)
+	}
 	switch req.URL.Path {
 	case "/api/v1/query_range":
 		return p.rangeRes, nil

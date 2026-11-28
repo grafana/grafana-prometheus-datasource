@@ -21,6 +21,10 @@ func logf(format string, a ...any) {
 }
 
 type Options struct {
+	// OnFrame, when set, gets each matrix or vector series once the next series is read, so that the
+	// series do not stay in memory. The last series stays in the result. The warnings, infos and stats
+	// come after the result in the response, so they go on that last series.
+	OnFrame func(*data.Frame) error
 }
 
 func rspErr(e error) backend.DataResponse {
@@ -632,6 +636,13 @@ func readMatrixOrVectorMulti(iter *sdkjsoniter.Iterator, resultType string, opt 
 	for more, err := iter.ReadArray(); more; more, err = iter.ReadArray() {
 		if err != nil {
 			return rspErr(err)
+		}
+
+		if opt.OnFrame != nil && len(rsp.Frames) > 0 {
+			if err := opt.OnFrame(rsp.Frames[0]); err != nil {
+				return backend.DataResponse{Error: err}
+			}
+			rsp.Frames = rsp.Frames[:0]
 		}
 
 		// First read all values to temporary storage

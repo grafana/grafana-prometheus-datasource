@@ -23,9 +23,16 @@ type Datasource struct {
 	Service *promlib.Service
 }
 
+var _ backend.QueryChunkedDataHandler = (*Datasource)(nil)
+
 func (d *Datasource) QueryData(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
 	ctx = d.contextualMiddlewares(ctx)
 	return d.Service.QueryData(ctx, req)
+}
+
+func (d *Datasource) QueryChunkedData(ctx context.Context, req *backend.QueryChunkedDataRequest, w backend.ChunkedDataWriter) error {
+	ctx = d.contextualMiddlewares(ctx)
+	return d.Service.QueryChunkedData(ctx, req, w)
 }
 
 func (d *Datasource) CallResource(ctx context.Context, req *backend.CallResourceRequest, sender backend.CallResourceResponseSender) error {
